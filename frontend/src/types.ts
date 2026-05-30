@@ -1,0 +1,725 @@
+export type Mode =
+  | "qa"
+  | "architecture"
+  | "reference"
+  | "compare"
+  | "waf"
+  | "review"
+  | "compliance"
+  | "migration"
+  | "regional"
+  | "cost"
+  | "drbc"
+  | "monitoring"
+  | "situation"
+  | "presentation"
+  | "certprep"
+  | "learningplan"
+  | "codegen"
+  | "tco"
+  | "bootstrap"
+  | "aiarchitecture"
+  | "dataplatform"
+  | "apim"
+  | "network"
+  | "landingzone"
+  | "identity"
+  | "threatmodel"
+  | "devsecops"
+  | "reliability"
+  | "sizing"
+  | "security"
+  | "governance"
+  | "ops"
+  | "intake"
+  | "analyze";
+
+// ── Navigation ──────────────────────────────────────────────────────────────
+
+export interface NavSection {
+  label: string;
+  items: NavItem[];
+}
+
+export interface NavItem {
+  mode: Mode;
+  label: string;
+  icon: string; // icon name key
+  description: string;
+}
+
+// ── Core chat types ──────────────────────────────────────────────────────────
+
+export interface Citation {
+  title: string;
+  url: string;
+  description: string;
+}
+
+export interface ChatMessage {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  citations?: Citation[];
+  isStreaming?: boolean;
+  structuredResult?: StructuredResult;
+}
+
+// ── Architecture types ───────────────────────────────────────────────────────
+
+export interface ArchComponent {
+  id: string;
+  label: string;
+  shape: string;
+  category?: string;
+  tier?: number;
+  x?: number;
+  y?: number;
+}
+
+export interface ArchConnection {
+  from: string;
+  to: string;
+  label?: string;
+}
+
+export interface ArchResult {
+  diagramXml: string | null;
+  runbookMarkdown: string | null;
+  bicepCode: string | null;
+  explanation: string;
+  citations: Citation[];
+}
+
+// ── WAF types ────────────────────────────────────────────────────────────────
+
+export interface WafPillarResult {
+  pillar: string;
+  score: number;
+  findings: string[];
+  recommendations: string[];
+}
+
+export interface WafResult {
+  pillars: WafPillarResult[];
+}
+
+// ── Cost estimation types ────────────────────────────────────────────────────
+
+export interface CostLineItem {
+  service: string;
+  sku: string;
+  region: string;
+  quantity: number;
+  unit_price: number | null;
+  unit_of_measure: string;
+  monthly_estimate: number | null;
+  currency: string;
+  note?: string;
+}
+
+export interface CostEstimate {
+  line_items: CostLineItem[];
+  total_monthly_estimate: number;
+  currency: string;
+  disclaimer: string;
+  optimization_tips?: string[];
+}
+
+// ── Monitoring config types ──────────────────────────────────────────────────
+
+export interface AlertRule {
+  name: string;
+  resource_type?: string;
+  metric_or_kql: string;
+  threshold: string;
+  severity: number;
+  description?: string;
+}
+
+export interface KqlQuery {
+  name: string;
+  query: string;
+  description?: string;
+}
+
+export interface MonitoringConfig {
+  alert_rules: AlertRule[];
+  kql_queries: KqlQuery[];
+  dashboard_widgets?: string[];
+  bicep_alerts?: string;
+}
+
+// ── Compliance types ─────────────────────────────────────────────────────────
+
+export interface ComplianceGap {
+  control: string;
+  gap: string;
+  remediation: string;
+  azure_service?: string;
+}
+
+export interface ComplianceResult {
+  framework: string;
+  controls_met: string[];
+  gaps: ComplianceGap[];
+  azure_policy_recommendations: string[];
+  shared_responsibility_notes?: string;
+}
+
+// ── Migration types ──────────────────────────────────────────────────────────
+
+export interface MigrationAssessment {
+  workload_name: string;
+  current_state: string;
+  strategy: string;
+  rationale: string;
+  target_azure_services: string[];
+  effort_weeks?: number;
+  risk_level: string;
+  wave?: number;
+  key_steps: string[];
+  blockers: string[];
+}
+
+// ── DR types ─────────────────────────────────────────────────────────────────
+
+export interface DrServiceConfig {
+  service: string;
+  dr_approach: string;
+  rpo_achieved?: string;
+  azure_feature?: string;
+}
+
+export interface DrStrategy {
+  dr_pattern: string;
+  primary_region: string;
+  secondary_region: string;
+  service_configs: DrServiceConfig[];
+  failover_steps: string[];
+  test_plan: string[];
+  estimated_monthly_dr_cost?: string;
+}
+
+// ── Service comparison types ──────────────────────────────────────────────────
+
+export interface ComparisonRow {
+  dimension: string;
+  values: Record<string, string>;
+}
+
+export interface ServiceComparison {
+  services: string[];
+  use_case: string;
+  comparison_rows: ComparisonRow[];
+  recommendation: string;
+  decision_tree: string[];
+}
+
+// ── ADR types ─────────────────────────────────────────────────────────────────
+
+export interface AdrRecord {
+  title: string;
+  status: "Proposed" | "Accepted" | "Deprecated";
+  context: string;
+  decision: string;
+  consequences: string;
+  alternatives?: string[];
+}
+
+// ── Bicep / IaC types ────────────────────────────────────────────────────────
+
+export interface BicepResult {
+  bicep_code: string;
+  param_file?: string;
+  deploy_commands: string[];
+  notes: string[];
+}
+
+// ── Reference architecture catalog ───────────────────────────────────────────
+
+export interface ReferenceArch {
+  id: string;
+  title: string;
+  category: string;
+  tags: string[];
+  description: string;
+  services: string[];
+  waf_score: Record<string, number>;
+  patterns: string[];
+  learn_url: string;
+  complexity: "Low" | "Medium" | "High";
+  estimated_monthly: string;
+}
+
+// ── Learning plan types ───────────────────────────────────────────────────────
+
+export interface LearningModule {
+  session_label: string;
+  title: string;
+  duration_hours?: number;
+  description: string;
+  topics: string[];
+  skills_taught: string[];
+  activities?: string[];
+}
+
+export interface LearningPlan {
+  title: string;
+  overview: string;
+  target_audience: string;
+  duration_days: number;
+  prerequisites: string[];
+  learning_outcomes: string[];
+  modules: LearningModule[];
+}
+
+// ── TCO types ─────────────────────────────────────────────────────────────────
+
+export interface TcoOnPremItem {
+  category: string;
+  description: string;
+  annual_cost: number;
+}
+
+export interface TcoAzureItem {
+  service: string;
+  sku: string;
+  monthly_cost: number;
+}
+
+export interface TcoReport {
+  on_prem_items: TcoOnPremItem[];
+  azure_items: TcoAzureItem[];
+  three_year_on_prem_total: number;
+  three_year_azure_total: number;
+  migration_cost_estimate?: number;
+  break_even_months?: number;
+  savings_percentage?: number;
+  recommendations: string[];
+}
+
+// ── Network topology types ────────────────────────────────────────────────────
+
+export interface VNetSubnet {
+  name: string;
+  cidr: string;
+  purpose?: string;
+}
+
+export interface VNet {
+  name: string;
+  cidr: string;
+  region?: string;
+  subnets: VNetSubnet[];
+}
+
+export interface NsgRule {
+  name: string;
+  priority: number;
+  direction: "Inbound" | "Outbound";
+  action: "Allow" | "Deny";
+  source: string;
+  destination: string;
+  port: string;
+  protocol: string;
+}
+
+export interface PrivateEndpoint {
+  resource: string;
+  subnet: string;
+  private_dns_zone: string;
+}
+
+export interface NetworkTopology {
+  topology_type: string;
+  vnets: VNet[];
+  nsg_rules: NsgRule[];
+  private_endpoints: PrivateEndpoint[];
+  dns_design?: string;
+  firewall?: string;
+}
+
+// ── Landing zone types ────────────────────────────────────────────────────────
+
+export interface ManagementGroup {
+  name: string;
+  level: number;
+  parent_id?: string;
+  children?: ManagementGroup[];
+}
+
+export interface LandingZoneDesign {
+  management_groups: ManagementGroup[];
+  policy_initiatives: string[];
+  naming_convention: string;
+  mandatory_tags: Record<string, string>;
+  rbac_assignments: Array<{ principal: string; role: string; scope: string }>;
+  subscription_vending?: string;
+}
+
+// ── RBAC / identity model types ───────────────────────────────────────────────
+
+export interface RoleAssignment {
+  principal: string;
+  role: string;
+  scope: string;
+  type: "Active" | "PIM-Eligible";
+}
+
+export interface ConditionalAccessPolicy {
+  name: string;
+  conditions: string;
+  grant_controls: string;
+}
+
+export interface RbacModel {
+  principals: string[];
+  role_assignments: RoleAssignment[];
+  custom_roles: Array<{ name: string; permissions: string[] }>;
+  conditional_access_policies: ConditionalAccessPolicy[];
+  pim_settings?: string;
+  workload_federation?: string;
+}
+
+// ── Threat register types ─────────────────────────────────────────────────────
+
+export interface Threat {
+  id: string;
+  title: string;
+  stride_category: string;
+  likelihood: number;
+  impact: number;
+  risk_score: number;
+  mitigations: string[];
+  azure_controls: string[];
+  status: "Open" | "Mitigated" | "Accepted";
+}
+
+export interface ThreatRegister {
+  trust_boundaries: string[];
+  attack_surface: string[];
+  threats: Threat[];
+  security_controls_recommended: string[];
+}
+
+// ── Pipeline design types ─────────────────────────────────────────────────────
+
+export interface PipelineJob {
+  name: string;
+  is_security_gate: boolean;
+  steps?: string[];
+}
+
+export interface PipelineStage {
+  name: string;
+  jobs: PipelineJob[];
+}
+
+export interface SecurityScan {
+  type: "SAST" | "DAST" | "SCA" | "IaC" | "Container";
+  tool: string;
+  blocking: boolean;
+}
+
+export interface PipelineDesign {
+  platform: string;
+  branch_strategy: string;
+  stages: PipelineStage[];
+  security_scans: SecurityScan[];
+  workload_identity: string;
+  secrets_management: string;
+}
+
+// ── SLO framework types ───────────────────────────────────────────────────────
+
+export interface SloService {
+  name: string;
+  azure_sla: string;
+  customer_slo: string;
+  sli_definition: string;
+  error_budget_minutes: number;
+}
+
+export interface BurnRateAlert {
+  window: string;
+  burn_rate: number;
+  description: string;
+}
+
+export interface SloFramework {
+  services: SloService[];
+  composite_sla: string;
+  error_budget_alerts: BurnRateAlert[];
+  toil_inventory: string[];
+  chaos_experiments: string[];
+}
+
+// ── SKU recommendation types ──────────────────────────────────────────────────
+
+export interface SkuAlternative {
+  sku: string;
+  trade_off: string;
+  monthly_delta: number;
+}
+
+export interface SkuRecommendationItem {
+  component: string;
+  recommended_sku: string;
+  vcpu?: number;
+  memory_gb?: number;
+  reasoning: string;
+  utilization_target?: string;
+  alternatives: SkuAlternative[];
+  autoscale?: { min: number; max: number; scale_trigger: string };
+}
+
+export interface SkuRecommendation {
+  workload_profile: {
+    peak_users?: number;
+    avg_rps?: number;
+    data_volume_gb?: number;
+    latency_p99_ms?: number;
+    availability_target?: string;
+  };
+  recommendations: SkuRecommendationItem[];
+  sizing_assumptions: string[];
+  warnings: string[];
+}
+
+// ── Workload context ──────────────────────────────────────────────────────────
+
+export interface WorkloadContext {
+  region: string;
+  complianceFramework: string;
+  budgetRange: string;
+  teamSize: string;
+  notes: string;
+}
+
+// ── Workload spec (Requirements Studio) ──────────────────────────────────────
+
+export type WorkloadType = "web-app" | "microservices" | "data-pipeline" | "ml" | "event-driven" | "other";
+export type WorkloadCriticality = "mission-critical" | "high" | "standard" | "dev-test";
+export type AvailabilitySla = "99.9" | "99.95" | "99.99";
+export type DataClassification = "public" | "internal" | "confidential" | "restricted";
+export type IdentityModel = "workforce" | "b2c" | "both" | "service-to-service";
+export type CloudMaturity = "greenfield" | "migrating" | "modernizing" | "optimizing";
+
+export interface WorkloadSpec {
+  name: string;
+  type: WorkloadType;
+  criticality: WorkloadCriticality;
+  businessOwner: string;
+  peakUsers: number;
+  avgRps: number;
+  dataVolumeGb: number;
+  latencyP99Ms: number;
+  availabilitySla: AvailabilitySla;
+  rtoHours: number;
+  rpoHours: number;
+  multiRegion: boolean;
+  primaryRegion: string;
+  drRegion: string;
+  complianceFrameworks: string[];
+  dataClassification: DataClassification;
+  identityModel: IdentityModel;
+  networkIsolation: boolean;
+  monthlyBudgetUsd: number;
+  teamSize: string;
+  cloudMaturity: CloudMaturity;
+  currentInfrastructure: string;
+  existingServices: string[];
+  integrations: string;
+  migrationTimeline: string;
+  regulatoryNotes: string;
+  additionalNotes: string;
+}
+
+// ── Bootstrap output ──────────────────────────────────────────────────────────
+
+export interface BootstrapOutputs {
+  explanation?: string;
+  diagramXml?: string;
+  bicepCode?: string;
+  paramFile?: string;
+  runbookMarkdown?: string;
+  costSummary?: string;
+}
+
+// ── Region comparison types ───────────────────────────────────────────────────
+
+export interface RegionComparisonRow {
+  region_name: string;
+  geography: string;
+  az_count: number;
+  data_residency: string;
+  paired_region: string;
+  latency_tier: string;
+  cost_delta: string;
+  compliance_certs: string[];
+  key_services_available: string[];
+}
+
+export interface RegionComparison {
+  regions: RegionComparisonRow[];
+  recommendation: string;
+  notes?: string[];
+}
+
+// ── Practice exam types ───────────────────────────────────────────────────────
+
+export interface PracticeQuestion {
+  question: string;
+  choices: { A: string; B: string; C: string; D: string };
+  correct: "A" | "B" | "C" | "D";
+  explanation: string;
+  domain: string;
+}
+
+export interface PracticeExamPack {
+  exam: string;
+  questions: PracticeQuestion[];
+}
+
+// ── Stakeholder communication plan types ─────────────────────────────────────
+
+export interface StakeholderAudience {
+  name: string;
+  talking_points: string[];
+  objections_and_responses: Array<{ objection: string; response: string }>;
+}
+
+export interface StakeholderPlan {
+  situation_summary: string;
+  audiences: StakeholderAudience[];
+  recommended_actions: string[];
+  timeline?: string;
+}
+
+// ── Decision card types ───────────────────────────────────────────────────────
+
+export interface DecisionCard {
+  recommendation: string;
+  rationale: string;
+  tradeoffs: Array<{ aspect: string; detail: string }>;
+  when_to_reconsider: string[];
+}
+
+
+
+export type StructuredResult =
+  | { kind: "service_comparison"; data: ServiceComparison }
+  | { kind: "compliance_result"; data: ComplianceResult }
+  | { kind: "migration_assessment"; data: MigrationAssessment }
+  | { kind: "dr_strategy"; data: DrStrategy }
+  | { kind: "monitoring_config"; data: MonitoringConfig }
+  | { kind: "cost_estimate"; data: CostEstimate }
+  | { kind: "learning_plan"; data: LearningPlan }
+  | { kind: "tco_report"; data: TcoReport }
+  | { kind: "network_topology"; data: NetworkTopology }
+  | { kind: "landing_zone_design"; data: LandingZoneDesign }
+  | { kind: "rbac_model"; data: RbacModel }
+  | { kind: "threat_register"; data: ThreatRegister }
+  | { kind: "pipeline_design"; data: PipelineDesign }
+  | { kind: "slo_framework"; data: SloFramework }
+  | { kind: "sku_recommendation"; data: SkuRecommendation }
+  | { kind: "region_comparison"; data: RegionComparison }
+  | { kind: "practice_exam_pack"; data: PracticeExamPack }
+  | { kind: "stakeholder_plan"; data: StakeholderPlan }
+  | { kind: "decision_card"; data: DecisionCard };
+
+
+// ── Presentation / deck builder types ────────────────────────────────────────
+
+export interface SlideOutlineItem {
+  slide_number: number;
+  layout: "title" | "agenda" | "section_divider" | "content" | "two_column" | "quote_stat" | "summary" | "references";
+  title: string;
+  content: string[];
+  right_content?: string[];
+  speaker_notes: string;
+}
+
+export interface DeckOutline {
+  deck_title: string;
+  subtitle: string;
+  slides: SlideOutlineItem[];
+}
+
+export interface DeckRecommendation {
+  type: "structure" | "content" | "narrative" | "audience_fit";
+  issue: string;
+  suggestion: string;
+  severity: "high" | "medium" | "low";
+}
+
+// ── Conversation history ─────────────────────────────────────────────────────
+
+export interface ConversationRecord {
+  id: string;
+  mode: Mode;
+  title: string;
+  createdAt: number;
+  updatedAt: number;
+  messages: ChatMessage[];
+}
+
+// ── Settings + multi-provider LLM ────────────────────────────────────────────
+
+export interface ModelConfig {
+  provider: "azure" | "github-models" | "github-copilot";
+  model: string;
+}
+
+export interface UserSettings {
+  github_token: string;
+  mode_models: Partial<Record<Mode, ModelConfig>>;
+}
+
+// ── Code generator types ──────────────────────────────────────────────────────
+
+export interface CodeFile {
+  name: string;
+  content: string;
+  language: string;
+  description?: string;
+}
+
+// ── SSE event union ──────────────────────────────────────────────────────────
+
+export type SseEvent =
+  | { type: "token"; content: string }
+  | { type: "citations"; citations: Citation[] }
+  | { type: "diagram"; xml: string }
+  | { type: "runbook"; markdown: string }
+  | { type: "bicep"; code: string; param_file?: string; deploy_commands?: string[]; notes?: string[] }
+  | { type: "cost_estimate"; estimate: CostEstimate }
+  | { type: "monitoring_config"; config: MonitoringConfig }
+  | { type: "compliance_result"; result: ComplianceResult }
+  | { type: "migration_assessment"; assessment: MigrationAssessment }
+  | { type: "dr_strategy"; strategy: DrStrategy }
+  | { type: "service_comparison"; comparison: ServiceComparison }
+  | { type: "waf_pillar"; pillar: WafPillarResult }
+  | { type: "waf_complete"; pillars: WafPillarResult[] }
+  | { type: "adr"; data: AdrRecord }
+  | { type: "outline"; outline: DeckOutline }
+  | { type: "review"; overall_assessment: string; recommendations: DeckRecommendation[]; improved_outline: DeckOutline }
+  | { type: "file"; name: string; content: string; language: string; description?: string }
+  | { type: "summary"; summary: string; repo_name: string }
+  | { type: "learning_plan"; plan: LearningPlan }
+  | { type: "tco_report"; report: TcoReport }
+  | { type: "network_topology"; topology: NetworkTopology }
+  | { type: "landing_zone_design"; design: LandingZoneDesign }
+  | { type: "rbac_model"; model: RbacModel }
+  | { type: "threat_register"; register: ThreatRegister }
+  | { type: "pipeline_design"; design: PipelineDesign }
+  | { type: "slo_framework"; framework: SloFramework }
+  | { type: "sku_recommendation"; recommendation: SkuRecommendation }
+  | { type: "region_comparison"; comparison: RegionComparison }
+  | { type: "practice_exam_pack"; pack: PracticeExamPack }
+  | { type: "stakeholder_plan"; plan: StakeholderPlan }
+  | { type: "decision_card"; card: DecisionCard }
+  | { type: "done" }
+  | { type: "status"; message: string }
+  | { type: "error"; message: string };

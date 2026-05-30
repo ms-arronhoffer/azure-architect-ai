@@ -1,0 +1,28 @@
+*, *::before, *::after { box-sizing: border-box; }
+html, body, #root { height: 100%; margin: 0; padding: 0; }
+
+body {
+  font-family: "Segoe UI Variable", "Segoe UI", -apple-system, BlinkMacSystemFont, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  line-height: 1.5;
+}
+
+/* Thin, elegant scrollbar */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: rgba(128, 128, 128, 0.2);
+  border-radius: 10px;
+  transition: background 0.2s;
+}
+::-webkit-scrollbar-thumb:hover { background: rgba(128, 128, 128, 0.4); }
+::-webkit-scrollbar-corner { background: transparent; }
+
+/* Azure blue selection */
+::selection { background: rgba(0, 120, 212, 0.28); }
+
+/* Monospace for code */
+code, pre, kbd {
+  font-family: "Cascadia Code", "Fira Code", "Consolas", monospace;
+}

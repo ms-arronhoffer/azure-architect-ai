@@ -1,0 +1,421 @@
+"""
+Architecture route — orchestrates multi-step architecture design and WAF assessments.
+Streams typed SSE events including diagram, runbook, Bicep, and cost estimate.
+"""
+
+import json
+from typing import AsyncGenerator
+
+from fastapi import APIRouter
+from fastapi.responses import StreamingResponse
+from openai import BadRequestError, AuthenticationError, APIError
+from pydantic import BaseModel
+
+from models import ModelConfig
+from prompts.system_prompt import MODE_TEMPLATES
+from services.diagram_service import generate_diagram
+from services.docs_service import search_azure_docs
+from services.mcp_service import call_mcp_tool, is_mcp_tool
+from services.openai_service import get_client, get_deployment, resolve_client_and_model
+from services.pricing_service import estimate_architecture, get_regional_pricing_context
+from services.runbook_service import build_runbook
+from services.settings_service import load_settings
+from tools.tool_definitions import get_tools_for_mode
+
+router = APIRouter()
+
+ARCHITECTURE_MODES = {"architecture", "waf", "review", "drbc", "network", "aiarchitecture", "dataplatform", "apim"}
+
+
+class ArchRequest(BaseModel):
+    requirements: str
+    constraints: str = ""
+    pattern: str = "custom"
+    mode: str = "architecture"
+    existing_description: str = ""
+    attachments: list[str] = []
+    include_components: list[str] = []  # e.g. ["diagram","runbook","bicep","cost","adr"]; empty = all
+    region: str = ""
+    llm_config: ModelConfig | None = None
+
+
+async def _stream_architecture(req: ArchRequest, provider: str = "azure", model: str = "", github_token: str = "") -> AsyncGenerator[str, None]:
+    try:
+        client, deployment = resolve_client_and_model("architecture", provider, model, github_token)
+    except ValueError as e:
+        yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
+        return
+    mode = req.mode if req.mode in ARCHITECTURE_MODES else "architecture"
+    system = MODE_TEMPLATES.get(mode, MODE_TEMPLATES["architecture"])
+    tools = get_tools_for_mode(mode)
+
+    if mode == "waf":
+        yield f"data: {json.dumps({'type': 'status', 'message': 'Running WAF assessment...'})}\n\n"
+        async for chunk in _stream_waf_assessment(req, client, deployment, system):
+            yield chunk
+        return
+
+    user_prompt = _build_prompt(req, mode)
+
+    if req.attachments:
+        parts: list[dict] = [{"type": "text", "text": user_prompt}]
+        for att in req.attachments:
+            if att.startswith("data:image/"):
+                parts.append({"type": "image_url", "image_url": {"url": att, "detail": "high"}})
+            else:
+                parts[0]["text"] += f"\n\n{att}"
+        user_content: object = parts
+    else:
+        user_content = user_prompt
+
+    enriched_system = system
+    if req.region:
+        try:
+            yield f"data: {json.dumps({'type': 'status', 'message': 'Fetching live pricing data...'})}\n\n"
+            pricing_ctx = await get_regional_pricing_context(req.region)
+            if pricing_ctx:
+                enriched_system = system + "\n\n" + pricing_ctx
+        except Exception:
+            pass
+
+    full_messages = [
+        {"role": "system", "content": enriched_system},
+        {"role": "user", "content": user_content},
+    ]
+
+    citations: list[dict] = []
+    arch_data: dict = {}
+    bicep_data: dict = {}
+    cost_items: list[dict] = []
+    adr_data: dict = {}
+
+    yield f"data: {json.dumps({'type': 'status', 'message': 'Searching reference architectures...'})}\n\n"
+
+    while True:
+        try:
+            stream = client.chat.completions.create(
+                model=deployment,
+                messages=full_messages,
+                tools=tools,
+                tool_choice="auto",
+                stream=True,
+                max_completion_tokens=8000,
+            )
+        except (BadRequestError, AuthenticationError, APIError) as e:
+            msg = getattr(e, "message", str(e))
+            yield f"data: {json.dumps({'type': 'error', 'message': msg})}\n\n"
+            return
+
+        collected_content = ""
+        tool_calls_raw: dict[int, dict] = {}
+        finish_reason = None
+
+        for chunk in stream:
+            if not chunk.choices:
+                continue
+            delta = chunk.choices[0].delta
+            finish_reason = chunk.choices[0].finish_reason
+
+            if delta.content:
+                collected_content += delta.content
+                yield f"data: {json.dumps({'type': 'token', 'content': delta.content})}\n\n"
+
+            if delta.tool_calls:
+                for tc in delta.tool_calls:
+                    idx = tc.index
+                    if idx not in tool_calls_raw:
+                        tool_calls_raw[idx] = {"id": "", "name": "", "arguments": ""}
+                    if tc.id:
+                        tool_calls_raw[idx]["id"] = tc.id
+                    if tc.function:
+                        if tc.function.name:
+                            tool_calls_raw[idx]["name"] = tc.function.name
+                        if tc.function.arguments:
+                            tool_calls_raw[idx]["arguments"] += tc.function.arguments
+
+        if finish_reason == "tool_calls" and tool_calls_raw:
+            tool_calls_formatted = [
+                {
+                    "id": v["id"],
+                    "type": "function",
+                    "function": {"name": v["name"], "arguments": v["arguments"]},
+                }
+                for v in tool_calls_raw.values()
+            ]
+            full_messages.append({
+                "role": "assistant",
+                "content": collected_content or None,
+                "tool_calls": tool_calls_formatted,
+            })
+
+            for tc in tool_calls_raw.values():
+                name = tc["name"]
+                args = _safe_json(tc["arguments"])
+
+                if name == "search_azure_docs":
+                    yield f"data: {json.dumps({'type': 'status', 'message': 'Fetching docs...'})}\n\n"
+                    result = await search_azure_docs(
+                        query=args.get("query", ""), category=args.get("category", "")
+                    )
+                    citations.extend(result)
+
+                elif name == "design_architecture":
+                    yield f"data: {json.dumps({'type': 'status', 'message': 'Generating diagram...'})}\n\n"
+                    arch_data = args
+                    result = {"status": "design_received", "component_count": len(args.get("components", []))}
+
+                elif name == "generate_bicep":
+                    yield f"data: {json.dumps({'type': 'status', 'message': 'Generating Bicep IaC...'})}\n\n"
+                    bicep_data = args
+                    yield f"data: {json.dumps({'type': 'bicep', 'code': args.get('bicep_code', ''), 'target_scope': args.get('target_scope', 'resourceGroup'), 'param_file': args.get('param_file'), 'deploy_commands': args.get('deploy_commands', []), 'notes': args.get('notes', [])})}\n\n"
+                    result = {"status": "bicep_received"}
+
+                elif name == "estimate_costs":
+                    yield f"data: {json.dumps({'type': 'status', 'message': 'Fetching pricing data...'})}\n\n"
+                    line_items = args.get("line_items", [])
+                    cost_items = line_items
+                    try:
+                        estimate = await estimate_architecture(line_items)
+                        estimate["optimization_tips"] = args.get("optimization_tips", [])
+                        yield f"data: {json.dumps({'type': 'cost_estimate', 'estimate': estimate})}\n\n"
+                        result = {"status": "cost_estimated", "total": estimate["total_monthly_estimate"]}
+                    except Exception as e:
+                        result = {"status": "error", "message": str(e)}
+
+                elif name == "design_network_topology":
+                    yield f"data: {json.dumps({'type': 'status', 'message': 'Building network topology...'})}\n\n"
+                    yield f"data: {json.dumps({'type': 'network_topology', 'topology': args})}\n\n"
+                    result = {"status": "network_topology_received"}
+
+                elif name == "assess_waf_pillar":
+                    pillar_data = args
+                    yield f"data: {json.dumps({'type': 'waf_pillar', 'pillar': pillar_data})}\n\n"
+                    result = {"status": "received"}
+
+                elif name == "generate_adr":
+                    adr_data = args
+                    yield f"data: {json.dumps({'type': 'adr', 'data': args})}\n\n"
+                    result = {"status": "adr_received"}
+
+                elif is_mcp_tool(name):
+                    yield f"data: {json.dumps({'type': 'status', 'message': 'Consulting Azure docs...'})}\n\n"
+                    result = await call_mcp_tool(name, args)
+
+                else:
+                    result = {}
+
+                full_messages.append({
+                    "role": "tool",
+                    "tool_call_id": tc["id"],
+                    "content": json.dumps(result),
+                })
+        else:
+            break
+
+    # Post-LLM: generate diagram and runbook if we have arch data
+    include = set(req.include_components) if req.include_components else {"diagram", "runbook", "bicep", "cost", "adr"}
+    if arch_data.get("components"):
+        if "diagram" in include:
+            try:
+                diagram_xml = generate_diagram(
+                    components=arch_data["components"],
+                    connections=arch_data.get("connections", []),
+                    title=req.requirements[:60],
+                )
+                yield f"data: {json.dumps({'type': 'diagram', 'xml': diagram_xml})}\n\n"
+            except Exception as e:
+                yield f"data: {json.dumps({'type': 'error', 'message': f'Diagram error: {e}'})}\n\n"
+
+        if "runbook" in include:
+            runbook_md = build_runbook(
+                arch_name=req.requirements[:80],
+                overview=arch_data.get("overview", req.requirements),
+                components=arch_data.get("components", []),
+                deployment_steps=arch_data.get("deployment_steps"),
+            )
+            yield f"data: {json.dumps({'type': 'runbook', 'markdown': runbook_md})}\n\n"
+
+    if citations:
+        yield f"data: {json.dumps({'type': 'citations', 'citations': citations})}\n\n"
+
+    yield "data: [DONE]\n\n"
+
+
+async def _stream_waf_assessment(req: ArchRequest, client, deployment: str, system: str):
+    desc = req.existing_description or req.requirements
+    pillars = ["reliability", "security", "cost", "operational-excellence", "performance"]
+    tools = get_tools_for_mode("waf")
+    pillar_results: list[dict] = []
+
+    for pillar in pillars:
+        yield f"data: {json.dumps({'type': 'status', 'message': f'Assessing {pillar}...'})}\n\n"
+
+        full_messages = [
+            {"role": "system", "content": system},
+            {
+                "role": "user",
+                "content": (
+                    f"Assess this architecture against the WAF {pillar} pillar and call assess_waf_pillar "
+                    f"with your findings and a score 1-5.\n\nArchitecture: {desc}"
+                ),
+            },
+        ]
+
+        while True:
+            stream = client.chat.completions.create(
+                model=deployment,
+                messages=full_messages,
+                tools=tools,
+                tool_choice="auto",
+                stream=True,
+                max_completion_tokens=1500,
+            )
+
+            tool_calls_raw: dict[int, dict] = {}
+            finish_reason = None
+            collected = ""
+
+            for chunk in stream:
+                if not chunk.choices:
+                    continue
+                delta = chunk.choices[0].delta
+                finish_reason = chunk.choices[0].finish_reason
+                if delta.content:
+                    collected += delta.content
+                if delta.tool_calls:
+                    for tc in delta.tool_calls:
+                        idx = tc.index
+                        if idx not in tool_calls_raw:
+                            tool_calls_raw[idx] = {"id": "", "name": "", "arguments": ""}
+                        if tc.id:
+                            tool_calls_raw[idx]["id"] = tc.id
+                        if tc.function:
+                            if tc.function.name:
+                                tool_calls_raw[idx]["name"] = tc.function.name
+                            if tc.function.arguments:
+                                tool_calls_raw[idx]["arguments"] += tc.function.arguments
+
+            if finish_reason == "tool_calls" and tool_calls_raw:
+                tool_calls_formatted = [
+                    {"id": v["id"], "type": "function", "function": {"name": v["name"], "arguments": v["arguments"]}}
+                    for v in tool_calls_raw.values()
+                ]
+                full_messages.append({"role": "assistant", "content": collected or None, "tool_calls": tool_calls_formatted})
+
+                for tc in tool_calls_raw.values():
+                    if tc["name"] == "assess_waf_pillar":
+                        args = _safe_json(tc["arguments"])
+                        pillar_results.append(args)
+                        yield f"data: {json.dumps({'type': 'waf_pillar', 'pillar': args})}\n\n"
+                        result = {"status": "received"}
+                    else:
+                        result = {}
+                    full_messages.append({"role": "tool", "tool_call_id": tc["id"], "content": json.dumps(result)})
+            else:
+                break
+
+    yield f"data: {json.dumps({'type': 'waf_complete', 'pillars': pillar_results})}\n\n"
+    yield "data: [DONE]\n\n"
+
+
+def _build_prompt(req: ArchRequest, mode: str) -> str:
+    base = (
+        f"**Requirements:** {req.requirements}\n"
+        f"**Constraints:** {req.constraints or 'None specified'}\n"
+        f"**Pattern:** {req.pattern}\n\n"
+    )
+    if mode == "network":
+        return (
+            f"Design an Azure network topology for the following requirements:\n\n"
+            + base
+            + "Call design_network_topology with a complete topology (VNets, subnets, NSG rules, private endpoints, DNS, firewall). "
+            "Also call design_architecture so a diagram can be generated. "
+            "Call generate_bicep with network IaC. Call estimate_costs for monthly networking budget. "
+            "After tool calls, provide a detailed explanation of the design decisions."
+        )
+    if mode == "aiarchitecture":
+        return (
+            f"Design an Azure AI/ML architecture for the following requirements:\n\n"
+            + base
+            + "Call search_azure_docs to find relevant AI reference architectures. "
+            "Call design_architecture with the full component list including AI services, data stores, and supporting infrastructure. "
+            "Call generate_bicep with production-ready IaC. Call estimate_costs for monthly AI workload budget. "
+            "Call generate_adr to document the primary AI architecture decision (e.g. RAG vs fine-tuning, model selection). "
+            "After tool calls, provide a detailed explanation of the AI architecture."
+        )
+    if mode == "dataplatform":
+        return (
+            f"Design an Azure data platform architecture for the following requirements:\n\n"
+            + base
+            + "Call search_azure_docs to find relevant data platform reference architectures (Fabric, Synapse, Databricks). "
+            "Call design_architecture with the full component list including ingestion, storage (medallion layers), processing, governance, and serving layers. "
+            "Call generate_bicep with production-ready IaC for the key data resources. "
+            "Call estimate_costs for monthly data platform budget. "
+            "After tool calls, provide a detailed explanation of the data architecture and medallion layer design."
+        )
+    if mode == "apim":
+        return (
+            f"Design an Azure API Management architecture for the following requirements:\n\n"
+            + base
+            + "Call search_azure_docs to find relevant APIM best practices and policy documentation. "
+            "Call design_architecture with the full APIM topology (gateway, backends, consumers, security components). "
+            "Call generate_bicep with APIM resource deployment including key policy XML. "
+            "Call estimate_costs for monthly APIM cost (tier, units, bandwidth). "
+            "After tool calls, provide a detailed explanation of the API management design decisions."
+        )
+    if mode == "review":
+        attachment_note = (
+            f"\n\nNote: {len(req.attachments)} file(s) have been uploaded for analysis "
+            "(diagrams will be analyzed visually; architecture files as text)."
+            if req.attachments else ""
+        )
+        return (
+            f"Conduct a thorough architecture review (red team + WAF assessment) of the following:\n\n"
+            + base
+            + attachment_note
+            + "\nSearch for best practices, then provide findings with severity ratings."
+        )
+    if mode == "drbc":
+        return (
+            f"Design a comprehensive DR/BC strategy for this workload:\n\n"
+            + base
+            + "Call design_dr_strategy with your recommendation. Include a full failover runbook."
+        )
+    include = set(req.include_components) if req.include_components else {"diagram", "runbook", "bicep", "cost", "adr"}
+    tool_instructions = ["Call search_azure_docs to find relevant reference architectures."]
+    if "diagram" in include or "runbook" in include:
+        tool_instructions.append(
+            "Call design_architecture with a complete component list including tier assignments."
+        )
+    if "bicep" in include:
+        tool_instructions.append("Call generate_bicep with production-ready IaC.")
+    if "cost" in include:
+        tool_instructions.append("Call estimate_costs for monthly budget.")
+    if "adr" in include:
+        tool_instructions.append("Call generate_adr to document the primary architectural decision.")
+    tool_instructions.append("After the tool calls, provide a detailed explanation.")
+    return (
+        f"Design an Azure architecture for the following requirements:\n\n"
+        + base
+        + " ".join(tool_instructions)
+    )
+
+
+def _safe_json(s: str) -> dict:
+    try:
+        return json.loads(s)
+    except Exception:
+        return {}
+
+
+@router.post("/architecture")
+async def architecture(req: ArchRequest):
+    app_settings = await load_settings()
+    mc = req.llm_config or app_settings.mode_models.get(req.mode)
+    provider = mc.provider if mc else "azure"
+    model = mc.model if mc else ""
+    return StreamingResponse(
+        _stream_architecture(req, provider, model, app_settings.github_token),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
