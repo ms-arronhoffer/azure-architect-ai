@@ -37,6 +37,28 @@ class ChatRequest(BaseModel):
     llm_config: ModelConfig | None = None
 
 
+# Modes that get mandatory doc pre-retrieval before the LLM call.
+# Each value is a base query that gets augmented with the user's message snippet.
+PREFETCH_MODES: dict[str, str] = {
+    "landingzone":  "Azure Cloud Adoption Framework landing zone management groups hub-spoke networking governance",
+    "threatmodel":  "Azure threat modeling STRIDE security controls zero trust defender",
+    "reliability":  "Azure reliability SLO SLA error budget site reliability engineering chaos engineering",
+    "sizing":       "Azure compute VM SKU sizing recommendations capacity planning performance tiers",
+    "drbc":         "Azure disaster recovery business continuity failover RTO RPO geo-replication",
+    "waf":          "Azure Well-Architected Framework reliability security cost operational excellence performance",
+}
+
+
+async def _prefetch_docs(mode: str, user_message: str) -> list[dict]:
+    """Fetch Learn docs before the LLM call for structured-output modes."""
+    base = PREFETCH_MODES.get(mode)
+    if not base:
+        return []
+    snippet = user_message[:150].strip()
+    query = f"{base} {snippet}".strip()
+    return await search_azure_docs(query=query, top=5)
+
+
 async def _stream_chat(mode: str, messages: list[dict], provider: str = "azure", model: str = "", github_token: str = "") -> AsyncGenerator[str, None]:
     try:
         client, deployment = resolve_client_and_model(mode, provider, model, github_token)
@@ -48,6 +70,20 @@ async def _stream_chat(mode: str, messages: list[dict], provider: str = "azure",
 
     full_messages = [{"role": "system", "content": system}] + messages
     citations: list[dict] = []
+
+    # Mandatory pre-retrieval for structured output modes — inject into system message
+    # so every response is anchored to real Learn articles, not just training knowledge.
+    user_content = messages[-1].get("content", "") if messages else ""
+    prefetched = await _prefetch_docs(mode, user_content)
+    if prefetched:
+        citations.extend(prefetched)
+        doc_block = "\n".join(
+            f"- [{d['title']}]({d['url']}): {d['description']}"
+            for d in prefetched
+        )
+        full_messages[0]["content"] += (
+            f"\n\n## Retrieved Documentation (cite these URLs in your response)\n{doc_block}"
+        )
 
     while True:
         kwargs: dict = {
