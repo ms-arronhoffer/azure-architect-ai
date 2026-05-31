@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { Panel, Group as PanelGroup, Separator as PanelResizeHandle } from "react-resizable-panels";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import {
@@ -14,7 +15,7 @@ import {
 } from "@fluentui/react-components";
 import { SendRegular, ChatRegular } from "@fluentui/react-icons";
 import { useSSE } from "../hooks/useSSE";
-import type { ChatMessage, Threat, ThreatRegister } from "../types";
+import type { ChatMessage, Threat, ThreatRegister, ConversationRecord, Mode } from "../types";
 
 type TmTab = "overview" | "stride" | "attack-surface" | "mitigations" | "controls";
 
@@ -203,7 +204,12 @@ function ThreatCard({ threat, styles }: { threat: Threat; styles: ReturnType<typ
   );
 }
 
-export default function ThreatModelPanel({ onRefine }: { onRefine?: (context: ChatMessage[]) => void }) {
+export default function ThreatModelPanel({ onRefine, sessionId, onSave, initialSession }: {
+  onRefine?: (context: ChatMessage[]) => void;
+  sessionId?: string;
+  onSave?: (id: string, mode: Mode, messages: ChatMessage[], structuredResult: unknown) => void;
+  initialSession?: ConversationRecord;
+}) {
   const styles = useStyles();
   const { stream, isStreaming, cancel } = useSSE();
 
@@ -215,6 +221,13 @@ export default function ThreatModelPanel({ onRefine }: { onRefine?: (context: Ch
   const [narrative, setNarrative] = useState("");
   const [register, setRegister] = useState<ThreatRegister | null>(null);
   const [statusMsg, setStatusMsg] = useState("");
+
+  useEffect(() => {
+    if (!initialSession?.structuredResult) return;
+    const sr = initialSession.structuredResult as { narrative?: string; register?: ThreatRegister };
+    if (sr.narrative) setNarrative(sr.narrative);
+    if (sr.register) setRegister(sr.register);
+  }, []);
 
   async function handleRun() {
     if (!archDescription.trim() || isStreaming) return;
@@ -229,12 +242,23 @@ export default function ThreatModelPanel({ onRefine }: { onRefine?: (context: Ch
       integrations ? `External Integrations: ${integrations}` : "",
     ].filter(Boolean).join("\n");
 
+    let localNarrative = "";
+    let localRegister: ThreatRegister | null = null;
+
     await stream("/api/chat", { mode: "threatmodel", message: prompt }, (event) => {
-      if (event.type === "token") setNarrative((p) => p + event.content);
-      if (event.type === "threat_register") setRegister(event.register);
+      if (event.type === "token") { localNarrative += event.content; setNarrative((p) => p + event.content); }
+      if (event.type === "threat_register") { localRegister = event.register; setRegister(event.register); }
       if (event.type === "status") setStatusMsg(event.message);
     });
     setStatusMsg("");
+
+    if (onSave && sessionId && (localNarrative || localRegister)) {
+      const msgs: ChatMessage[] = [
+        { id: crypto.randomUUID(), role: "user", content: prompt },
+        { id: crypto.randomUUID(), role: "assistant", content: localNarrative },
+      ];
+      onSave(sessionId, "threatmodel", msgs, { narrative: localNarrative, register: localRegister });
+    }
   }
 
   function handleRefine() {
@@ -269,8 +293,9 @@ export default function ThreatModelPanel({ onRefine }: { onRefine?: (context: Ch
 
   return (
     <div className={styles.panel}>
-      <div className={styles.layout}>
-        <div className={styles.sidebar}>
+      <PanelGroup orientation="horizontal" style={{ height: "100%", overflow: "hidden" }}>
+        <Panel defaultSize={28} minSize={18} maxSize={45}>
+          <div style={{ height: "100%", overflowY: "auto", padding: "20px 16px", borderRight: `1px solid ${tokens.colorNeutralStroke2}`, background: tokens.colorNeutralBackground1, display: "flex", flexDirection: "column", gap: "14px" }}>
           <Text weight="semibold" size={400}>Threat Model</Text>
           <Text size={200} style={{ color: tokens.colorNeutralForeground3, marginTop: "-8px" }}>
             STRIDE Analysis & Security Controls
@@ -324,9 +349,13 @@ export default function ThreatModelPanel({ onRefine }: { onRefine?: (context: Ch
               Refine in Chat
             </Button>
           )}
-        </div>
+          </div>
+        </Panel>
 
-        <div className={styles.right}>
+        <PanelResizeHandle style={{ width: "4px", background: tokens.colorNeutralBackground3, cursor: "col-resize" }} />
+
+        <Panel>
+          <div style={{ height: "100%", display: "flex", flexDirection: "column", overflow: "hidden" }}>
           <div className={styles.tabBar}>
             <TabList
               selectedValue={activeTab}
@@ -457,8 +486,9 @@ export default function ThreatModelPanel({ onRefine }: { onRefine?: (context: Ch
               )
             )}
           </div>
-        </div>
-      </div>
+          </div>
+        </Panel>
+      </PanelGroup>
     </div>
   );
 }

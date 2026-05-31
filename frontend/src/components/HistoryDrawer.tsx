@@ -14,21 +14,43 @@ import type { ConversationRecord, Mode } from "../types";
 
 const MODE_LABELS: Partial<Record<Mode, string>> = {
   qa: "Q&A",
-  architecture: "Architecture",
-  waf: "WAF",
-  review: "Review",
+  situation: "Situation",
+  certprep: "Cert Prep",
+  regional: "Regional",
+  compare: "Compare",
+  governance: "Governance",
   compliance: "Compliance",
+  identity: "Identity",
+  security: "Security",
+  devsecops: "DevSecOps",
   migration: "Migration",
   cost: "Cost",
   monitoring: "Monitoring",
+  ops: "Ops",
+  architecture: "Architecture",
+  network: "Network",
+  aiarchitecture: "AI Arch",
+  dataplatform: "Data Platform",
+  apim: "APIM",
+  waf: "WAF",
+  review: "Review",
   drbc: "DR/BC",
-  situation: "Situation",
+  sizing: "Sizing",
+  tco: "TCO",
+  threatmodel: "Threat Model",
+  reliability: "Reliability",
+  landingzone: "Landing Zone",
   presentation: "Presentation",
-  certprep: "Cert Prep",
   reference: "Reference",
-  compare: "Compare",
-  regional: "Regional",
+  codegen: "Code Gen",
+  learningplan: "Learning Plan",
+  bootstrap: "Bootstrap",
 };
+
+const PANEL_MODES = new Set<Mode>([
+  "architecture", "network", "aiarchitecture", "dataplatform", "apim",
+  "waf", "review", "drbc", "sizing", "tco", "threatmodel", "reliability", "landingzone",
+]);
 
 const useStyles = makeStyles({
   list: {
@@ -56,6 +78,12 @@ const useStyles = makeStyles({
     textOverflow: "ellipsis",
     whiteSpace: "nowrap",
     display: "block",
+  },
+  meta: {
+    display: "flex",
+    alignItems: "center",
+    gap: "6px",
+    marginTop: "2px",
   },
   date: {
     fontSize: "11px",
@@ -108,13 +136,13 @@ export default function HistoryDrawer({
             <Button appearance="subtle" size="small" icon={<DismissRegular />} onClick={onClose} />
           }
         >
-          Conversation History
+          History
         </DrawerHeaderTitle>
       </DrawerHeader>
       <DrawerBody>
         {conversations.length === 0 ? (
           <div className={styles.empty}>
-            <Text size={300}>No saved conversations yet.</Text>
+            <Text size={300}>No saved sessions yet.</Text>
           </div>
         ) : (
           <>
@@ -129,26 +157,41 @@ export default function HistoryDrawer({
               </Button>
             </div>
             <div className={styles.list}>
-              {conversations.map((conv) => (
-                <div key={conv.id} className={styles.item} onClick={() => { onLoad(conv); onClose(); }}>
-                  <Badge appearance="tint" size="small" color="informative">
-                    {MODE_LABELS[conv.mode] ?? conv.mode}
-                  </Badge>
-                  <div className={styles.itemContent}>
-                    <Text className={styles.title}>{conv.title}</Text>
-                    <span className={styles.date}>
-                      {new Date(conv.updatedAt).toLocaleDateString()}
-                    </span>
+              {conversations.map((conv) => {
+                const isPanel = PANEL_MODES.has(conv.mode);
+                const hasSaved = !!conv.structuredResult;
+                return (
+                  <div key={conv.id} className={styles.item} onClick={() => { onLoad(conv); onClose(); }}>
+                    <Badge
+                      appearance="tint"
+                      size="small"
+                      color={isPanel ? "brand" : "informative"}
+                    >
+                      {MODE_LABELS[conv.mode] ?? conv.mode}
+                    </Badge>
+                    <div className={styles.itemContent}>
+                      <Text className={styles.title}>{conv.title}</Text>
+                      <div className={styles.meta}>
+                        <span className={styles.date}>
+                          {new Date(conv.updatedAt).toLocaleDateString()}
+                        </span>
+                        {hasSaved && (
+                          <Badge appearance="filled" color="success" size="extra-small">
+                            Saved
+                          </Badge>
+                        )}
+                      </div>
+                    </div>
+                    <Button
+                      appearance="subtle"
+                      size="small"
+                      icon={<DeleteRegular />}
+                      onClick={(e) => { e.stopPropagation(); onDelete(conv.id); }}
+                      title="Delete"
+                    />
                   </div>
-                  <Button
-                    appearance="subtle"
-                    size="small"
-                    icon={<DeleteRegular />}
-                    onClick={(e) => { e.stopPropagation(); onDelete(conv.id); }}
-                    title="Delete"
-                  />
-                </div>
-              ))}
+                );
+              })}
             </div>
           </>
         )}

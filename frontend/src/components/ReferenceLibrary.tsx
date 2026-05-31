@@ -19,6 +19,7 @@ import {
   SearchRegular,
 } from "@fluentui/react-icons";
 import type { ReferenceArch } from "../types";
+import { apiPath } from "../config/api";
 
 const COMPLEXITY_COLOR: Record<string, "informative" | "warning" | "danger"> = {
   Low: "informative", Medium: "warning", High: "danger",
@@ -163,7 +164,7 @@ export default function ReferenceLibrary() {
       if (q) params.set("q", q);
       if (cat) params.set("category", cat);
       if (tag) params.set("tag", tag);
-      const resp = await fetch(`/api/reference-architectures?${params}`);
+      const resp = await fetch(apiPath(`/api/reference-architectures?${params}`));
       const data = await resp.json();
       setArchs(data.architectures ?? []);
       if (data.categories?.length) setCategories(data.categories);

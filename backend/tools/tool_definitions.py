@@ -1580,6 +1580,196 @@ TOOLS = [
         },
     },
 ]
+
+# ── Project planning ────────────────────────────────────────────────────────
+TOOLS.extend([
+    {
+        "type": "function",
+        "function": {
+            "name": "generate_project_timeline",
+            "description": (
+                "Produce a realistic phased implementation timeline (Gantt) for an Azure project. "
+                "Use for architecture, migration, DR, and landing-zone planning."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "phases": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "name": {"type": "string", "description": "Phase name, e.g. 'Network Foundation'"},
+                                "start_week": {"type": "integer", "minimum": 0},
+                                "duration_weeks": {"type": "integer", "minimum": 1},
+                                "dependencies": {"type": "array", "items": {"type": "string"}},
+                                "deliverables": {"type": "array", "items": {"type": "string"}},
+                            },
+                            "required": ["name", "start_week", "duration_weeks"],
+                        },
+                    },
+                    "total_weeks": {"type": "integer", "minimum": 1},
+                    "critical_path": {"type": "array", "items": {"type": "string"}},
+                    "notes": {"type": "string"},
+                },
+                "required": ["phases", "total_weeks"],
+            },
+        },
+    },
+])
+
+# ── Troubleshooting ─────────────────────────────────────────────────────────
+TOOLS.extend([
+    {
+        "type": "function",
+        "function": {
+            "name": "diagnose_issue",
+            "description": (
+                "Rank likely root causes for an Azure infrastructure issue with severity, "
+                "blast radius, and affected services."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "symptom": {"type": "string", "description": "What the user is observing."},
+                    "severity": {"type": "string", "enum": ["low", "medium", "high", "critical"]},
+                    "blast_radius": {"type": "string", "description": "Scope of impact (single tenant, region, global)."},
+                    "affected_services": {"type": "array", "items": {"type": "string"}},
+                    "hypotheses": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "cause": {"type": "string"},
+                                "likelihood": {"type": "string", "enum": ["high", "medium", "low"]},
+                                "evidence_needed": {"type": "string"},
+                                "rule_out_check": {"type": "string"},
+                            },
+                            "required": ["cause", "likelihood"],
+                        },
+                    },
+                },
+                "required": ["symptom", "severity", "hypotheses"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "generate_kql_queries",
+            "description": (
+                "Emit targeted Azure Monitor / Log Analytics KQL queries for evidence gathering. "
+                "Be specific about table names, time windows, and key columns."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "queries": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "name": {"type": "string", "description": "Short descriptive name, e.g. 'API Gateway 5xx Errors'"},
+                                "purpose": {"type": "string"},
+                                "table": {"type": "string", "description": "AzureDiagnostics, ContainerLog, AppTraces, etc."},
+                                "kql": {"type": "string"},
+                                "time_window": {"type": "string", "description": "e.g. 'last 1h', 'last 24h'"},
+                            },
+                            "required": ["name", "kql"],
+                        },
+                    },
+                },
+                "required": ["queries"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "generate_remediation_runbook",
+            "description": (
+                "Step-by-step fix procedure with exact commands, expected outputs, and fallbacks. "
+                "Include service-restart and downtime notes per step."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "steps": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "order": {"type": "integer"},
+                                "action": {"type": "string"},
+                                "command": {"type": "string", "description": "az / pwsh / kubectl invocation."},
+                                "expected_output": {"type": "string"},
+                                "fallback": {"type": "string"},
+                                "causes_downtime": {"type": "boolean"},
+                            },
+                            "required": ["order", "action"],
+                        },
+                    },
+                    "escalation_path": {"type": "string"},
+                    "estimated_resolution_minutes": {"type": "integer"},
+                },
+                "required": ["steps"],
+            },
+        },
+    },
+])
+
+# ── Governance / naming ─────────────────────────────────────────────────────
+TOOLS.extend([
+    {
+        "type": "function",
+        "function": {
+            "name": "validate_resource_naming",
+            "description": (
+                "Validate proposed Azure resource names against the Cloud Adoption Framework "
+                "(abbreviation + workload + env + region) plus per-type length/character rules. "
+                "Returns per-name pass/fail, errors, warnings, and a suggested fix."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "items": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "resource_type": {"type": "string", "description": "CAF key, e.g. 'storageAccount', 'keyVault'."},
+                                "name": {"type": "string"},
+                            },
+                            "required": ["resource_type", "name"],
+                        },
+                    },
+                },
+                "required": ["items"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "suggest_resource_name",
+            "description": (
+                "Produce a CAF-conformant Azure resource name from workload + env + region inputs."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "resource_type": {"type": "string"},
+                    "workload": {"type": "string"},
+                    "env": {"type": "string", "default": "dev"},
+                    "region": {"type": "string", "default": "eastus2"},
+                    "suffix": {"type": "string"},
+                },
+                "required": ["resource_type", "workload"],
+            },
+        },
+    },
+])
+
 _BY_NAME = {t["function"]["name"]: t for t in TOOLS}
 
 def get_tools(*names: str) -> list:

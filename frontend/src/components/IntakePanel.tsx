@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
   makeStyles,
   tokens,
@@ -19,6 +19,8 @@ import {
 import {
   ClipboardTaskRegular,
   DocumentRegular,
+  ArrowDownloadRegular,
+  ArrowUploadRegular,
   ArrowForwardRegular,
   SparkleRegular,
   AddRegular,
@@ -26,6 +28,7 @@ import {
 } from "@fluentui/react-icons";
 import { useWorkloadSpec, toSpecPromptPrefix } from "../hooks/useWorkloadSpec";
 import type { WorkloadSpec, Mode } from "../types";
+import { apiPath } from "../config/api";
 
 const COMPLIANCE_OPTIONS = [
   "HIPAA", "SOC 2", "PCI DSS", "ISO 27001", "FedRAMP", "GDPR", "NIST 800-53",
@@ -261,13 +264,15 @@ export default function IntakePanel({ onContinueIn }: IntakePanelProps) {
   const [isValidating, setIsValidating] = useState(false);
   const [validationNotes, setValidationNotes] = useState<string[]>([]);
   const [newService, setNewService] = useState("");
+  const [importFeedback, setImportFeedback] = useState<{ ok: boolean; msg: string } | null>(null);
+  const importFileRef = useRef<HTMLInputElement>(null);
   const pct = completion(spec);
 
   async function handleValidate() {
     setIsValidating(true);
     setValidationNotes([]);
     try {
-      const res = await fetch("/api/intake/validate", {
+      const res = await fetch(apiPath("/api/intake/validate"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(spec),
@@ -292,6 +297,43 @@ export default function IntakePanel({ onContinueIn }: IntakePanelProps) {
     a.download = `${spec.name || "workload"}-requirements.md`;
     a.click();
     URL.revokeObjectURL(url);
+  }
+
+  function handleDownloadTemplate() {
+    const template = { "$schema": "azure-architect-ai/workload-spec/v1", ...spec };
+    const blob = new Blob([JSON.stringify(template, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${spec.name || "workload"}-requirements.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function handleImportClick() {
+    importFileRef.current?.click();
+  }
+
+  function handleImportFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = "";
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const raw = JSON.parse(ev.target?.result as string);
+        // Strip schema metadata field before merging
+        const { $schema: _schema, ...parsed } = raw as Record<string, unknown>;
+        void _schema;
+        setSpec(parsed as Partial<WorkloadSpec>);
+        setImportFeedback({ ok: true, msg: "Requirements imported." });
+        setTimeout(() => setImportFeedback(null), 3000);
+      } catch {
+        setImportFeedback({ ok: false, msg: "Invalid JSON — file not imported." });
+        setTimeout(() => setImportFeedback(null), 4000);
+      }
+    };
+    reader.readAsText(file);
   }
 
   function toggleCompliance(fw: string) {
@@ -571,6 +613,18 @@ export default function IntakePanel({ onContinueIn }: IntakePanelProps) {
         <Button appearance="subtle" icon={<DocumentRegular />} onClick={handleExportMd} disabled={!spec.name}>
           Export .md
         </Button>
+        <Button appearance="subtle" icon={<ArrowDownloadRegular />} onClick={handleDownloadTemplate}>
+          Download Template
+        </Button>
+        <Button appearance="subtle" icon={<ArrowUploadRegular />} onClick={handleImportClick}>
+          Import JSON
+        </Button>
+        {importFeedback && (
+          <Text size={200} style={{ color: importFeedback.ok ? tokens.colorStatusSuccessForeground1 : tokens.colorStatusDangerForeground1 }}>
+            {importFeedback.msg}
+          </Text>
+        )}
+        <input ref={importFileRef} type="file" accept=".json" style={{ display: "none" }} onChange={handleImportFile} />
         <Button
           appearance="primary"
           icon={<ArrowForwardRegular />}

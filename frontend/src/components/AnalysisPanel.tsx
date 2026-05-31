@@ -23,6 +23,7 @@ import {
 } from "@fluentui/react-icons";
 import { useWorkloadSpec, toSpecPromptPrefix } from "../hooks/useWorkloadSpec";
 import type { WafPillarResult, ChatMessage } from "../types";
+import { apiPath } from "../config/api";
 
 interface JobStatus {
   status: "idle" | "running" | "done" | "error";
@@ -217,7 +218,7 @@ export default function AnalysisPanel({ onRefine }: { onRefine?: (context: ChatM
     const requirements = toSpecPromptPrefix(spec) || spec.additionalNotes || "General Azure workload analysis.";
 
     try {
-      const res = await fetch("/api/analyze", {
+      const res = await fetch(apiPath("/api/analyze"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -295,7 +296,7 @@ export default function AnalysisPanel({ onRefine }: { onRefine?: (context: ChatM
   }
 
   async function handleExportBrief() {
-    const res = await fetch("/api/export/brief", {
+    const res = await fetch(apiPath("/api/export/brief"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({

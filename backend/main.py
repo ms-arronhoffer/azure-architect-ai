@@ -4,7 +4,10 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from db import init_db
 from config import settings
+from middleware.logging import RequestContextMiddleware, configure_logging
 from services.mcp_service import init_mcp
+
+configure_logging()
 from routes.health import router as health_router
 from routes.chat import router as chat_router
 from routes.architecture import router as arch_router
@@ -18,6 +21,12 @@ from routes.codegen import router as codegen_router
 from routes.intake import router as intake_router
 from routes.analyze import router as analyze_router
 from routes.parse import router as parse_router
+from routes.auth import router as auth_router
+from routes.rag import router as rag_router
+from routes.scan import router as scan_router
+from routes.iac import router as iac_router
+from routes.cost import router as cost_router
+from routes.security import router as security_router
 
 
 @asynccontextmanager
@@ -26,11 +35,19 @@ async def lifespan(app: FastAPI):
         await init_db()
         if settings.mcp_enabled:
             await init_mcp(stack)
+        if settings.rag_enabled:
+            try:
+                from services.rag_service import reindex_reference_archs
+                await reindex_reference_archs()
+            except Exception as exc:
+                from middleware.logging import get_logger
+                get_logger("startup").warning("rag.warmup_failed", error=str(exc))
         yield
 
 
 app = FastAPI(title="Azure Architect AI", version="2.0.0", lifespan=lifespan)
 
+app.add_middleware(RequestContextMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:5173", "http://localhost:3000"],
@@ -52,3 +69,9 @@ app.include_router(codegen_router, prefix="/api")
 app.include_router(intake_router, prefix="/api")
 app.include_router(analyze_router, prefix="/api")
 app.include_router(parse_router, prefix="/api")
+app.include_router(auth_router, prefix="/api")
+app.include_router(rag_router, prefix="/api")
+app.include_router(scan_router, prefix="/api")
+app.include_router(iac_router, prefix="/api")
+app.include_router(cost_router, prefix="/api")
+app.include_router(security_router, prefix="/api")

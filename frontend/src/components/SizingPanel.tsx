@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { Panel, Group as PanelGroup, Separator as PanelResizeHandle } from "react-resizable-panels";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import {
@@ -33,7 +34,7 @@ import {
 import { useSSE } from "../hooks/useSSE";
 import { useWorkloadSpec, toSpecPromptPrefix } from "../hooks/useWorkloadSpec";
 import { exportSizingToDocx } from "../utils/sizingDocxExport";
-import type { SseEvent, SkuRecommendation, CostEstimate, ChatMessage } from "../types";
+import type { SseEvent, SkuRecommendation, CostEstimate, ChatMessage, ConversationRecord, Mode } from "../types";
 
 // ── Styles ────────────────────────────────────────────────────────────────────
 
@@ -156,11 +157,14 @@ type SizingTab = "recommendations" | "sku-matrix" | "cost-estimate" | "ri-saving
 
 interface SizingPanelProps {
   onRefine?: (context: ChatMessage[]) => void;
+  sessionId?: string;
+  onSave?: (id: string, mode: Mode, messages: ChatMessage[], structuredResult: unknown) => void;
+  initialSession?: ConversationRecord;
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export default function SizingPanel({ onRefine }: SizingPanelProps) {
+export default function SizingPanel({ onRefine, sessionId, onSave, initialSession }: SizingPanelProps) {
   const styles = useStyles();
   const { stream, isStreaming, cancel } = useSSE();
   const { stream: deliverableStream, isStreaming: deliverableStreaming, cancel: cancelDeliverable } = useSSE();
@@ -182,6 +186,15 @@ export default function SizingPanel({ onRefine }: SizingPanelProps) {
   const [statusMsg, setStatusMsg] = useState("");
   void cancelDeliverable;
 
+  useEffect(() => {
+    if (!initialSession?.structuredResult) return;
+    const sr = initialSession.structuredResult as { narrative?: string; skuRec?: SkuRecommendation; costEst?: CostEstimate; riSavings?: string };
+    if (sr.narrative) setNarrative(sr.narrative);
+    if (sr.skuRec) setSkuRec(sr.skuRec);
+    if (sr.costEst) setCostEst(sr.costEst);
+    if (sr.riSavings) setRiSavings(sr.riSavings);
+  }, []);
+
   const hasResults = narrative.length > 0 || skuRec !== null || costEst !== null;
 
   async function handleAssess() {
@@ -200,17 +213,30 @@ export default function SizingPanel({ onRefine }: SizingPanelProps) {
     parts.push(`Target availability: ${availability}`);
     if (budget) parts.push(`Monthly budget constraint: $${budget}`);
 
+    const prompt = parts.join("\n");
+    let localNarrative = "";
+    let localSkuRec: SkuRecommendation | null = null;
+    let localCostEst: CostEstimate | null = null;
+
     await stream(
       "/api/chat",
-      { mode: "sizing", messages: [{ role: "user", content: parts.join("\n") }] },
+      { mode: "sizing", messages: [{ role: "user", content: prompt }] },
       (event: SseEvent) => {
-        if (event.type === "token") setNarrative((n) => n + event.content);
+        if (event.type === "token") { localNarrative += event.content; setNarrative((n) => n + event.content); }
         if (event.type === "status") setStatusMsg(event.message);
-        if (event.type === "sku_recommendation") setSkuRec(event.recommendation);
-        if (event.type === "cost_estimate") setCostEst(event.estimate);
+        if (event.type === "sku_recommendation") { localSkuRec = event.recommendation; setSkuRec(event.recommendation); }
+        if (event.type === "cost_estimate") { localCostEst = event.estimate; setCostEst(event.estimate); }
       }
     );
     setStatusMsg("");
+
+    if (onSave && sessionId && (localNarrative || localSkuRec)) {
+      const msgs: ChatMessage[] = [
+        { id: crypto.randomUUID(), role: "user", content: prompt },
+        { id: crypto.randomUUID(), role: "assistant", content: localNarrative },
+      ];
+      onSave(sessionId, "sizing", msgs, { narrative: localNarrative, skuRec: localSkuRec, costEst: localCostEst, riSavings: "" });
+    }
   }
 
   async function generateRiSavings() {
@@ -464,9 +490,10 @@ Include specific percentage savings estimates for each category.`;
   // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
-    <div className={styles.panel}>
+    <PanelGroup orientation="horizontal" style={{ height: "100%", overflow: "hidden" }}>
       {/* ── Left Sidebar ───────────────────────────────────────────────── */}
-      <div className={styles.sidebar}>
+      <Panel defaultSize={28} minSize={18} maxSize={45}>
+        <div style={{ height: "100%", overflowY: "auto", padding: "20px 16px", borderRight: `1px solid ${tokens.colorNeutralStroke2}`, display: "flex", flexDirection: "column", gap: "16px", background: tokens.colorNeutralBackground1 }}>
         <div>
           <Text weight="semibold" size={400}>Capacity Sizing</Text>
           <Text size={200} style={{ color: tokens.colorNeutralForeground3, display: "block", marginTop: "4px" }}>
@@ -543,10 +570,14 @@ Include specific percentage savings estimates for each category.`;
             Export DOCX
           </Button>
         )}
-      </div>
+        </div>
+      </Panel>
+
+      <PanelResizeHandle style={{ width: "4px", background: tokens.colorNeutralBackground3, cursor: "col-resize" }} />
 
       {/* ── Right Panel ─────────────────────────────────────────────────── */}
-      <div className={styles.rightPanel}>
+      <Panel>
+        <div style={{ height: "100%", display: "flex", flexDirection: "column", overflow: "hidden" }}>
         <div className={styles.tabBar}>
           <TabList selectedValue={activeTab} onTabSelect={(_, d) => setActiveTab(d.value as SizingTab)}>
             <Tab value="recommendations">
@@ -566,7 +597,8 @@ Include specific percentage savings estimates for each category.`;
         <div className={styles.tabContent}>
           {renderTabContent()}
         </div>
-      </div>
-    </div>
+        </div>
+      </Panel>
+    </PanelGroup>
   );
 }

@@ -6,11 +6,17 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "lint": "eslint . --ext ts,tsx --max-warnings=0",
+    "format": "prettier --write \"src/**/*.{ts,tsx,json,css}\"",
+    "format:check": "prettier --check \"src/**/*.{ts,tsx,json,css}\"",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@fluentui/react-components": "^9.54.0",
     "@fluentui/react-icons": "^2.0.247",
+    "@azure/msal-browser": "^3.27.0",
+    "@azure/msal-react": "^2.2.0",
     "@types/jszip": "^3.4.0",
     "@types/react-syntax-highlighter": "^15.5.13",
     "docx": "^9.7.1",
@@ -18,13 +24,20 @@
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-markdown": "^9.0.1",
+    "react-resizable-panels": "^4.11.2",
     "react-syntax-highlighter": "^16.1.1",
     "remark-gfm": "^4.0.0"
   },
   "devDependencies": {
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
+    "@typescript-eslint/eslint-plugin": "^8.18.0",
+    "@typescript-eslint/parser": "^8.18.0",
     "@vitejs/plugin-react": "^4.3.4",
+    "eslint": "^9.16.0",
+    "eslint-plugin-react-hooks": "^5.1.0",
+    "eslint-plugin-react-refresh": "^0.4.16",
+    "prettier": "^3.4.2",
     "typescript": "^5.6.3",
     "vite": "^6.0.5"
   }

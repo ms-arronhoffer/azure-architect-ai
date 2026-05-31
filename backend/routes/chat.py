@@ -6,14 +6,16 @@ Tool calls are dispatched and their structured results emitted as typed SSE even
 import json
 from typing import AsyncGenerator
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
 from openai import BadRequestError, AuthenticationError, APIError
 from pydantic import BaseModel
 
+from auth import require_user, user_id_from_claims
 from models import ModelConfig
 from prompts.system_prompt import MODE_TEMPLATES
 from services.docs_service import search_azure_docs
+from services.rag_service import cached_learn_search
 from services.mcp_service import call_mcp_tool, is_mcp_tool
 from services.openai_service import TOOL_INCOMPATIBLE_MODELS, get_client, get_deployment, resolve_client_and_model
 from services.pricing_service import estimate_architecture, validate_sku
@@ -56,7 +58,7 @@ async def _prefetch_docs(mode: str, user_message: str) -> list[dict]:
         return []
     snippet = user_message[:150].strip()
     query = f"{base} {snippet}".strip()
-    return await search_azure_docs(query=query, top=5)
+    return await cached_learn_search(query=query, top=5)
 
 
 async def _stream_chat(mode: str, messages: list[dict], provider: str = "azure", model: str = "", github_token: str = "") -> AsyncGenerator[str, None]:
@@ -177,9 +179,9 @@ async def _dispatch_tool(name: str, args: dict) -> tuple[object, dict | None]:
         return result_text, None
 
     if name == "search_azure_docs":
-        result = await search_azure_docs(
+        result = await cached_learn_search(
             query=args.get("query", ""),
-            category=args.get("category", ""),
+            top=5,
         )
         return result, None
 
@@ -318,6 +320,30 @@ async def _dispatch_tool(name: str, args: dict) -> tuple[object, dict | None]:
     if name == "design_landing_zone":
         return {"status": "landing_zone_designed"}, {"type": "landing_zone_design", "design": {**args}}
 
+    if name == "validate_resource_naming":
+        from services.naming_service import validate_batch
+        from dataclasses import asdict
+        results = [asdict(r) for r in validate_batch(args.get("items", []))]
+        return {"status": "names_validated", "results": results}, {
+            "type": "naming_validation",
+            "results": results,
+        }
+
+    if name == "suggest_resource_name":
+        from services.naming_service import suggest_name
+        suggestion = suggest_name(
+            resource_type=args.get("resource_type", ""),
+            workload=args.get("workload", "workload"),
+            env=args.get("env", "dev"),
+            region=args.get("region", "eastus2"),
+            suffix=args.get("suffix"),
+        )
+        return {"status": "name_suggested", "name": suggestion}, {
+            "type": "naming_suggestion",
+            "name": suggestion,
+            "inputs": {**args},
+        }
+
     if name == "design_rbac_model":
         return {"status": "rbac_designed"}, {"type": "rbac_model", "model": {**args}}
 
@@ -345,6 +371,23 @@ async def _dispatch_tool(name: str, args: dict) -> tuple[object, dict | None]:
     if name == "recommend_service":
         return {"status": "service_recommended"}, {"type": "decision_card", "card": {**args}}
 
+    if name == "diagnose_issue":
+        event = {"type": "diagnosis", "diagnosis": {**args}}
+        return {"status": "diagnosis_received"}, event
+
+    if name == "generate_kql_queries":
+        event = {"type": "kql_queries", "queries": args.get("queries", [])}
+        return {"status": "kql_received"}, event
+
+    if name == "generate_remediation_runbook":
+        event = {
+            "type": "remediation_runbook",
+            "steps": args.get("steps", []),
+            "escalation_path": args.get("escalation_path", ""),
+            "estimated_minutes": args.get("estimated_resolution_minutes", 0),
+        }
+        return {"status": "runbook_received"}, event
+
     return {}, None
 
 
@@ -356,14 +399,21 @@ def _safe_json(s: str) -> dict:
 
 
 @router.post("/chat")
-async def chat(req: ChatRequest):
+async def chat(req: ChatRequest, claims=Depends(require_user)):
     app_settings = await load_settings()
     mc = req.llm_config or app_settings.mode_models.get(req.mode)
     provider = mc.provider if mc else "azure"
     model = mc.model if mc else ""
     messages = [m.model_dump() for m in req.messages]
+    github_token = ""
+    if provider in {"github-models", "github-copilot"}:
+        from db import session_scope
+        from services.secret_store import get_secret
+        user_id = user_id_from_claims(claims)
+        async with session_scope() as session:
+            github_token = await get_secret(session, user_id, "github_pat") or ""
     return StreamingResponse(
-        _stream_chat(req.mode, messages, provider, model, app_settings.github_token),
+        _stream_chat(req.mode, messages, provider, model, github_token),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )

@@ -32,7 +32,8 @@ export type Mode =
   | "governance"
   | "ops"
   | "intake"
-  | "analyze";
+  | "analyze"
+  | "troubleshoot";
 
 // ── Navigation ──────────────────────────────────────────────────────────────
 
@@ -663,6 +664,7 @@ export interface ConversationRecord {
   createdAt: number;
   updatedAt: number;
   messages: ChatMessage[];
+  structuredResult?: unknown;
 }
 
 // ── Settings + multi-provider LLM ────────────────────────────────────────────
@@ -673,8 +675,11 @@ export interface ModelConfig {
 }
 
 export interface UserSettings {
-  github_token: string;
   mode_models: Partial<Record<Mode, ModelConfig>>;
+}
+
+export interface GithubTokenStatus {
+  configured: boolean;
 }
 
 // ── Code generator types ──────────────────────────────────────────────────────
@@ -684,6 +689,63 @@ export interface CodeFile {
   content: string;
   language: string;
   description?: string;
+}
+
+// ── Project timeline / Gantt types ───────────────────────────────────────────
+
+export interface TimelinePhase {
+  id: string;
+  name: string;
+  start_week: number;
+  duration_weeks: number;
+  dependencies?: string[];
+  is_milestone?: boolean;
+  owner?: string;
+}
+
+export interface ProjectTimeline {
+  phases: TimelinePhase[];
+  total_weeks: number;
+  critical_path?: string[];
+  notes?: string;
+  diagramXml: string;
+}
+
+// ── Troubleshooting types ─────────────────────────────────────────────────────
+
+export interface DiagnosisHypothesis {
+  hypothesis: string;
+  likelihood: "high" | "medium" | "low";
+  evidence_to_confirm: string;
+  azure_service?: string;
+}
+
+export interface DiagnosisResult {
+  root_cause_hypotheses: DiagnosisHypothesis[];
+  affected_services: string[];
+  severity: "critical" | "high" | "medium" | "low";
+  estimated_blast_radius?: string;
+}
+
+export interface DiagnosticKqlQuery {
+  name: string;
+  query: string;
+  purpose: string;
+  table?: string;
+}
+
+export interface RemediationStep {
+  step_number: number;
+  action: string;
+  command?: string;
+  expected_output?: string;
+  if_fails?: string;
+}
+
+export interface RemediationRunbook {
+  steps: RemediationStep[];
+  escalation_path?: string;
+  estimated_resolution_minutes?: number;
 }
 
 // ── SSE event union ──────────────────────────────────────────────────────────
@@ -720,6 +782,10 @@ export type SseEvent =
   | { type: "practice_exam_pack"; pack: PracticeExamPack }
   | { type: "stakeholder_plan"; plan: StakeholderPlan }
   | { type: "decision_card"; card: DecisionCard }
+  | { type: "project_timeline"; xml: string; phases: TimelinePhase[]; total_weeks: number; notes?: string }
+  | { type: "diagnosis"; diagnosis: DiagnosisResult }
+  | { type: "kql_queries"; queries: DiagnosticKqlQuery[] }
+  | { type: "remediation_runbook"; steps: RemediationStep[]; escalation_path: string; estimated_minutes: number }
   | { type: "done" }
   | { type: "status"; message: string }
   | { type: "error"; message: string };

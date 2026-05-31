@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { Panel, Group as PanelGroup, Separator as PanelResizeHandle } from "react-resizable-panels";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import {
@@ -22,7 +23,7 @@ import { useSSE } from "../hooks/useSSE";
 import { useFindingChecklist } from "../hooks/useFindingChecklist";
 import { useWorkloadSpec, toSpecPromptPrefix } from "../hooks/useWorkloadSpec";
 import { exportWAFToDocx } from "../utils/wafDocxExport";
-import type { SseEvent, WafPillarResult, ChatMessage } from "../types";
+import type { SseEvent, WafPillarResult, ChatMessage, ConversationRecord, Mode } from "../types";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -202,11 +203,13 @@ type WafTab = "summary" | "reliability" | "security" | "cost" | "operational-exc
 interface WAFPanelProps {
   onRefine?: (context: ChatMessage[]) => void;
   conversationId?: string;
+  onSave?: (id: string, mode: Mode, messages: ChatMessage[], structuredResult: unknown) => void;
+  initialSession?: ConversationRecord;
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export default function WAFPanel({ onRefine, conversationId }: WAFPanelProps) {
+export default function WAFPanel({ onRefine, conversationId, onSave, initialSession }: WAFPanelProps) {
   const styles = useStyles();
   const { stream, isStreaming, cancel } = useSSE();
   const { stream: deliverableStream, isStreaming: deliverableStreaming, cancel: cancelDeliverable } = useSSE();
@@ -219,6 +222,13 @@ export default function WAFPanel({ onRefine, conversationId }: WAFPanelProps) {
   const [generatingTab, setGeneratingTab] = useState<string | null>(null);
   const [statusMsg, setStatusMsg] = useState("");
 
+  useEffect(() => {
+    if (!initialSession?.structuredResult) return;
+    const sr = initialSession.structuredResult as { pillars?: WafPillarResult[]; remediationPlan?: string };
+    if (sr.pillars?.length) setPillars(sr.pillars);
+    if (sr.remediationPlan) setRemediationPlan(sr.remediationPlan);
+  }, []);
+
   const pillarMap = Object.fromEntries(pillars.map((p) => [p.pillar, p]));
   const avgScore = pillars.length > 0
     ? Math.round((pillars.reduce((s, p) => s + p.score, 0) / pillars.length) * 10) / 10
@@ -230,12 +240,15 @@ export default function WAFPanel({ onRefine, conversationId }: WAFPanelProps) {
     setRemediationPlan("");
     setStatusMsg("");
 
+    let localPillars: WafPillarResult[] = [];
+
     await stream(
       "/api/architecture",
       { requirements: description, mode: "waf", existing_description: description },
       (event: SseEvent) => {
         if (event.type === "status") setStatusMsg(event.message);
         if (event.type === "waf_pillar") {
+          localPillars = [...localPillars.filter((p) => p.pillar !== event.pillar.pillar), event.pillar];
           setPillars((prev) => {
             const exists = prev.find((p) => p.pillar === event.pillar.pillar);
             if (exists) return prev.map((p) => p.pillar === event.pillar.pillar ? event.pillar : p);
@@ -243,12 +256,22 @@ export default function WAFPanel({ onRefine, conversationId }: WAFPanelProps) {
           });
         }
         if (event.type === "waf_complete") {
+          localPillars = event.pillars;
           setPillars(event.pillars);
         }
       }
     );
     setStatusMsg("");
     setActiveTab("summary");
+
+    if (onSave && conversationId && localPillars.length > 0) {
+      const summary = localPillars.map((p) => `${p.pillar}: ${p.score}/5`).join(", ");
+      const msgs: ChatMessage[] = [
+        { id: crypto.randomUUID(), role: "user", content: description },
+        { id: crypto.randomUUID(), role: "assistant", content: `WAF Assessment: ${summary}` },
+      ];
+      onSave(conversationId, "waf", msgs, { pillars: localPillars, remediationPlan: "" });
+    }
   }
 
   async function generateRemediation() {
@@ -475,9 +498,10 @@ For each phase, include: objectives, specific Azure services to add/configure, i
   void cancelDeliverable;
 
   return (
-    <div className={styles.panel}>
+    <PanelGroup orientation="horizontal" style={{ height: "100%", overflow: "hidden" }}>
       {/* ── Left Sidebar ─────────────────────────────────────────────────────── */}
-      <div className={styles.sidebar}>
+      <Panel defaultSize={28} minSize={18} maxSize={45}>
+        <div style={{ height: "100%", overflowY: "auto", padding: "20px 16px", borderRight: `1px solid ${tokens.colorNeutralStroke2}`, display: "flex", flexDirection: "column", gap: "16px", background: tokens.colorNeutralBackground1 }}>
         <Text weight="semibold" size={500}>WAF Assessment</Text>
         <Text size={200} style={{ color: tokens.colorNeutralForeground3, marginTop: "-10px" }}>
           Evaluate your architecture against all 5 Azure Well-Architected Framework pillars.
@@ -530,10 +554,14 @@ For each phase, include: objectives, specific Azure services to add/configure, i
             Refine in Chat
           </Button>
         )}
-      </div>
+        </div>
+      </Panel>
+
+      <PanelResizeHandle style={{ width: "4px", background: tokens.colorNeutralBackground3, cursor: "col-resize" }} />
 
       {/* ── Right Panel ──────────────────────────────────────────────────────── */}
-      <div className={styles.rightPanel}>
+      <Panel>
+        <div style={{ height: "100%", display: "flex", flexDirection: "column", overflow: "hidden" }}>
         <div className={styles.tabBar}>
           <TabList selectedValue={activeTab} onTabSelect={(_, d) => setActiveTab(d.value as WafTab)} size="small">
             <Tab value="summary">Summary{pillars.length > 0 && <span className={styles.tabDot} />}</Tab>
@@ -555,7 +583,8 @@ For each phase, include: objectives, specific Azure services to add/configure, i
           {activeTab === "performance" && renderPillarTab("performance")}
           {activeTab === "remediation" && renderRemediationTab()}
         </div>
-      </div>
-    </div>
+        </div>
+      </Panel>
+    </PanelGroup>
   );
 }

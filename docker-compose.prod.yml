@@ -1,0 +1,35 @@
+# Prod-parity stack: builds production images, runs with no bind mounts.
+# Use this to smoke-test the prod image graph locally before deploying to Azure.
+#
+#   docker compose -f docker-compose.prod.yml up --build
+#
+# Auth: the backend still uses DefaultAzureCredential — mount ~/.azure or set
+# AZURE_OPENAI_KEY in .env.
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.prod
+    env_file: .env
+    expose:
+      - "8000"
+    volumes:
+      # Mount host az CLI tokens so DefaultAzureCredential keeps working in
+      # local prod-parity runs. Drop this volume in real deployments — ACA uses
+      # a managed identity instead.
+      - ~/.azure:/home/app/.azure:ro
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.prod
+      args:
+        # Empty = same-origin, nginx proxies /api to the backend service below.
+        VITE_API_BASE_URL: ""
+    ports:
+      - "8080:8080"
+    depends_on:
+      - backend
+    restart: unless-stopped

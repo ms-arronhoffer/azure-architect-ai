@@ -119,15 +119,29 @@ interface SettingsDrawerProps {
   onClose: () => void;
   settings: UserSettings;
   onSave: (s: UserSettings) => void;
+  githubTokenConfigured: boolean;
+  onSaveGithubToken: (token: string) => Promise<void>;
+  onClearGithubToken: () => Promise<void>;
 }
 
-export default function SettingsDrawer({ open, onClose, settings, onSave }: SettingsDrawerProps) {
+export default function SettingsDrawer({
+  open,
+  onClose,
+  settings,
+  onSave,
+  githubTokenConfigured,
+  onSaveGithubToken,
+  onClearGithubToken,
+}: SettingsDrawerProps) {
   const styles = useStyles();
   const [draft, setDraft] = useState<UserSettings>(settings);
+  const [tokenInput, setTokenInput] = useState("");
   const [showToken, setShowToken] = useState(false);
+  const [tokenSaving, setTokenSaving] = useState(false);
+  const [tokenError, setTokenError] = useState<string | null>(null);
 
-  // Sync when settings change (e.g. initial load)
-  if (open && draft.github_token === "" && settings.github_token !== "") {
+  // Sync model selections when external settings change
+  if (open && Object.keys(draft.mode_models).length === 0 && Object.keys(settings.mode_models).length > 0) {
     setDraft(settings);
   }
 
@@ -148,6 +162,33 @@ export default function SettingsDrawer({ open, onClose, settings, onSave }: Sett
   function handleSave() {
     onSave(draft);
     onClose();
+  }
+
+  async function handleSaveToken() {
+    if (!tokenInput.trim()) return;
+    setTokenSaving(true);
+    setTokenError(null);
+    try {
+      await onSaveGithubToken(tokenInput.trim());
+      setTokenInput("");
+    } catch (e) {
+      setTokenError(e instanceof Error ? e.message : "Failed to save token");
+    } finally {
+      setTokenSaving(false);
+    }
+  }
+
+  async function handleClearToken() {
+    setTokenSaving(true);
+    setTokenError(null);
+    try {
+      await onClearGithubToken();
+      setTokenInput("");
+    } catch (e) {
+      setTokenError(e instanceof Error ? e.message : "Failed to clear token");
+    } finally {
+      setTokenSaving(false);
+    }
   }
 
   return (
@@ -172,15 +213,19 @@ export default function SettingsDrawer({ open, onClose, settings, onSave }: Sett
           <div className={styles.section}>
             <Text className={styles.sectionTitle}>GitHub Personal Access Token</Text>
             <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
-              Required for GitHub Models, Copilot Enterprise, and repo push.
+              Required for GitHub Models, Copilot Enterprise, and repo push. Stored
+              encrypted server-side; never returned to the browser.
+            </Text>
+            <Text size={200} style={{ color: githubTokenConfigured ? tokens.colorPaletteGreenForeground1 : tokens.colorNeutralForeground3 }}>
+              Status: {githubTokenConfigured ? "Configured" : "Not configured"}
             </Text>
             <div className={styles.tokenRow}>
               <input
                 type={showToken ? "text" : "password"}
                 className={styles.tokenInput}
-                placeholder="ghp_..."
-                value={draft.github_token}
-                onChange={(e) => setDraft((d) => ({ ...d, github_token: e.target.value }))}
+                placeholder={githubTokenConfigured ? "Enter a new token to replace" : "ghp_..."}
+                value={tokenInput}
+                onChange={(e) => setTokenInput(e.target.value)}
               />
               <Button
                 appearance="subtle"
@@ -189,6 +234,22 @@ export default function SettingsDrawer({ open, onClose, settings, onSave }: Sett
                 onClick={() => setShowToken((v) => !v)}
               />
             </div>
+            <div className={styles.tokenRow} style={{ gap: 8 }}>
+              <Button
+                size="small"
+                appearance="primary"
+                disabled={tokenSaving || !tokenInput.trim()}
+                onClick={handleSaveToken}
+              >
+                {githubTokenConfigured ? "Replace token" : "Save token"}
+              </Button>
+              {githubTokenConfigured && (
+                <Button size="small" disabled={tokenSaving} onClick={handleClearToken}>
+                  Clear token
+                </Button>
+              )}
+            </div>
+            {tokenError && <Text className={styles.warning}>{tokenError}</Text>}
           </div>
 
           <Divider />

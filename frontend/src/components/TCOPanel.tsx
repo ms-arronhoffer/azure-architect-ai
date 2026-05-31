@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { Panel, Group as PanelGroup, Separator as PanelResizeHandle } from "react-resizable-panels";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import {
@@ -29,7 +30,7 @@ import {
 import { useSSE } from "../hooks/useSSE";
 import { useWorkloadSpec, toSpecPromptPrefix } from "../hooks/useWorkloadSpec";
 import { exportTCOToDocx } from "../utils/tcoDocxExport";
-import type { SseEvent, TcoReport, ChatMessage } from "../types";
+import type { SseEvent, TcoReport, ChatMessage, ConversationRecord, Mode } from "../types";
 
 // ── Styles ────────────────────────────────────────────────────────────────────
 
@@ -166,11 +167,14 @@ type TcoTab = "summary" | "on-premises" | "azure-costs" | "projection" | "migrat
 
 interface TCOPanelProps {
   onRefine?: (context: ChatMessage[]) => void;
+  sessionId?: string;
+  onSave?: (id: string, mode: Mode, messages: ChatMessage[], structuredResult: unknown) => void;
+  initialSession?: ConversationRecord;
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export default function TCOPanel({ onRefine }: TCOPanelProps) {
+export default function TCOPanel({ onRefine, sessionId, onSave, initialSession }: TCOPanelProps) {
   const styles = useStyles();
   const { stream, isStreaming, cancel } = useSSE();
   const { stream: deliverableStream, isStreaming: deliverableStreaming, cancel: cancelDeliverable } = useSSE();
@@ -191,6 +195,14 @@ export default function TCOPanel({ onRefine }: TCOPanelProps) {
   const [generatingTab, setGeneratingTab] = useState<string | null>(null);
   const [statusMsg, setStatusMsg] = useState("");
   void cancelDeliverable;
+
+  useEffect(() => {
+    if (!initialSession?.structuredResult) return;
+    const sr = initialSession.structuredResult as { narrative?: string; tcoReport?: TcoReport; migrationPlan?: string };
+    if (sr.narrative) setNarrative(sr.narrative);
+    if (sr.tcoReport) setTcoReport(sr.tcoReport);
+    if (sr.migrationPlan) setMigrationPlan(sr.migrationPlan);
+  }, []);
 
   const hasResults = narrative.length > 0 || tcoReport !== null;
 
@@ -214,16 +226,28 @@ export default function TCOPanel({ onRefine }: TCOPanelProps) {
     setStatusMsg("");
     setActiveTab("summary");
 
+    const prompt = buildPrompt();
+    let localNarrative = "";
+    let localReport: TcoReport | null = null;
+
     await stream(
       "/api/chat",
-      { mode: "tco", messages: [{ role: "user", content: buildPrompt() }] },
+      { mode: "tco", messages: [{ role: "user", content: prompt }] },
       (event: SseEvent) => {
-        if (event.type === "token") setNarrative((n) => n + event.content);
+        if (event.type === "token") { localNarrative += event.content; setNarrative((n) => n + event.content); }
         if (event.type === "status") setStatusMsg(event.message);
-        if (event.type === "tco_report") setTcoReport(event.report);
+        if (event.type === "tco_report") { localReport = event.report; setTcoReport(event.report); }
       }
     );
     setStatusMsg("");
+
+    if (onSave && sessionId && (localNarrative || localReport)) {
+      const msgs: ChatMessage[] = [
+        { id: crypto.randomUUID(), role: "user", content: prompt },
+        { id: crypto.randomUUID(), role: "assistant", content: localNarrative },
+      ];
+      onSave(sessionId, "tco", msgs, { narrative: localNarrative, tcoReport: localReport, migrationPlan: "" });
+    }
   }
 
   async function generateMigrationPlan() {
@@ -517,9 +541,10 @@ Provide specific dollar estimates where possible.`;
   // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
-    <div className={styles.panel}>
+    <PanelGroup orientation="horizontal" style={{ height: "100%", overflow: "hidden" }}>
       {/* ── Left Sidebar ───────────────────────────────────────────────── */}
-      <div className={styles.sidebar}>
+      <Panel defaultSize={28} minSize={18} maxSize={45}>
+        <div style={{ height: "100%", overflowY: "auto", padding: "20px 16px", borderRight: `1px solid ${tokens.colorNeutralStroke2}`, display: "flex", flexDirection: "column", gap: "16px", background: tokens.colorNeutralBackground1 }}>
         <div>
           <Text weight="semibold" size={400}>TCO Analysis</Text>
           <Text size={200} style={{ color: tokens.colorNeutralForeground3, display: "block", marginTop: "4px" }}>
@@ -612,10 +637,14 @@ Provide specific dollar estimates where possible.`;
             Export DOCX
           </Button>
         )}
-      </div>
+        </div>
+      </Panel>
+
+      <PanelResizeHandle style={{ width: "4px", background: tokens.colorNeutralBackground3, cursor: "col-resize" }} />
 
       {/* ── Right Panel ─────────────────────────────────────────────────── */}
-      <div className={styles.rightPanel}>
+      <Panel>
+        <div style={{ height: "100%", display: "flex", flexDirection: "column", overflow: "hidden" }}>
         <div className={styles.tabBar}>
           <TabList selectedValue={activeTab} onTabSelect={(_, d) => setActiveTab(d.value as TcoTab)}>
             <Tab value="summary">
@@ -638,7 +667,8 @@ Provide specific dollar estimates where possible.`;
         <div className={styles.tabContent}>
           {renderTabContent()}
         </div>
-      </div>
-    </div>
+        </div>
+      </Panel>
+    </PanelGroup>
   );
 }

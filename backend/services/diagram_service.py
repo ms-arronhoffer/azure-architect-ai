@@ -181,3 +181,147 @@ def generate_diagram(
 def _serialize(element: ET.Element) -> str:
     ET.indent(element, space="  ")
     return ET.tostring(element, encoding="unicode")
+
+
+def generate_gantt_xml(phases: list[dict], total_weeks: int, critical_path: list[str] | None = None) -> str:
+    """
+    Generate a draw.io XML Gantt chart from project phase definitions.
+
+    Layout:
+    - Row 0: week header (week numbers)
+    - Rows 1..N: one row per phase
+    - Milestone phases rendered as diamonds; critical-path phases in red
+    - Dependency arrows connect phase end → dependent phase start
+    """
+    critical_path = set(critical_path or [])
+    LABEL_W = 150     # left column width for phase labels
+    WEEK_W = 40       # width per week
+    ROW_H = 38        # row height
+    HEADER_H = 30     # header row height
+    MARGIN = 20
+
+    total_w = LABEL_W + total_weeks * WEEK_W + MARGIN * 2
+    total_h = HEADER_H + len(phases) * ROW_H + MARGIN * 2
+
+    mxfile = ET.Element("mxfile", host="azure-architect-ai")
+    diagram = ET.SubElement(mxfile, "diagram", name="Project Timeline")
+    model = ET.SubElement(
+        diagram, "mxGraphModel",
+        dx="1422", dy="762", grid="1", gridSize="10",
+        guides="1", tooltips="1", connect="1", arrows="1",
+        fold="1", page="1", pageScale="1",
+        pageWidth=str(max(1169, total_w + 40)),
+        pageHeight=str(max(827, total_h + 80)),
+        math="0", shadow="0",
+    )
+    root = ET.SubElement(model, "root")
+    ET.SubElement(root, "mxCell", id="0")
+    ET.SubElement(root, "mxCell", id="1", parent="0")
+
+    cell_id = 2
+
+    # ── Header row: week numbers ──────────────────────────────────────────────
+    for w in range(1, total_weeks + 1):
+        x = MARGIN + LABEL_W + (w - 1) * WEEK_W
+        cell = ET.SubElement(
+            root, "mxCell",
+            id=str(cell_id),
+            value=f"W{w}",
+            style="text;html=1;strokeColor=none;fillColor=#dae8fc;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=9;fontStyle=1;",
+            vertex="1",
+            parent="1",
+        )
+        ET.SubElement(cell, "mxGeometry",
+                      x=str(x), y=str(MARGIN),
+                      width=str(WEEK_W), height=str(HEADER_H),
+                      **{"as": "geometry"})
+        cell_id += 1
+
+    # Track cell IDs by phase id for dependency arrows
+    phase_cell_ids: dict[str, str] = {}
+
+    # ── Phase rows ────────────────────────────────────────────────────────────
+    for row_idx, phase in enumerate(phases):
+        y = MARGIN + HEADER_H + row_idx * ROW_H
+        phase_id = phase.get("id", f"p{row_idx}")
+        name = phase.get("name", "")
+        start = max(1, phase.get("start_week", 1))
+        duration = max(0, phase.get("duration_weeks", 1))
+        owner = phase.get("owner", "")
+        is_milestone = phase.get("is_milestone", False) or duration == 0
+        on_critical = phase_id in critical_path
+
+        # Label cell
+        label_cell = ET.SubElement(
+            root, "mxCell",
+            id=str(cell_id),
+            value=f'<b>{name}</b>' + (f'<br/><font style="font-size:8px">{owner}</font>' if owner else ""),
+            style="text;html=1;strokeColor=#d6b656;fillColor=#fff2cc;align=left;verticalAlign=middle;spacingLeft=4;whiteSpace=wrap;overflow=hidden;rounded=0;fontSize=10;",
+            vertex="1",
+            parent="1",
+        )
+        ET.SubElement(label_cell, "mxGeometry",
+                      x=str(MARGIN), y=str(y),
+                      width=str(LABEL_W), height=str(ROW_H),
+                      **{"as": "geometry"})
+        cell_id += 1
+
+        # Bar or milestone diamond
+        bar_x = MARGIN + LABEL_W + (start - 1) * WEEK_W
+        bar_w = max(WEEK_W, duration * WEEK_W)
+        bar_y = y + 4
+        bar_h = ROW_H - 8
+
+        if is_milestone:
+            fill = "#ffe6cc"
+            stroke = "#d6b656"
+            style = f"rhombus;whiteSpace=wrap;html=1;fillColor={fill};strokeColor={stroke};fontSize=9;"
+            bar_w = bar_h  # square-ish diamond
+        elif on_critical:
+            fill = "#f8cecc"
+            stroke = "#b85450"
+            style = f"rounded=0;whiteSpace=wrap;html=1;fillColor={fill};strokeColor={stroke};fontSize=9;"
+        else:
+            fill = "#dae8fc"
+            stroke = "#6c8ebf"
+            style = f"rounded=0;whiteSpace=wrap;html=1;fillColor={fill};strokeColor={stroke};fontSize=9;"
+
+        bar_cell = ET.SubElement(
+            root, "mxCell",
+            id=str(cell_id),
+            value="",
+            style=style,
+            vertex="1",
+            parent="1",
+        )
+        ET.SubElement(bar_cell, "mxGeometry",
+                      x=str(bar_x), y=str(bar_y),
+                      width=str(bar_w), height=str(bar_h),
+                      **{"as": "geometry"})
+        phase_cell_ids[phase_id] = str(cell_id)
+        cell_id += 1
+
+    # ── Dependency arrows ──────────────────────────────────────────────────────
+    for phase in phases:
+        phase_id = phase.get("id", "")
+        deps = phase.get("dependencies", [])
+        if not deps or phase_id not in phase_cell_ids:
+            continue
+        for dep_id in deps:
+            if dep_id not in phase_cell_ids:
+                continue
+            edge = ET.SubElement(
+                root, "mxCell",
+                id=str(cell_id),
+                value="",
+                style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;strokeColor=#555555;",
+                edge="1",
+                source=phase_cell_ids[dep_id],
+                target=phase_cell_ids[phase_id],
+                parent="1",
+            )
+            ET.SubElement(edge, "mxGeometry", relative="1", **{"as": "geometry"})
+            cell_id += 1
+
+    return _serialize(mxfile)
+

@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { Panel, Group as PanelGroup, Separator as PanelResizeHandle } from "react-resizable-panels";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import {
@@ -14,7 +15,7 @@ import {
 } from "@fluentui/react-components";
 import { SendRegular, ChatRegular } from "@fluentui/react-icons";
 import { useSSE } from "../hooks/useSSE";
-import type { ChatMessage, LandingZoneDesign, ManagementGroup } from "../types";
+import type { ChatMessage, LandingZoneDesign, ManagementGroup, ConversationRecord, Mode } from "../types";
 
 type LzTab = "overview" | "management-groups" | "networking" | "identity" | "policy";
 
@@ -155,7 +156,12 @@ function MgNode({ mg, depth = 0 }: { mg: ManagementGroup; depth?: number }) {
   );
 }
 
-export default function LandingZonePanel({ onRefine }: { onRefine?: (context: ChatMessage[]) => void }) {
+export default function LandingZonePanel({ onRefine, sessionId, onSave, initialSession }: {
+  onRefine?: (context: ChatMessage[]) => void;
+  sessionId?: string;
+  onSave?: (id: string, mode: Mode, messages: ChatMessage[], structuredResult: unknown) => void;
+  initialSession?: ConversationRecord;
+}) {
   const styles = useStyles();
   const { stream, isStreaming, cancel } = useSSE();
 
@@ -168,6 +174,13 @@ export default function LandingZonePanel({ onRefine }: { onRefine?: (context: Ch
   const [narrative, setNarrative] = useState("");
   const [design, setDesign] = useState<LandingZoneDesign | null>(null);
   const [statusMsg, setStatusMsg] = useState("");
+
+  useEffect(() => {
+    if (!initialSession?.structuredResult) return;
+    const sr = initialSession.structuredResult as { narrative?: string; design?: LandingZoneDesign };
+    if (sr.narrative) setNarrative(sr.narrative);
+    if (sr.design) setDesign(sr.design);
+  }, []);
 
   async function handleRun() {
     if (!orgDescription.trim() || isStreaming) return;
@@ -183,12 +196,23 @@ export default function LandingZonePanel({ onRefine }: { onRefine?: (context: Ch
       `Preferred network topology: ${NETWORK_OPTIONS.find((n) => n.value === networkTopology)?.label}`,
     ].filter(Boolean).join("\n");
 
+    let localNarrative = "";
+    let localDesign: LandingZoneDesign | null = null;
+
     await stream("/api/chat", { mode: "landingzone", message: prompt }, (event) => {
-      if (event.type === "token") setNarrative((p) => p + event.content);
-      if (event.type === "landing_zone_design") setDesign(event.design);
+      if (event.type === "token") { localNarrative += event.content; setNarrative((p) => p + event.content); }
+      if (event.type === "landing_zone_design") { localDesign = event.design; setDesign(event.design); }
       if (event.type === "status") setStatusMsg(event.message);
     });
     setStatusMsg("");
+
+    if (onSave && sessionId && (localNarrative || localDesign)) {
+      const msgs: ChatMessage[] = [
+        { id: crypto.randomUUID(), role: "user", content: prompt },
+        { id: crypto.randomUUID(), role: "assistant", content: localNarrative },
+      ];
+      onSave(sessionId, "landingzone", msgs, { narrative: localNarrative, design: localDesign });
+    }
   }
 
   function handleRefine() {
@@ -206,8 +230,9 @@ export default function LandingZonePanel({ onRefine }: { onRefine?: (context: Ch
 
   return (
     <div className={styles.panel}>
-      <div className={styles.layout}>
-        <div className={styles.sidebar}>
+      <PanelGroup orientation="horizontal" style={{ height: "100%", overflow: "hidden" }}>
+        <Panel defaultSize={28} minSize={18} maxSize={45}>
+          <div style={{ height: "100%", overflowY: "auto", padding: "20px 16px", borderRight: `1px solid ${tokens.colorNeutralStroke2}`, background: tokens.colorNeutralBackground1, display: "flex", flexDirection: "column", gap: "14px" }}>
           <Text weight="semibold" size={400}>Landing Zone Design</Text>
           <Text size={200} style={{ color: tokens.colorNeutralForeground3, marginTop: "-8px" }}>
             Azure Cloud Adoption Framework
@@ -268,9 +293,13 @@ export default function LandingZonePanel({ onRefine }: { onRefine?: (context: Ch
               Refine in Chat
             </Button>
           )}
-        </div>
+          </div>
+        </Panel>
 
-        <div className={styles.right}>
+        <PanelResizeHandle style={{ width: "4px", background: tokens.colorNeutralBackground3, cursor: "col-resize" }} />
+
+        <Panel>
+          <div style={{ height: "100%", display: "flex", flexDirection: "column", overflow: "hidden" }}>
           <div className={styles.tabBar}>
             <TabList
               selectedValue={activeTab}
@@ -409,8 +438,9 @@ export default function LandingZonePanel({ onRefine }: { onRefine?: (context: Ch
               )
             )}
           </div>
-        </div>
-      </div>
+          </div>
+        </Panel>
+      </PanelGroup>
     </div>
   );
 }

@@ -197,6 +197,17 @@ async def _stream_architecture(req: ArchRequest, provider: str = "azure", model:
                     yield f"data: {json.dumps({'type': 'adr', 'data': args})}\n\n"
                     result = {"status": "adr_received"}
 
+                elif name == "generate_project_timeline":
+                    yield f"data: {json.dumps({'type': 'status', 'message': 'Generating project timeline...'})}\n\n"
+                    from services.diagram_service import generate_gantt_xml
+                    gantt_xml = generate_gantt_xml(
+                        args.get("phases", []),
+                        args.get("total_weeks", 12),
+                        args.get("critical_path", [])
+                    )
+                    yield f"data: {json.dumps({'type': 'project_timeline', 'xml': gantt_xml, 'phases': args.get('phases', []), 'total_weeks': args.get('total_weeks', 12), 'notes': args.get('notes', '')})}\n\n"
+                    result = {"status": "timeline_received"}
+
                 elif is_mcp_tool(name):
                     yield f"data: {json.dumps({'type': 'status', 'message': 'Consulting Azure docs...'})}\n\n"
                     result = await call_mcp_tool(name, args)

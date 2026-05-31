@@ -1,0 +1,133 @@
+name: deploy
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "backend/**"
+      - "frontend/**"
+      - ".github/workflows/deploy.yml"
+  workflow_dispatch:
+    inputs:
+      services:
+        description: "Comma-separated services to deploy: backend,frontend"
+        required: false
+        default: "backend,frontend"
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AZURE_LOCATION: eastus2
+  DEPLOYMENT_NAME: main
+  IMAGE_TAG: ${{ github.sha }}
+
+jobs:
+  detect:
+    runs-on: ubuntu-latest
+    outputs:
+      backend: ${{ steps.changes.outputs.backend }}
+      frontend: ${{ steps.changes.outputs.frontend }}
+      acr: ${{ steps.outputs.outputs.acr }}
+      rg: ${{ steps.outputs.outputs.rg }}
+      backendApp: ${{ steps.outputs.outputs.backendApp }}
+      frontendApp: ${{ steps.outputs.outputs.frontendApp }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - id: changes
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            backend:
+              - 'backend/**'
+            frontend:
+              - 'frontend/**'
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      - id: outputs
+        run: |
+          ACR_LOGIN=$(az deployment sub show -n ${{ env.DEPLOYMENT_NAME }} --query properties.outputs.acrLoginServer.value -o tsv)
+          RG=$(az deployment sub show -n ${{ env.DEPLOYMENT_NAME }} --query properties.outputs.resourceGroupName.value -o tsv)
+          echo "acr=${ACR_LOGIN%%.*}" >> $GITHUB_OUTPUT
+          echo "rg=$RG" >> $GITHUB_OUTPUT
+          echo "backendApp=$(az containerapp list -g $RG --query "[?contains(name, 'backend')].name | [0]" -o tsv)" >> $GITHUB_OUTPUT
+          echo "frontendApp=$(az containerapp list -g $RG --query "[?contains(name, 'frontend')].name | [0]" -o tsv)" >> $GITHUB_OUTPUT
+
+  backend:
+    needs: detect
+    if: needs.detect.outputs.backend == 'true' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    environment: dev
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      - name: ACR build
+        run: |
+          az acr build -r ${{ needs.detect.outputs.acr }} \
+            -t aa-backend:${{ env.IMAGE_TAG }} \
+            -t aa-backend:latest \
+            -f backend/Dockerfile.prod ./backend
+      - name: Update container app revision
+        run: |
+          az containerapp update \
+            -g ${{ needs.detect.outputs.rg }} \
+            -n ${{ needs.detect.outputs.backendApp }} \
+            --image ${{ needs.detect.outputs.acr }}.azurecr.io/aa-backend:${{ env.IMAGE_TAG }} \
+            --revision-suffix sha-${{ env.IMAGE_TAG }}
+
+  frontend:
+    needs: detect
+    if: needs.detect.outputs.frontend == 'true' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    environment: dev
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      - name: ACR build
+        run: |
+          az acr build -r ${{ needs.detect.outputs.acr }} \
+            -t aa-frontend:${{ env.IMAGE_TAG }} \
+            -t aa-frontend:latest \
+            -f frontend/Dockerfile.prod ./frontend
+      - name: Update container app revision
+        run: |
+          az containerapp update \
+            -g ${{ needs.detect.outputs.rg }} \
+            -n ${{ needs.detect.outputs.frontendApp }} \
+            --image ${{ needs.detect.outputs.acr }}.azurecr.io/aa-frontend:${{ env.IMAGE_TAG }} \
+            --revision-suffix sha-${{ env.IMAGE_TAG }}
+
+  smoke:
+    needs: [detect, backend, frontend]
+    if: always() && (needs.backend.result == 'success' || needs.frontend.result == 'success')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      - name: Frontend health check
+        run: |
+          URL=$(az deployment sub show -n ${{ env.DEPLOYMENT_NAME }} --query properties.outputs.frontendUrl.value -o tsv)
+          for i in 1 2 3 4 5; do
+            code=$(curl -s -o /dev/null -w "%{http_code}" "$URL" || echo "000")
+            echo "Attempt $i: $code"
+            [ "$code" = "200" ] && exit 0
+            sleep 10
+          done
+          exit 1

@@ -26,6 +26,7 @@ import {
   LayerRegular,
   ShieldErrorRegular,
   HeartPulseRegular,
+  WrenchScrewdriverRegular,
 } from "@fluentui/react-icons";
 import type { Mode } from "../types";
 
@@ -85,6 +86,7 @@ const NAV_SECTIONS: NavSectionDef[] = [
       { mode: "tco", label: "TCO Analysis", icon: <CalculatorRegular />, description: "On-premises vs Azure 3-year cost comparison" },
       { mode: "drbc", label: "DR/BC Design", icon: <ArrowSyncRegular />, description: "Recovery strategies and failover runbooks" },
       { mode: "reliability", label: "Reliability & SLO", icon: <HeartPulseRegular />, description: "SLO design, FMEA, chaos experiments & toil inventory" },
+      { mode: "troubleshoot", label: "Troubleshoot", icon: <WrenchScrewdriverRegular />, description: "Diagnose and resolve Azure issues" },
       { mode: "codegen", label: "Code Generator", icon: <CodeRegular />, description: "Generate code with Copilot and push to GitHub" },
       { mode: "sizing", label: "Capacity Sizing", icon: <ResizeRegular />, description: "Workload profile to SKU recommendations" },
     ],

@@ -43,6 +43,7 @@ const MODE_LABELS: Record<Mode, string> = {
   threatmodel: "Threat Modeling",
   devsecops: "DevSecOps",
   reliability: "Reliability & SLO",
+  troubleshoot: "Troubleshoot",
   sizing: "Capacity Sizing",
   security: "Security & Identity",
   governance: "Governance",

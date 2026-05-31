@@ -1,6 +1,7 @@
-import { useRef, useState } from "react";
+import { useRef, useState, useEffect } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { Panel, Group as PanelGroup, Separator as PanelResizeHandle } from "react-resizable-panels";
 import {
   makeStyles,
   tokens,
@@ -34,7 +35,7 @@ import { useFindingChecklist } from "../hooks/useFindingChecklist";
 import { useWorkloadSpec, toSpecPromptPrefix } from "../hooks/useWorkloadSpec";
 import { parseArmTemplate, parseBicepText, formatResourceList } from "../utils/templateParser";
 import { exportReviewToDocx } from "../utils/reviewDocxExport";
-import type { SseEvent, WafPillarResult, ChatMessage } from "../types";
+import type { SseEvent, WafPillarResult, ChatMessage, ConversationRecord, Mode } from "../types";
 
 const PILLAR_LABELS: Record<string, string> = {
   reliability: "Reliability",
@@ -223,6 +224,18 @@ const useStyles = makeStyles({
     padding: "40px 20px",
     textAlign: "center",
   },
+  dropOverlay: {
+    position: "absolute" as const,
+    inset: 0,
+    zIndex: 10,
+    background: "rgba(0,120,212,0.08)",
+    border: `2px dashed ${tokens.colorBrandBackground}`,
+    borderRadius: "8px",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    pointerEvents: "none" as const,
+  },
 });
 
 interface Attachment {
@@ -235,9 +248,11 @@ interface Attachment {
 interface ReviewPanelProps {
   onRefine?: (context: ChatMessage[], suggestedReplies?: string[]) => void;
   conversationId?: string;
+  onSave?: (id: string, mode: Mode, messages: ChatMessage[], structuredResult: unknown) => void;
+  initialSession?: ConversationRecord;
 }
 
-export default function ReviewPanel({ onRefine, conversationId }: ReviewPanelProps) {
+export default function ReviewPanel({ onRefine, conversationId, onSave, initialSession }: ReviewPanelProps) {
   const styles = useStyles();
   const { stream, isStreaming, cancel } = useSSE();
   const { stream: deliverableStream, isStreaming: deliverableStreaming, cancel: cancelDeliverable } = useSSE();
@@ -261,11 +276,26 @@ export default function ReviewPanel({ onRefine, conversationId }: ReviewPanelPro
   const [referenceDesign, setReferenceDesign] = useState("");
   const [extractedRequirements, setExtractedRequirements] = useState("");
   const [generatingTab, setGeneratingTab] = useState<string | null>(null);
-
   const [exporting, setExporting] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+
+  useEffect(() => {
+    if (!initialSession?.structuredResult) return;
+    const sr = initialSession.structuredResult as { narrative?: string; pillars?: WafPillarResult[]; templateText?: string; migrationPlan?: string; referenceDesign?: string };
+    if (sr.narrative) setNarrative(sr.narrative);
+    if (sr.pillars?.length) setPillars(sr.pillars);
+    if (sr.templateText) setTemplateText(sr.templateText);
+    if (sr.migrationPlan) setMigrationPlan(sr.migrationPlan);
+    if (sr.referenceDesign) setReferenceDesign(sr.referenceDesign);
+  }, []);
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files ?? []);
+    handleFiles(files);
+    e.target.value = "";
+  }
+
+  function handleFiles(files: File[]) {
     if (!files.length) return;
     files.forEach((file) => {
       const isImage = file.type.startsWith("image/");
@@ -281,7 +311,6 @@ export default function ReviewPanel({ onRefine, conversationId }: ReviewPanelPro
       if (isImage) reader.readAsDataURL(file);
       else reader.readAsText(file);
     });
-    e.target.value = "";
   }
 
   function removeAttachment(id: string) {
@@ -322,7 +351,10 @@ export default function ReviewPanel({ onRefine, conversationId }: ReviewPanelPro
       existingDescription += `\n\n## Existing Template\n\`\`\`${lang}\n${templateText}\n\`\`\``;
     }
 
+    let localNarrative = "";
+    let localPillars: WafPillarResult[] = [];
     let firstToken = true;
+
     await stream(
       "/api/architecture",
       {
@@ -334,10 +366,12 @@ export default function ReviewPanel({ onRefine, conversationId }: ReviewPanelPro
       (event: SseEvent) => {
         if (event.type === "token") {
           if (firstToken) { firstToken = false; setActiveTab("overview"); }
+          localNarrative += event.content;
           setNarrative((n) => n + event.content);
         }
         if (event.type === "status") setStatusMsg(event.message);
         if (event.type === "waf_pillar") {
+          localPillars = [...localPillars.filter((p) => p.pillar !== event.pillar.pillar), event.pillar];
           setPillars((prev) => {
             const exists = prev.find((p) => p.pillar === event.pillar.pillar);
             if (exists) return prev.map((p) => p.pillar === event.pillar.pillar ? event.pillar : p);
@@ -347,6 +381,14 @@ export default function ReviewPanel({ onRefine, conversationId }: ReviewPanelPro
       }
     );
     setStatusMsg("");
+
+    if (onSave && conversationId && (localNarrative || localPillars.length > 0)) {
+      const msgs: ChatMessage[] = [
+        { id: crypto.randomUUID(), role: "user", content: existingDescription },
+        { id: crypto.randomUUID(), role: "assistant", content: localNarrative },
+      ];
+      onSave(conversationId, "review", msgs, { narrative: localNarrative, pillars: localPillars, templateText, migrationPlan: "", referenceDesign: "" });
+    }
   }
 
   async function generateDiagram(kind: "current" | "target") {
@@ -554,9 +596,18 @@ export default function ReviewPanel({ onRefine, conversationId }: ReviewPanelPro
   }
 
   return (
-    <div className={styles.panel}>
-      {/* Left sidebar */}
-      <div className={styles.form}>
+    <div
+      className={styles.panel}
+      style={{ position: "relative" }}
+      onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+      onDragLeave={() => setIsDragging(false)}
+      onDrop={(e) => { e.preventDefault(); setIsDragging(false); handleFiles(Array.from(e.dataTransfer.files)); }}
+    >
+      {isDragging && <div className={styles.dropOverlay}><Text size={400} weight="semibold">Drop files to attach</Text></div>}
+      <PanelGroup orientation="horizontal" style={{ height: "100%" }}>
+        {/* Left sidebar */}
+        <Panel defaultSize={28} minSize={18} maxSize={45}>
+          <div style={{ height: "100%", overflowY: "auto", padding: "16px", borderRight: `1px solid ${tokens.colorNeutralStroke2}`, display: "flex", flexDirection: "column", gap: "12px", background: tokens.colorNeutralBackground1 }}>
         <Text weight="semibold" size={400}>Architecture Review</Text>
         <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
           Red-team your architecture. Get severity-tagged findings and WAF-pillar scores.
@@ -690,9 +741,13 @@ export default function ReviewPanel({ onRefine, conversationId }: ReviewPanelPro
           </Button>
         )}
       </div>
+        </Panel>
 
-      {/* Right panel with tabs */}
-      <div className={styles.rightPanel}>
+        <PanelResizeHandle style={{ width: "4px", background: tokens.colorNeutralBackground3, cursor: "col-resize" }} />
+
+        {/* Right panel with tabs */}
+        <Panel>
+          <div style={{ height: "100%", display: "flex", flexDirection: "column", overflow: "hidden", minWidth: 0 }}>
         <div className={styles.tabBar}>
           <TabList
             selectedValue={activeTab}
@@ -818,7 +873,9 @@ export default function ReviewPanel({ onRefine, conversationId }: ReviewPanelPro
           {activeTab === "reference" && renderTextTab(referenceDesign, "reference")}
           {activeTab === "requirements" && renderTextTab(extractedRequirements, "requirements")}
         </div>
-      </div>
+          </div>
+        </Panel>
+      </PanelGroup>
     </div>
   );
 }

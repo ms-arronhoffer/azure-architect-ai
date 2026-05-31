@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { Panel, Group as PanelGroup, Separator as PanelResizeHandle } from "react-resizable-panels";
 import {
   makeStyles,
   tokens,
@@ -20,6 +21,7 @@ import {
   TableCell,
 } from "@fluentui/react-components";
 import {
+  CalendarRegular,
   ChatRegular,
   DocumentRegular,
   ArrowDownloadRegular,
@@ -30,7 +32,7 @@ import { useSSE } from "../hooks/useSSE";
 import { useWorkloadSpec, toSpecPromptPrefix } from "../hooks/useWorkloadSpec";
 import { exportDRBCToDocx } from "../utils/drbcDocxExport";
 import { buildDiagramSrcdoc, downloadDiagramFile, openDiagramInDrawIo } from "../utils/diagramViewer";
-import type { SseEvent, DrStrategy, ChatMessage } from "../types";
+import type { SseEvent, DrStrategy, ChatMessage, ConversationRecord, Mode, ProjectTimeline } from "../types";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -154,19 +156,34 @@ const useStyles = makeStyles({
   diagramContainer: { display: "flex", flexDirection: "column", height: "100%" },
   diagramActions: { display: "flex", gap: "8px", marginBottom: "8px", flexWrap: "wrap" },
   diagramFrame: { flex: 1, border: `1px solid ${tokens.colorNeutralStroke2}`, borderRadius: "4px", minHeight: "480px" },
+  dropOverlay: {
+    position: "absolute" as const,
+    inset: 0,
+    zIndex: 10,
+    background: "rgba(0,120,212,0.08)",
+    border: `2px dashed ${tokens.colorBrandBackground}`,
+    borderRadius: "8px",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    pointerEvents: "none" as const,
+  },
 });
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type DRBCTab = "strategy" | "runbook" | "rto-rpo" | "diagram" | "test-plan";
+type DRBCTab = "strategy" | "runbook" | "rto-rpo" | "diagram" | "test-plan" | "gantt";
 
 interface DRBCPanelProps {
   onRefine?: (context: ChatMessage[]) => void;
+  sessionId?: string;
+  onSave?: (id: string, mode: Mode, messages: ChatMessage[], structuredResult: unknown) => void;
+  initialSession?: ConversationRecord;
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export default function DRBCPanel({ onRefine }: DRBCPanelProps) {
+export default function DRBCPanel({ onRefine, sessionId, onSave, initialSession }: DRBCPanelProps) {
   const styles = useStyles();
   const { stream, isStreaming, cancel } = useSSE();
   const { stream: deliverableStream, isStreaming: deliverableStreaming, cancel: cancelDeliverable } = useSSE();
@@ -181,6 +198,24 @@ export default function DRBCPanel({ onRefine }: DRBCPanelProps) {
   const [testPlan, setTestPlan] = useState("");
   const [generatingTab, setGeneratingTab] = useState<string | null>(null);
   const [statusMsg, setStatusMsg] = useState("");
+  const [projectTimeline, setProjectTimeline] = useState<ProjectTimeline | null>(null);
+  const [ganttHtml, setGanttHtml] = useState("");
+  const [isDragging, setIsDragging] = useState(false);
+
+  useEffect(() => {
+    if (!initialSession?.structuredResult) return;
+    const sr = initialSession.structuredResult as { narrative?: string; drStrategy?: DrStrategy; diagramXml?: string; testPlan?: string; projectTimeline?: ProjectTimeline };
+    if (sr.narrative) setNarrative(sr.narrative);
+    if (sr.drStrategy) setDrStrategy(sr.drStrategy);
+    if (sr.diagramXml) setDiagramXml(sr.diagramXml);
+    if (sr.testPlan) setTestPlan(sr.testPlan);
+    if (sr.projectTimeline) setProjectTimeline(sr.projectTimeline);
+  }, []);
+
+  useEffect(() => {
+    if (!projectTimeline?.diagramXml) return;
+    setGanttHtml(buildDiagramSrcdoc(projectTimeline.diagramXml));
+  }, [projectTimeline]);
 
   const hasResults = narrative.length > 0 || drStrategy !== null;
 
@@ -188,21 +223,38 @@ export default function DRBCPanel({ onRefine }: DRBCPanelProps) {
     if (!description.trim() || isStreaming) return;
     setNarrative("");
     setDrStrategy(null);
+    setProjectTimeline(null);
     setStatusMsg("");
 
     const enrichedReqs = `${description}\n\nRTO: ${rto} hours | RPO: ${rpo} hours`;
+    let localNarrative = "";
+    let localStrategy: DrStrategy | null = null;
+    let localTimeline: ProjectTimeline | null = null;
 
     await stream(
       "/api/architecture",
       { requirements: enrichedReqs, mode: "drbc", existing_description: enrichedReqs },
       (event: SseEvent) => {
-        if (event.type === "token") setNarrative((n) => n + event.content);
+        if (event.type === "token") { localNarrative += event.content; setNarrative((n) => n + event.content); }
         if (event.type === "status") setStatusMsg(event.message);
-        if (event.type === "dr_strategy") setDrStrategy(event.strategy);
+        if (event.type === "dr_strategy") { localStrategy = event.strategy; setDrStrategy(event.strategy); }
+        if (event.type === "project_timeline") {
+          const tl: ProjectTimeline = { phases: event.phases, total_weeks: event.total_weeks, notes: event.notes, diagramXml: event.xml };
+          localTimeline = tl;
+          setProjectTimeline(tl);
+        }
       }
     );
     setStatusMsg("");
     setActiveTab("strategy");
+
+    if (onSave && sessionId && (localNarrative || localStrategy)) {
+      const msgs: ChatMessage[] = [
+        { id: crypto.randomUUID(), role: "user", content: enrichedReqs },
+        { id: crypto.randomUUID(), role: "assistant", content: localNarrative },
+      ];
+      onSave(sessionId, "drbc", msgs, { narrative: localNarrative, drStrategy: localStrategy, diagramXml: "", testPlan: "", projectTimeline: localTimeline });
+    }
   }
 
   async function generateDiagram() {
@@ -468,87 +520,130 @@ Format as a structured runbook with numbered steps.`;
     );
   }
 
+  function renderGanttTab() {
+    if (!projectTimeline) {
+      return (
+        <div className={styles.emptyTabHint}>
+          <Text size={300} style={{ color: tokens.colorNeutralForeground3 }}>
+            Run the DR design to generate a project Gantt chart with phases, milestones, and critical path.
+          </Text>
+        </div>
+      );
+    }
+    return (
+      <div className={styles.diagramContainer}>
+        <div className={styles.diagramActions}>
+          <Button size="small" appearance="outline" icon={<ArrowDownloadRegular />} onClick={() => downloadDiagramFile(projectTimeline.diagramXml, "dr-timeline.drawio")}>Download (.drawio)</Button>
+          <Button size="small" appearance="outline" icon={<OpenRegular />} onClick={() => openDiagramInDrawIo(projectTimeline.diagramXml)}>Open in draw.io</Button>
+        </div>
+        {ganttHtml && (
+          <iframe srcDoc={ganttHtml} className={styles.diagramFrame} sandbox="allow-scripts allow-same-origin" title="DR Project Timeline" />
+        )}
+        {projectTimeline.notes && (
+          <Text size={200} style={{ color: tokens.colorNeutralForeground3, marginTop: "8px" }}>{projectTimeline.notes}</Text>
+        )}
+      </div>
+    );
+  }
+
   // Suppress unused-variable warning
   void cancelDeliverable;
 
   return (
-    <div className={styles.panel}>
-      {/* ── Left Sidebar ─────────────────────────────────────────────────────── */}
-      <div className={styles.sidebar}>
-        <Text weight="semibold" size={500}>DR/BC Design</Text>
-        <Text size={200} style={{ color: tokens.colorNeutralForeground3, marginTop: "-10px" }}>
-          Design a disaster recovery strategy with pattern recommendation, failover runbook, and test plan.
-        </Text>
+    <div
+      className={styles.panel}
+      style={{ position: "relative" }}
+      onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+      onDragLeave={() => setIsDragging(false)}
+      onDrop={(e) => { e.preventDefault(); setIsDragging(false); }}
+    >
+      {isDragging && <div className={styles.dropOverlay}><Text size={400} weight="semibold">Drop files to attach</Text></div>}
+      <PanelGroup orientation="horizontal" style={{ height: "100%" }}>
+        {/* ── Left Sidebar ───────────────────────────────────────────────────── */}
+        <Panel defaultSize={26} minSize={18} maxSize={45}>
+          <div style={{ height: "100%", overflowY: "auto", padding: "20px 16px", borderRight: `1px solid ${tokens.colorNeutralStroke2}`, display: "flex", flexDirection: "column", gap: "16px", background: tokens.colorNeutralBackground1 }}>
+            <Text weight="semibold" size={500}>DR/BC Design</Text>
+            <Text size={200} style={{ color: tokens.colorNeutralForeground3, marginTop: "-10px" }}>
+              Design a disaster recovery strategy with pattern recommendation, failover runbook, and test plan.
+            </Text>
 
-        <div>
-          <span className={styles.sectionLabel}>Workload Description</span>
-          <div className={styles.reqBox}>
-            <textarea
-              className={styles.reqTextarea}
-              placeholder="Describe your workload: services, data stores, scale, criticality, and current availability setup…"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-            />
+            <div>
+              <span className={styles.sectionLabel}>Workload Description</span>
+              <div className={styles.reqBox}>
+                <textarea
+                  className={styles.reqTextarea}
+                  placeholder="Describe your workload: services, data stores, scale, criticality, and current availability setup…"
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div className={styles.slaRow}>
+              <Field label="RTO (hours)">
+                <Input type="number" value={rto} onChange={(_, d) => setRto(d.value)} style={{ width: "100%" }} />
+              </Field>
+              <Field label="RPO (hours)">
+                <Input type="number" value={rpo} onChange={(_, d) => setRpo(d.value)} style={{ width: "100%" }} />
+              </Field>
+            </div>
+
+            {isStreaming ? (
+              <Button appearance="primary" icon={<Spinner size="tiny" />} onClick={cancel}>Stop</Button>
+            ) : (
+              <Button appearance="primary" onClick={handleDesign} disabled={!description.trim()}>
+                Design DR Strategy
+              </Button>
+            )}
+
+            {statusMsg && (
+              <div className={styles.status}>
+                <Spinner size="tiny" />
+                <span>{statusMsg}</span>
+              </div>
+            )}
+
+            {hasResults && (
+              <Button appearance="outline" icon={<DocumentRegular />} onClick={handleExport}>
+                Export Report (.docx)
+              </Button>
+            )}
+
+            {hasResults && onRefine && (
+              <Button appearance="subtle" icon={<ChatRegular />} onClick={handleRefine}>
+                Refine in Chat
+              </Button>
+            )}
           </div>
-        </div>
+        </Panel>
 
-        <div className={styles.slaRow}>
-          <Field label="RTO (hours)">
-            <Input type="number" value={rto} onChange={(_, d) => setRto(d.value)} style={{ width: "100%" }} />
-          </Field>
-          <Field label="RPO (hours)">
-            <Input type="number" value={rpo} onChange={(_, d) => setRpo(d.value)} style={{ width: "100%" }} />
-          </Field>
-        </div>
+        <PanelResizeHandle style={{ width: "4px", background: tokens.colorNeutralBackground3, cursor: "col-resize" }} />
 
-        {isStreaming ? (
-          <Button appearance="primary" icon={<Spinner size="tiny" />} onClick={cancel}>Stop</Button>
-        ) : (
-          <Button appearance="primary" onClick={handleDesign} disabled={!description.trim()}>
-            Design DR Strategy
-          </Button>
-        )}
+        {/* ── Right Panel ────────────────────────────────────────────────────── */}
+        <Panel>
+          <div style={{ height: "100%", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+            <div className={styles.tabBar}>
+              <TabList selectedValue={activeTab} onTabSelect={(_, d) => setActiveTab(d.value as DRBCTab)} size="small">
+                <Tab value="strategy">DR Strategy{hasResults && <span className={styles.tabDot} />}</Tab>
+                <Tab value="runbook">Runbook{drStrategy && drStrategy.failover_steps.length > 0 && <span className={styles.tabDot} />}</Tab>
+                <Tab value="rto-rpo">RTO/RPO{drStrategy && drStrategy.service_configs.length > 0 && <span className={styles.tabDot} />}</Tab>
+                <Tab value="diagram">Diagram{diagramXml && <span className={styles.tabDot} />}</Tab>
+                <Tab value="test-plan">Test Plan{testPlan && <span className={styles.tabDot} />}</Tab>
+                <Tab value="gantt" icon={<CalendarRegular />}>Gantt{projectTimeline && <span className={styles.tabDot} />}</Tab>
+              </TabList>
+            </div>
 
-        {statusMsg && (
-          <div className={styles.status}>
-            <Spinner size="tiny" />
-            <span>{statusMsg}</span>
+            <div className={styles.tabContent}>
+              {activeTab === "strategy" && renderStrategyTab()}
+              {activeTab === "runbook" && renderRunbookTab()}
+              {activeTab === "rto-rpo" && renderRtoRpoTab()}
+              {activeTab === "diagram" && renderDiagramTab()}
+              {activeTab === "test-plan" && renderTestPlanTab()}
+              {activeTab === "gantt" && renderGanttTab()}
+            </div>
           </div>
-        )}
-
-        {hasResults && (
-          <Button appearance="outline" icon={<DocumentRegular />} onClick={handleExport}>
-            Export Report (.docx)
-          </Button>
-        )}
-
-        {hasResults && onRefine && (
-          <Button appearance="subtle" icon={<ChatRegular />} onClick={handleRefine}>
-            Refine in Chat
-          </Button>
-        )}
-      </div>
-
-      {/* ── Right Panel ──────────────────────────────────────────────────────── */}
-      <div className={styles.rightPanel}>
-        <div className={styles.tabBar}>
-          <TabList selectedValue={activeTab} onTabSelect={(_, d) => setActiveTab(d.value as DRBCTab)} size="small">
-            <Tab value="strategy">DR Strategy{hasResults && <span className={styles.tabDot} />}</Tab>
-            <Tab value="runbook">Runbook{drStrategy && drStrategy.failover_steps.length > 0 && <span className={styles.tabDot} />}</Tab>
-            <Tab value="rto-rpo">RTO/RPO{drStrategy && drStrategy.service_configs.length > 0 && <span className={styles.tabDot} />}</Tab>
-            <Tab value="diagram">Diagram{diagramXml && <span className={styles.tabDot} />}</Tab>
-            <Tab value="test-plan">Test Plan{testPlan && <span className={styles.tabDot} />}</Tab>
-          </TabList>
-        </div>
-
-        <div className={styles.tabContent}>
-          {activeTab === "strategy" && renderStrategyTab()}
-          {activeTab === "runbook" && renderRunbookTab()}
-          {activeTab === "rto-rpo" && renderRtoRpoTab()}
-          {activeTab === "diagram" && renderDiagramTab()}
-          {activeTab === "test-plan" && renderTestPlanTab()}
-        </div>
-      </div>
+        </Panel>
+      </PanelGroup>
     </div>
   );
 }

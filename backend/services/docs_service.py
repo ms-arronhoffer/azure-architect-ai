@@ -1,5 +1,8 @@
 import httpx
 
+from middleware.logging import get_logger
+
+log = get_logger("docs_service")
 LEARN_SEARCH_URL = "https://learn.microsoft.com/api/search"
 
 
@@ -30,5 +33,16 @@ async def search_azure_docs(query: str, category: str = "", top: int = 5) -> lis
                 for r in results
                 if r.get("url")
             ]
-        except Exception:
+        except httpx.HTTPStatusError as exc:
+            log.warning(
+                "learn_search.http_error",
+                status=exc.response.status_code,
+                query=query,
+            )
+            return []
+        except httpx.RequestError as exc:
+            log.warning("learn_search.request_error", error=str(exc), query=query)
+            return []
+        except Exception as exc:
+            log.exception("learn_search.unexpected", error=str(exc), query=query)
             return []

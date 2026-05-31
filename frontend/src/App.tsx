@@ -23,6 +23,7 @@ import AnalysisPanel from "./components/AnalysisPanel";
 import LandingZonePanel from "./components/LandingZonePanel";
 import ThreatModelPanel from "./components/ThreatModelPanel";
 import ReliabilityPanel from "./components/ReliabilityPanel";
+import TroubleshootingPanel from "./components/TroubleshootingPanel";
 import { useConversationHistory } from "./hooks/useConversationHistory";
 import { useWorkloadContext } from "./hooks/useWorkloadContext";
 import { useSettings } from "./hooks/useSettings";
@@ -51,6 +52,7 @@ const useStyles = makeStyles({
 });
 
 const ARCH_MODES: Mode[] = ["architecture", "network", "aiarchitecture", "dataplatform", "apim"];
+const PANEL_MODES: Mode[] = [...ARCH_MODES, "waf", "review", "drbc", "sizing", "tco", "threatmodel", "reliability", "landingzone", "troubleshoot"];
 
 export default function App() {
   const styles = useStyles();
@@ -62,30 +64,54 @@ export default function App() {
   const [contextOpen, setContextOpen] = useState(false);
   const [selectedConversation, setSelectedConversation] = useState<ConversationRecord | null>(null);
   const [refinementSeed, setRefinementSeed] = useState<{ id: string; messages: ChatMessage[]; suggestedReplies?: string[] } | null>(null);
+  const [selectedPanelSession, setSelectedPanelSession] = useState<ConversationRecord | null>(null);
   const { conversations, upsert, remove, clear, fork } = useConversationHistory();
   const { context: workloadContext, setContext: setWorkloadContext, clearContext } = useWorkloadContext();
-  const { settings, saveSettings } = useSettings();
+  const { settings, saveSettings, githubTokenConfigured, setGithubToken, clearGithubToken } = useSettings();
 
   const wafSessionId = useRef(crypto.randomUUID()).current;
   const reviewSessionId = useRef(crypto.randomUUID()).current;
+  const drbcSessionId = useRef(crypto.randomUUID()).current;
+  const sizingSessionId = useRef(crypto.randomUUID()).current;
+  const tcoSessionId = useRef(crypto.randomUUID()).current;
+  const threatModelSessionId = useRef(crypto.randomUUID()).current;
+  const reliabilitySessionId = useRef(crypto.randomUUID()).current;
+  const landingZoneSessionId = useRef(crypto.randomUUID()).current;
+  const troubleshootSessionId = useRef(crypto.randomUUID()).current;
 
   function handleModeChange(m: Mode) {
     setMode(m);
     setSelectedConversation(null);
+    setSelectedPanelSession(null);
     setRefinementSeed(null);
   }
 
   function handleLoadConversation(conv: ConversationRecord) {
     setMode(conv.mode);
-    setSelectedConversation(conv);
     setRefinementSeed(null);
     setHistoryOpen(false);
+    if (PANEL_MODES.includes(conv.mode)) {
+      setSelectedPanelSession(conv);
+      setSelectedConversation(null);
+    } else {
+      setSelectedConversation(conv);
+      setSelectedPanelSession(null);
+    }
   }
 
   function handleRefine(context: ChatMessage[], suggestedReplies?: string[]) {
     setRefinementSeed({ id: crypto.randomUUID(), messages: context, suggestedReplies });
     setMode("qa");
     setSelectedConversation(null);
+    setSelectedPanelSession(null);
+  }
+
+  function handlePanelSave(id: string, m: Mode, messages: ChatMessage[], structuredResult: unknown) {
+    upsert(id, m, messages, structuredResult);
+  }
+
+  function panelSession(m: Mode): ConversationRecord | undefined {
+    return selectedPanelSession?.mode === m ? selectedPanelSession : undefined;
   }
 
   async function handleFork(messages: ChatMessage[], upToIndex: number) {
@@ -126,6 +152,8 @@ export default function App() {
           onRefine={handleRefine}
           onModeChange={handleModeChange}
           workloadContext={workloadContext}
+          onSave={(id, m, msgs, sr) => handlePanelSave(id, m, msgs, sr)}
+          initialSession={ARCH_MODES.includes(selectedPanelSession?.mode ?? "" as Mode) ? selectedPanelSession ?? undefined : undefined}
         />
       );
     }
@@ -135,6 +163,8 @@ export default function App() {
           key="waf"
           onRefine={handleRefine}
           conversationId={wafSessionId}
+          onSave={(id, m, msgs, sr) => handlePanelSave(id, m, msgs, sr)}
+          initialSession={panelSession("waf")}
         />
       );
     }
@@ -144,20 +174,23 @@ export default function App() {
           key="review"
           onRefine={handleRefine}
           conversationId={reviewSessionId}
+          onSave={(id, m, msgs, sr) => handlePanelSave(id, m, msgs, sr)}
+          initialSession={panelSession("review")}
         />
       );
     }
-    if (mode === "drbc") return <DRBCPanel key="drbc" onRefine={handleRefine} />;
-    if (mode === "landingzone") return <LandingZonePanel key="landingzone" onRefine={handleRefine} />;
-    if (mode === "threatmodel") return <ThreatModelPanel key="threatmodel" onRefine={handleRefine} />;
-    if (mode === "reliability") return <ReliabilityPanel key="reliability" onRefine={handleRefine} />;
+    if (mode === "drbc") return <DRBCPanel key="drbc" onRefine={handleRefine} sessionId={drbcSessionId} onSave={handlePanelSave} initialSession={panelSession("drbc")} />;
+    if (mode === "landingzone") return <LandingZonePanel key="landingzone" onRefine={handleRefine} sessionId={landingZoneSessionId} onSave={handlePanelSave} initialSession={panelSession("landingzone")} />;
+    if (mode === "threatmodel") return <ThreatModelPanel key="threatmodel" onRefine={handleRefine} sessionId={threatModelSessionId} onSave={handlePanelSave} initialSession={panelSession("threatmodel")} />;
+    if (mode === "reliability") return <ReliabilityPanel key="reliability" onRefine={handleRefine} sessionId={reliabilitySessionId} onSave={handlePanelSave} initialSession={panelSession("reliability")} />;
+    if (mode === "troubleshoot") return <TroubleshootingPanel key="troubleshoot" onRefine={handleRefine} sessionId={troubleshootSessionId} onSave={handlePanelSave} initialSession={panelSession("troubleshoot")} />;
     if (mode === "reference") return <ReferenceLibrary key="reference" />;
     if (mode === "presentation") return <PresentationPanel key="presentation" />;
     if (mode === "codegen") return <CodegenPanel key="codegen" onRefine={handleRefine} />;
     if (mode === "learningplan") return <LearningPlanPanel key="learningplan" />;
     if (mode === "bootstrap") return <BootstrapPanel key="bootstrap" onRefine={handleRefine} />;
-    if (mode === "sizing") return <SizingPanel key="sizing" onRefine={handleRefine} />;
-    if (mode === "tco") return <TCOPanel key="tco" onRefine={handleRefine} />;
+    if (mode === "sizing") return <SizingPanel key="sizing" onRefine={handleRefine} sessionId={sizingSessionId} onSave={handlePanelSave} initialSession={panelSession("sizing")} />;
+    if (mode === "tco") return <TCOPanel key="tco" onRefine={handleRefine} sessionId={tcoSessionId} onSave={handlePanelSave} initialSession={panelSession("tco")} />;
     if (ADVISOR_MODES.includes(mode)) {
       return (
         <AdvisorPanel
@@ -213,6 +246,9 @@ export default function App() {
         onClose={() => setSettingsOpen(false)}
         settings={settings}
         onSave={saveSettings}
+        githubTokenConfigured={githubTokenConfigured}
+        onSaveGithubToken={setGithubToken}
+        onClearGithubToken={clearGithubToken}
       />
       <WorkloadContextPanel
         open={contextOpen}

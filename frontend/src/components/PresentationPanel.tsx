@@ -22,6 +22,7 @@ import {
 
 import type { DeckOutline, DeckRecommendation } from "../types";
 import ChatPanel from "./ChatPanel";
+import { apiPath } from "../config/api";
 
 const useStyles = makeStyles({
   root: {
@@ -270,7 +271,7 @@ export default function PresentationPanel() {
 
     abortRef.current = new AbortController();
     try {
-      const res = await fetch("/api/presentation/outline", {
+      const res = await fetch(apiPath("/api/presentation/outline"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -348,7 +349,7 @@ export default function PresentationPanel() {
     setPhase("building");
     setStatusMsg("Building presentation…");
     try {
-      const res = await fetch("/api/presentation/build", {
+      const res = await fetch(apiPath("/api/presentation/build"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ outline }),

@@ -7,5 +7,6 @@ class ModelConfig(BaseModel):
 
 
 class UserSettings(BaseModel):
-    github_token: str = ""
+    # GitHub PAT is no longer carried in this model. Tokens live encrypted server-side
+    # and are managed via /api/auth/github-token. Clients see only configured-state there.
     mode_models: dict[str, ModelConfig] = {}

@@ -1,0 +1,43 @@
+[tool.ruff]
+line-length = 110
+target-version = "py311"
+src = ["backend"]
+extend-exclude = [".venv", "venv", "__pycache__", "data"]
+
+[tool.ruff.lint]
+select = [
+    "E", "F", "W",      # pycodestyle + pyflakes
+    "I",                 # isort
+    "B",                 # bugbear
+    "UP",                # pyupgrade
+    "SIM",               # simplify
+    "RUF",               # ruff-specific
+]
+ignore = [
+    "E501",              # line length handled by formatter
+    "B008",              # FastAPI Depends() default
+]
+
+[tool.ruff.lint.per-file-ignores]
+"backend/tools/tool_definitions.py" = ["E501"]
+"backend/prompts/*.py" = ["E501"]
+
+[tool.mypy]
+python_version = "3.11"
+files = ["backend"]
+strict = true
+ignore_missing_imports = true
+warn_unused_ignores = false
+disallow_untyped_decorators = false
+# Tighten as the codebase catches up:
+disallow_any_generics = false
+disallow_subclassing_any = false
+
+[[tool.mypy.overrides]]
+module = ["drawpyo.*", "mcp.*", "sse_starlette.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["backend/tests"]
+pythonpath = ["backend"]
+addopts = "-q"
