@@ -34,5 +34,9 @@ class Settings(BaseSettings):
     session_cookie_name: str = "aa_session"
     session_cookie_secure: bool = False  # set true behind HTTPS
 
+    # Azure Monitor / Application Insights. When set, OTel exports traces, logs,
+    # and metrics to App Insights via azure-monitor-opentelemetry.
+    applicationinsights_connection_string: str | None = None
+
 
 settings = Settings()

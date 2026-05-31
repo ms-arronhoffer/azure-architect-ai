@@ -42,6 +42,11 @@ class IacModule:
     parameters: list[IacParameter] = field(default_factory=list)
     resources: list[IacResource] = field(default_factory=list)
     outputs: dict[str, str] = field(default_factory=dict)
+    notes: list[str] = field(default_factory=list)
+
+
+# Alias preserved for callers using the newer "blueprint" naming.
+IacBlueprint = IacModule
 
 
 # Service label → (azure_type, default sku) mapping used to materialize an IR
@@ -89,9 +94,11 @@ def module_from_reference_arch(arch: dict) -> IacModule:
             IacParameter("environment", "string", "dev", "Deployment environment"),
         ],
     )
+    dropped: list[str] = []
     for svc in arch.get("services", []):
         entry = SERVICE_CATALOG.get(svc)
         if entry is None:
+            dropped.append(svc)
             continue
         azure_type, sku = entry
         module.resources.append(
@@ -102,13 +109,33 @@ def module_from_reference_arch(arch: dict) -> IacModule:
                 properties={"service_label": svc},
             )
         )
+    if dropped:
+        module.notes.append(
+            "Dropped (no SERVICE_CATALOG mapping): " + ", ".join(sorted(set(dropped)))
+        )
     return module
 
 
+def blueprint_from_reference_arch(pattern_name: str) -> IacModule:
+    """Lookup a reference arch by id and build the IR blueprint.
+
+    Raises KeyError if the pattern_name doesn't match a REFERENCE_ARCHS entry.
+    """
+    # Lazy import to avoid circular dependencies during package init.
+    from data.reference_archs import REFERENCE_ARCHS
+
+    arch = next((a for a in REFERENCE_ARCHS if a["id"] == pattern_name), None)
+    if arch is None:
+        raise KeyError(f"unknown reference arch pattern: {pattern_name}")
+    return module_from_reference_arch(arch)
+
+
 __all__ = [
+    "IacBlueprint",
     "IacModule",
     "IacParameter",
     "IacResource",
     "SERVICE_CATALOG",
+    "blueprint_from_reference_arch",
     "module_from_reference_arch",
 ]

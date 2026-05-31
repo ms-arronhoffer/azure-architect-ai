@@ -13,6 +13,7 @@ from pydantic import BaseModel
 
 from auth import require_user, user_id_from_claims
 from models import ModelConfig
+from observability import tool_calls_counter
 from prompts.system_prompt import MODE_TEMPLATES
 from services.docs_service import search_azure_docs
 from services.rag_service import cached_learn_search
@@ -149,6 +150,10 @@ async def _stream_chat(mode: str, messages: list[dict], provider: str = "azure",
             for tc in tool_calls_raw.values():
                 name = tc["name"]
                 args = _safe_json(tc["arguments"])
+                try:
+                    tool_calls_counter.add(1, {"tool_name": name})
+                except Exception:
+                    pass
                 tool_result, sse_event = await _dispatch_tool(name, args)
 
                 if name == "search_azure_docs" and isinstance(tool_result, list):

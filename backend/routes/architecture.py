@@ -170,6 +170,30 @@ async def _stream_architecture(req: ArchRequest, provider: str = "azure", model:
                     yield f"data: {json.dumps({'type': 'bicep', 'code': args.get('bicep_code', ''), 'target_scope': args.get('target_scope', 'resourceGroup'), 'param_file': args.get('param_file'), 'deploy_commands': args.get('deploy_commands', []), 'notes': args.get('notes', [])})}\n\n"
                     result = {"status": "bicep_received"}
 
+                elif name == "generate_terraform":
+                    yield f"data: {json.dumps({'type': 'status', 'message': 'Generating Terraform module...'})}\n\n"
+                    try:
+                        from services.iac import blueprint_from_reference_arch, emit_terraform
+                        bp = blueprint_from_reference_arch(args.get("pattern_name", ""))
+                        files = emit_terraform(bp)
+                        yield f"data: {json.dumps({'type': 'terraform_files', 'files': files, 'pattern_name': args.get('pattern_name', ''), 'notes': bp.notes})}\n\n"
+                        result = {"status": "terraform_received", "file_count": len(files)}
+                    except (KeyError, Exception) as e:
+                        result = {"status": "error", "message": str(e)}
+                        yield f"data: {json.dumps({'type': 'error', 'message': f'Terraform error: {e}'})}\n\n"
+
+                elif name == "generate_arm":
+                    yield f"data: {json.dumps({'type': 'status', 'message': 'Generating ARM template...'})}\n\n"
+                    try:
+                        from services.iac import blueprint_from_reference_arch, emit_arm
+                        bp = blueprint_from_reference_arch(args.get("pattern_name", ""))
+                        files = emit_arm(bp)
+                        yield f"data: {json.dumps({'type': 'arm_files', 'files': files, 'pattern_name': args.get('pattern_name', ''), 'notes': bp.notes})}\n\n"
+                        result = {"status": "arm_received", "file_count": len(files)}
+                    except (KeyError, Exception) as e:
+                        result = {"status": "error", "message": str(e)}
+                        yield f"data: {json.dumps({'type': 'error', 'message': f'ARM error: {e}'})}\n\n"
+
                 elif name == "estimate_costs":
                     yield f"data: {json.dumps({'type': 'status', 'message': 'Fetching pricing data...'})}\n\n"
                     line_items = args.get("line_items", [])
@@ -207,6 +231,75 @@ async def _stream_architecture(req: ArchRequest, provider: str = "azure", model:
                     )
                     yield f"data: {json.dumps({'type': 'project_timeline', 'xml': gantt_xml, 'phases': args.get('phases', []), 'total_weeks': args.get('total_weeks', 12), 'notes': args.get('notes', '')})}\n\n"
                     result = {"status": "timeline_received"}
+
+                elif name == "generate_cicd_pipeline":
+                    yield f"data: {json.dumps({'type': 'status', 'message': 'Emitting CI/CD pipeline...'})}\n\n"
+                    try:
+                        from services.cicd_emitter import emit_github_actions, emit_azure_devops
+                        platform = args.get("platform", "github_actions")
+                        pattern = args.get("pattern_name", "")
+                        environment = args.get("environment", "dev")
+                        deploy_method = args.get("deploy_method", "bicep")
+                        if platform == "azure_devops":
+                            files = emit_azure_devops(pattern, environment, deploy_method)
+                        else:
+                            files = emit_github_actions(pattern, environment, deploy_method)
+                        yield f"data: {json.dumps({'type': 'cicd_files', 'platform': platform, 'pattern_name': pattern, 'environment': environment, 'deploy_method': deploy_method, 'files': files})}\n\n"
+                        result = {"status": "cicd_received", "file_count": len(files)}
+                    except Exception as e:
+                        result = {"status": "error", "message": str(e)}
+                        yield f"data: {json.dumps({'type': 'error', 'message': f'CI/CD error: {e}'})}\n\n"
+
+                elif name == "design_cost_alerts":
+                    yield f"data: {json.dumps({'type': 'status', 'message': 'Designing budget alerts...'})}\n\n"
+                    try:
+                        from services.cost_anomaly_service import design_budget_alerts
+                        payload = design_budget_alerts(
+                            subscription_id=args.get("subscription_id", ""),
+                            monthly_budget=float(args.get("monthly_budget_usd", 0)),
+                            alert_thresholds=args.get("alert_thresholds") or [50, 80, 100, 110],
+                        )
+                        yield f"data: {json.dumps({'type': 'cost_alerts', 'alerts': payload})}\n\n"
+                        result = {"status": "cost_alerts_received"}
+                    except Exception as e:
+                        result = {"status": "error", "message": str(e)}
+                        yield f"data: {json.dumps({'type': 'error', 'message': f'Cost alerts error: {e}'})}\n\n"
+
+                elif name == "assess_security_posture":
+                    yield f"data: {json.dumps({'type': 'status', 'message': 'Scoring security posture...'})}\n\n"
+                    try:
+                        from services.security_posture_service import (
+                            score_security_posture,
+                            list_defender_recommendations,
+                            list_sentinel_incidents,
+                        )
+                        sub = args.get("subscription_id", "")
+                        posture = score_security_posture(sub)
+                        if args.get("include_recommendations", True):
+                            posture["recommendations"] = list_defender_recommendations(sub, severity_min="Medium")
+                        if args.get("include_incidents", False) and args.get("workspace_resource_id"):
+                            posture["incidents"] = list_sentinel_incidents(
+                                args["workspace_resource_id"], lookback_hours=24
+                            )
+                        yield f"data: {json.dumps({'type': 'security_posture', 'posture': posture})}\n\n"
+                        result = {"status": "posture_received", "score": posture.get("score")}
+                    except Exception as e:
+                        result = {"status": "error", "message": str(e)}
+                        yield f"data: {json.dumps({'type': 'error', 'message': f'Security posture error: {e}'})}\n\n"
+
+                elif name == "compare_clouds":
+                    yield f"data: {json.dumps({'type': 'status', 'message': 'Comparing clouds...'})}\n\n"
+                    try:
+                        from services.multicloud_service import compare_services as _cmp_svc, decision_matrix
+                        if args.get("workload_type"):
+                            payload = decision_matrix(args["workload_type"], args.get("criteria", []))
+                        else:
+                            payload = _cmp_svc(args.get("azure_service", ""), args.get("target_clouds", []))
+                        yield f"data: {json.dumps({'type': 'multicloud_comparison', 'comparison': payload})}\n\n"
+                        result = {"status": "multicloud_received"}
+                    except Exception as e:
+                        result = {"status": "error", "message": str(e)}
+                        yield f"data: {json.dumps({'type': 'error', 'message': f'Multicloud error: {e}'})}\n\n"
 
                 elif is_mcp_tool(name):
                     yield f"data: {json.dumps({'type': 'status', 'message': 'Consulting Azure docs...'})}\n\n"

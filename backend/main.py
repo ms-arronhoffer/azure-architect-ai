@@ -33,6 +33,9 @@ from routes.security import router as security_router
 async def lifespan(app: FastAPI):
     async with AsyncExitStack() as stack:
         await init_db()
+        # Wire OpenTelemetry + Azure Monitor after middleware is registered (see below).
+        from observability import configure_telemetry
+        configure_telemetry(app)
         if settings.mcp_enabled:
             await init_mcp(stack)
         if settings.rag_enabled:

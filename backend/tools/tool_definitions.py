@@ -9,10 +9,12 @@ from tools.domains.cost import TOOLS as _cost_tools
 from tools.domains.devsecops import TOOLS as _devsecops_tools
 from tools.domains.drbc import TOOLS as _drbc_tools
 from tools.domains.governance import TOOLS as _governance_tools
+from tools.domains.iac import TOOLS as _iac_tools
 from tools.domains.learning import TOOLS as _learning_tools
 from tools.domains.migration import TOOLS as _migration_tools
 from tools.domains.monitoring import TOOLS as _monitoring_tools
 from tools.domains.network import TOOLS as _network_tools
+from tools.domains.operations import TOOLS as _operations_tools
 from tools.domains.presentation import TOOLS as _presentation_tools
 from tools.domains.project import TOOLS as _project_tools
 from tools.domains.qa import TOOLS as _qa_tools
@@ -22,7 +24,7 @@ from tools.domains.stakeholder import TOOLS as _stakeholder_tools
 from tools.domains.troubleshoot import TOOLS as _troubleshoot_tools
 from tools.domains.waf import TOOLS as _waf_tools
 
-TOOLS = _architecture_tools + _bicep_tools + _codegen_tools + _comparison_tools + _compliance_tools + _cost_tools + _devsecops_tools + _drbc_tools + _governance_tools + _learning_tools + _migration_tools + _monitoring_tools + _network_tools + _presentation_tools + _project_tools + _qa_tools + _security_tools + _sizing_tools + _stakeholder_tools + _troubleshoot_tools + _waf_tools
+TOOLS = _architecture_tools + _bicep_tools + _codegen_tools + _comparison_tools + _compliance_tools + _cost_tools + _devsecops_tools + _drbc_tools + _governance_tools + _iac_tools + _learning_tools + _migration_tools + _monitoring_tools + _network_tools + _operations_tools + _presentation_tools + _project_tools + _qa_tools + _security_tools + _sizing_tools + _stakeholder_tools + _troubleshoot_tools + _waf_tools
 
 _BY_NAME = {t["function"]["name"]: t for t in TOOLS}
 
@@ -32,7 +34,8 @@ def get_tools(*names: str) -> list:
 TOOLS_BY_MODE: dict[str, list] = {
     "qa":           get_tools("search_azure_docs", "compare_services", "recommend_service"),
     "architecture": get_tools("search_azure_docs", "design_architecture", "assess_waf_pillar",
-                              "generate_bicep", "estimate_costs", "generate_adr",
+                              "generate_bicep", "generate_terraform", "generate_arm",
+                              "estimate_costs", "generate_adr",
                               "generate_project_timeline", "validate_resource_naming",
                               "suggest_resource_name"),
     "reference":    get_tools("search_azure_docs"),
@@ -52,27 +55,37 @@ TOOLS_BY_MODE: dict[str, list] = {
     "codegen":      get_tools("generate_code_files"),
     "tco":          get_tools("search_azure_docs", "estimate_costs", "generate_tco_report"),
     "bootstrap":      get_tools("search_azure_docs", "design_architecture", "generate_bicep",
-                                "estimate_costs"),
+                                "generate_terraform", "generate_arm", "estimate_costs"),
     "aiarchitecture": get_tools("search_azure_docs", "design_architecture", "estimate_costs",
-                                "generate_bicep", "generate_project_timeline"),
+                                "generate_bicep", "generate_terraform", "generate_arm",
+                                "generate_project_timeline"),
     "dataplatform":   get_tools("search_azure_docs", "design_architecture", "estimate_costs",
-                                "generate_bicep"),
+                                "generate_bicep", "generate_terraform", "generate_arm"),
     "apim":           get_tools("search_azure_docs", "design_architecture", "generate_bicep",
-                                "estimate_costs"),
+                                "generate_terraform", "generate_arm", "estimate_costs"),
     "network":        get_tools("search_azure_docs", "design_network_topology", "generate_bicep",
-                                "estimate_costs"),
+                                "generate_terraform", "generate_arm", "estimate_costs"),
     "landingzone":    get_tools("search_azure_docs", "design_landing_zone", "generate_bicep",
+                                "generate_terraform", "generate_arm",
                                 "map_compliance", "validate_resource_naming", "suggest_resource_name"),
     "identity":       get_tools("search_azure_docs", "design_rbac_model", "map_compliance",
-                                "generate_bicep", "validate_resource_naming"),
+                                "generate_bicep", "generate_terraform", "generate_arm",
+                                "validate_resource_naming"),
     "threatmodel":    get_tools("search_azure_docs", "generate_threat_register", "assess_waf_pillar",
                                 "map_compliance"),
-    "devsecops":      get_tools("search_azure_docs", "design_pipeline", "generate_bicep"),
+    "devsecops":      get_tools("search_azure_docs", "design_pipeline", "generate_bicep",
+                                "generate_terraform", "generate_arm"),
     "reliability":    get_tools("search_azure_docs", "define_slo_framework", "assess_waf_pillar",
                                 "generate_monitoring_config"),
     "sizing":         get_tools("search_azure_docs", "recommend_sku", "estimate_costs"),
     "troubleshoot":   get_tools("search_azure_docs", "diagnose_issue", "generate_kql_queries",
                                 "generate_remediation_runbook"),
+    "devops":         get_tools("search_azure_docs", "generate_cicd_pipeline", "design_pipeline"),
+    "finops":         get_tools("search_azure_docs", "estimate_costs", "generate_tco_report",
+                                "design_cost_alerts"),
+    "securityposture": get_tools("search_azure_docs", "assess_security_posture",
+                                 "assess_waf_pillar", "map_compliance"),
+    "multicloud":     get_tools("search_azure_docs", "compare_clouds", "compare_services"),
 }
 
 # Modes that benefit from MCP tools (informational/guidance, not subscription-bound actions)
@@ -81,6 +94,7 @@ _MCP_ENABLED_MODES = {
     "regional", "cost", "drbc", "monitoring", "compare", "certprep", "reference",
     "aiarchitecture", "dataplatform", "apim", "network", "landingzone", "identity",
     "threatmodel", "devsecops", "reliability", "sizing", "troubleshoot",
+    "devops", "finops", "securityposture", "multicloud",
 }
 
 

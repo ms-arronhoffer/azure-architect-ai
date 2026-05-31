@@ -609,6 +609,95 @@ export interface DecisionCard {
 
 
 
+// ── Architecture-route SSE result types ──────────────────────────────────────
+
+export interface TerraformFilesResult {
+  files: Record<string, string>;
+  pattern_name?: string;
+  notes?: string[];
+}
+
+export interface ArmFilesResult {
+  files: Record<string, string>;
+  pattern_name?: string;
+  notes?: string[];
+}
+
+export interface CicdFilesResult {
+  platform: string;            // "github" | "azure_devops" (route emits literal "github" or "azure_devops")
+  files: Record<string, string>;
+  pattern_name?: string;
+  environment?: string;
+  deploy_method?: string;
+}
+
+export interface CostAlertsResult {
+  subscription_id?: string;
+  monthly_budget_usd?: number;
+  thresholds?: number[];
+  bicep?: string;
+  resources?: string[];
+  deploy_command?: string;
+  error?: string;
+}
+
+export interface SecurityPostureFinding {
+  id?: string;
+  title?: string;
+  severity?: string;
+  status?: string;
+  resource?: string;
+  remediation?: string;
+  [key: string]: unknown;
+}
+
+export interface SecurityPostureRecommendation {
+  id?: string;
+  display_name?: string;
+  severity?: string;
+  category?: string;
+  resource?: string;
+  [key: string]: unknown;
+}
+
+export interface SecurityPostureIncident {
+  id?: string;
+  title?: string;
+  severity?: string;
+  status?: string;
+  created_time?: string;
+  [key: string]: unknown;
+}
+
+export interface SecurityPostureResult {
+  subscription_id?: string;
+  score?: number;
+  summary?: string;
+  top_findings?: SecurityPostureFinding[];
+  severity_breakdown?: Record<string, number>;
+  recommendations?: SecurityPostureRecommendation[];
+  incidents?: SecurityPostureIncident[];
+  error?: string;
+}
+
+export interface MulticloudComparisonResult {
+  // compare_services() shape
+  azure_service?: string;
+  category?: string;
+  matches?: Record<string, string | undefined>;
+  why_azure?: string;
+  note?: string;
+  // decision_matrix() shape
+  workload_type?: string;
+  criteria?: string[];
+  azure?: Record<string, number>;
+  aws?: Record<string, number>;
+  gcp?: Record<string, number>;
+  notes?: string;
+  error?: string;
+}
+
+
 export type StructuredResult =
   | { kind: "service_comparison"; data: ServiceComparison }
   | { kind: "compliance_result"; data: ComplianceResult }
@@ -628,7 +717,13 @@ export type StructuredResult =
   | { kind: "region_comparison"; data: RegionComparison }
   | { kind: "practice_exam_pack"; data: PracticeExamPack }
   | { kind: "stakeholder_plan"; data: StakeholderPlan }
-  | { kind: "decision_card"; data: DecisionCard };
+  | { kind: "decision_card"; data: DecisionCard }
+  | { kind: "terraform_files"; data: TerraformFilesResult }
+  | { kind: "arm_files"; data: ArmFilesResult }
+  | { kind: "cicd_files"; data: CicdFilesResult }
+  | { kind: "cost_alerts"; data: CostAlertsResult }
+  | { kind: "security_posture"; data: SecurityPostureResult }
+  | { kind: "multicloud_comparison"; data: MulticloudComparisonResult };
 
 
 // ── Presentation / deck builder types ────────────────────────────────────────
@@ -786,6 +881,12 @@ export type SseEvent =
   | { type: "diagnosis"; diagnosis: DiagnosisResult }
   | { type: "kql_queries"; queries: DiagnosticKqlQuery[] }
   | { type: "remediation_runbook"; steps: RemediationStep[]; escalation_path: string; estimated_minutes: number }
+  | { type: "terraform_files"; files: Record<string, string>; pattern_name?: string; notes?: string[] }
+  | { type: "arm_files"; files: Record<string, string>; pattern_name?: string; notes?: string[] }
+  | { type: "cicd_files"; platform: string; files: Record<string, string>; pattern_name?: string; environment?: string; deploy_method?: string }
+  | { type: "cost_alerts"; alerts: CostAlertsResult }
+  | { type: "security_posture"; posture: SecurityPostureResult }
+  | { type: "multicloud_comparison"; comparison: MulticloudComparisonResult }
   | { type: "done" }
   | { type: "status"; message: string }
   | { type: "error"; message: string };

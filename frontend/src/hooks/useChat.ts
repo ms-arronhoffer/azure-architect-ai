@@ -145,6 +145,41 @@ function _toStructuredResult(event: { type: string; [key: string]: unknown }): S
       return { kind: "stakeholder_plan", data: event.plan as never };
     case "decision_card":
       return { kind: "decision_card", data: event.card as never };
+    case "terraform_files":
+      return {
+        kind: "terraform_files",
+        data: {
+          files: event.files as Record<string, string>,
+          pattern_name: event.pattern_name as string | undefined,
+          notes: (event.notes as string[] | undefined) ?? [],
+        } as never,
+      };
+    case "arm_files":
+      return {
+        kind: "arm_files",
+        data: {
+          files: event.files as Record<string, string>,
+          pattern_name: event.pattern_name as string | undefined,
+          notes: (event.notes as string[] | undefined) ?? [],
+        } as never,
+      };
+    case "cicd_files":
+      return {
+        kind: "cicd_files",
+        data: {
+          platform: event.platform as string,
+          files: event.files as Record<string, string>,
+          pattern_name: event.pattern_name as string | undefined,
+          environment: event.environment as string | undefined,
+          deploy_method: event.deploy_method as string | undefined,
+        } as never,
+      };
+    case "cost_alerts":
+      return { kind: "cost_alerts", data: event.alerts as never };
+    case "security_posture":
+      return { kind: "security_posture", data: event.posture as never };
+    case "multicloud_comparison":
+      return { kind: "multicloud_comparison", data: event.comparison as never };
     default:
       return null;
   }

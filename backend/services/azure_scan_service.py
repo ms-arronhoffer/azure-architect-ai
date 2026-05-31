@@ -25,6 +25,7 @@ from azure.mgmt.resourcegraph.models import QueryRequest, QueryRequestOptions
 from config import settings
 from data.reference_archs import REFERENCE_ARCHS
 from middleware.logging import get_logger
+from observability import tracer
 
 log = get_logger("azure_scan_service")
 
@@ -175,37 +176,41 @@ def scan_drift(
         raise ValueError(f"unknown reference architecture: {reference_arch_id}")
 
     sub = _resolve_subscription(subscription_id)
-    log.info("scan.start", subscription=sub, reference_arch=reference_arch_id)
+    with tracer.start_as_current_span(
+        "azure.scan.drift",
+        attributes={"azure.subscription_id": sub},
+    ):
+        log.info("scan.start", subscription=sub, reference_arch=reference_arch_id)
 
-    resources = list_resources(sub)
-    public_ips = list_public_ips(sub)
-    open_rules = list_open_nsg_rules(sub)
+        resources = list_resources(sub)
+        public_ips = list_public_ips(sub)
+        open_rules = list_open_nsg_rules(sub)
 
-    report = {
-        "subscription_id": sub,
-        "reference_arch": {
-            "id": arch["id"],
-            "title": arch["title"],
-        },
-        "summary": {
-            "total_resources": len(resources),
-            "public_ips": len(public_ips),
-        },
-        "findings": {
-            "service_coverage": _service_coverage(resources, arch.get("services", [])),
-            "tag_violations": _tag_violations(resources),
-            "public_exposure": _public_exposure(public_ips),
-            "open_management_ports": _management_port_exposure(open_rules),
-        },
-    }
-    log.info(
-        "scan.complete",
-        subscription=sub,
-        resources=len(resources),
-        tag_violations=len(report["findings"]["tag_violations"]),
-        open_ports=len(report["findings"]["open_management_ports"]),
-    )
-    return report
+        report = {
+            "subscription_id": sub,
+            "reference_arch": {
+                "id": arch["id"],
+                "title": arch["title"],
+            },
+            "summary": {
+                "total_resources": len(resources),
+                "public_ips": len(public_ips),
+            },
+            "findings": {
+                "service_coverage": _service_coverage(resources, arch.get("services", [])),
+                "tag_violations": _tag_violations(resources),
+                "public_exposure": _public_exposure(public_ips),
+                "open_management_ports": _management_port_exposure(open_rules),
+            },
+        }
+        log.info(
+            "scan.complete",
+            subscription=sub,
+            resources=len(resources),
+            tag_violations=len(report["findings"]["tag_violations"]),
+            open_ports=len(report["findings"]["open_management_ports"]),
+        )
+        return report
 
 
 __all__ = [

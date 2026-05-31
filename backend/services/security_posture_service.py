@@ -94,30 +94,170 @@ def list_policy_states(subscription_id: str | None = None) -> list[dict]:
     return out
 
 
-def list_defender_recommendations(subscription_id: str | None = None) -> list[dict]:
-    """Active Defender for Cloud recommendations (assessments) in the sub."""
+_SEVERITY_RANK = {"low": 1, "medium": 2, "high": 3, "critical": 4}
+
+
+def list_defender_recommendations(
+    subscription_id: str | None = None,
+    severity_min: str = "Low",
+) -> list[dict]:
+    """Active Defender for Cloud recommendations (assessments) in the sub.
+
+    Filters by severity floor (Low | Medium | High | Critical).
+    """
     sub = _resolve_subscription(subscription_id)
-    client = _security_client(sub)
-    out: list[dict] = []
+    min_rank = _SEVERITY_RANK.get(severity_min.lower(), 1)
     try:
+        client = _security_client(sub)
+        out: list[dict] = []
         for assessment in client.assessments.list(scope=f"/subscriptions/{sub}"):
             status = (assessment.status.code or "").lower() if assessment.status else ""
-            if status not in ("unhealthy", "notapplicable"):
+            if status != "unhealthy":
                 continue
-            if status == "notapplicable":
+            sev = (assessment.metadata.severity if assessment.metadata else None) or "Low"
+            if _SEVERITY_RANK.get(sev.lower(), 1) < min_rank:
                 continue
             out.append({
                 "id": assessment.id,
                 "display_name": assessment.display_name,
-                "severity": (assessment.metadata.severity if assessment.metadata else None),
+                "severity": sev,
                 "status": status,
                 "resource": assessment.resource_details.id if assessment.resource_details else None,
             })
+        log.info("defender.unhealthy", subscription=sub, count=len(out))
+        return out
     except Exception as exc:
         log.warning("defender.list_failed", error=str(exc))
-        return []
-    log.info("defender.unhealthy", subscription=sub, count=len(out))
-    return out
+        return [{"error": f"Defender query failed: {exc}"}]
+
+
+def list_policy_assignments(subscription_id: str | None = None) -> list[dict]:
+    """All policy assignments in the subscription (with compliance state if available)."""
+    sub = _resolve_subscription(subscription_id)
+    try:
+        try:
+            from azure.mgmt.resource import PolicyClient  # type: ignore
+        except ImportError:
+            from azure.mgmt.resource.policy import PolicyClient  # type: ignore
+        cred = _creds()
+        client = PolicyClient(cred, sub)
+        out: list[dict] = []
+        compliance_by_assignment: dict[str, str] = {}
+        try:
+            states = _policy_client().policy_states.list_query_results_for_subscription(
+                policy_states_resource="latest", subscription_id=sub
+            )
+            for s in states:
+                if s.policy_assignment_id:
+                    compliance_by_assignment.setdefault(
+                        s.policy_assignment_id.lower(),
+                        s.compliance_state or "Unknown",
+                    )
+        except Exception as exc:
+            log.warning("policy.states.failed", error=str(exc))
+
+        for a in client.policy_assignments.list():
+            out.append({
+                "id": a.id,
+                "displayName": a.display_name or a.name,
+                "policyDefinitionId": a.policy_definition_id,
+                "enforcementMode": str(a.enforcement_mode) if a.enforcement_mode else "Default",
+                "scope": a.scope,
+                "complianceState": compliance_by_assignment.get((a.id or "").lower(), "Unknown"),
+            })
+        log.info("policy.assignments", subscription=sub, count=len(out))
+        return out
+    except Exception as exc:
+        log.warning("policy.assignments.failed", error=str(exc))
+        return [{"error": f"Policy assignments query failed: {exc}"}]
+
+
+def list_sentinel_incidents(
+    workspace_resource_id: str,
+    lookback_hours: int = 24,
+) -> list[dict]:
+    """List Sentinel incidents in the given workspace from the last N hours."""
+    try:
+        from azure.mgmt.securityinsight import SecurityInsights
+    except ImportError as exc:
+        return [{"error": f"azure-mgmt-securityinsight not installed: {exc}"}]
+
+    try:
+        # workspace_resource_id form:
+        # /subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.OperationalInsights/workspaces/{ws}
+        parts = workspace_resource_id.strip("/").split("/")
+        sub = parts[1]
+        rg = parts[3]
+        ws = parts[-1]
+        client = SecurityInsights(_creds(), sub)
+        from datetime import datetime, timedelta, timezone as _tz
+        cutoff = datetime.now(_tz.utc) - timedelta(hours=lookback_hours)
+        out: list[dict] = []
+        for inc in client.incidents.list(resource_group_name=rg, workspace_name=ws):
+            created = getattr(inc, "created_time_utc", None) or getattr(inc, "properties", None)
+            if created and hasattr(created, "isoformat") and created < cutoff:
+                continue
+            out.append({
+                "id": inc.id,
+                "title": getattr(inc, "title", None),
+                "severity": str(getattr(inc, "severity", "")),
+                "status": str(getattr(inc, "status", "")),
+                "createdTime": created.isoformat() if hasattr(created, "isoformat") else None,
+            })
+        log.info("sentinel.incidents", workspace=ws, count=len(out))
+        return out
+    except Exception as exc:
+        log.warning("sentinel.incidents.failed", error=str(exc))
+        return [{"error": f"Sentinel incidents query failed: {exc}"}]
+
+
+def score_security_posture(subscription_id: str | None = None) -> dict:
+    """Aggregate Defender + Policy into a single 0-100 score with top findings."""
+    sub = _resolve_subscription(subscription_id)
+    try:
+        assignments = list_policy_assignments(sub)
+        defender = list_defender_recommendations(sub, severity_min="Medium")
+
+        # Score: prefer Defender secure score if available; else heuristic.
+        score: float
+        try:
+            sc_client = _security_client(sub)
+            secure_scores = list(sc_client.secure_scores.list())
+            if secure_scores:
+                # secure score percentage * 100
+                ss = secure_scores[0]
+                score = float(getattr(ss.score, "percentage", 0.0) or 0.0) * 100
+            else:
+                raise RuntimeError("no secure scores")
+        except Exception:
+            # Heuristic: policy compliance %.
+            assigned = [a for a in assignments if "error" not in a]
+            compliant = [a for a in assigned if a.get("complianceState", "").lower() == "compliant"]
+            score = (len(compliant) / len(assigned) * 100) if assigned else 50.0
+
+        sev_buckets: dict[str, int] = {}
+        for d in defender:
+            if "error" in d:
+                continue
+            sev = (d.get("severity") or "low").lower()
+            sev_buckets[sev] = sev_buckets.get(sev, 0) + 1
+
+        top = [d for d in defender if "error" not in d][:10]
+        summary = (
+            f"Security posture score: {score:.0f}/100. "
+            f"{sev_buckets.get('high', 0) + sev_buckets.get('critical', 0)} high/critical Defender findings; "
+            f"{len([a for a in assignments if 'error' not in a])} policy assignments active."
+        )
+        return {
+            "subscription_id": sub,
+            "score": round(score, 1),
+            "summary": summary,
+            "top_findings": top,
+            "severity_breakdown": sev_buckets,
+        }
+    except Exception as exc:
+        log.warning("posture.score.failed", error=str(exc))
+        return {"error": f"Security posture scoring failed: {exc}"}
 
 
 def _expected_policy_gap(
@@ -168,6 +308,9 @@ def scan_security_posture(
 
 __all__ = [
     "list_defender_recommendations",
+    "list_policy_assignments",
     "list_policy_states",
+    "list_sentinel_incidents",
     "scan_security_posture",
+    "score_security_posture",
 ]

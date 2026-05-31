@@ -3,6 +3,7 @@ from openai import APIConnectionError, APIStatusError, RateLimitError
 from azure.identity import DefaultAzureCredential, get_bearer_token_provider
 from config import settings
 from middleware.logging import get_logger
+from observability import openai_tokens_histogram, tracer
 import random
 import time
 
@@ -19,37 +20,53 @@ TOOL_INCOMPATIBLE_MODELS = {
 _RETRYABLE_STATUSES = {408, 425, 429, 500, 502, 503, 504}
 
 
-def call_with_retry(fn, *, max_attempts: int = 4, base_delay: float = 0.5, max_delay: float = 8.0):
+def call_with_retry(fn, *, max_attempts: int = 4, base_delay: float = 0.5, max_delay: float = 8.0, model_name: str = ""):
     """Run an OpenAI SDK call with exponential backoff + jitter on transient errors.
 
     Honors a Retry-After header when the SDK exposes it. Re-raises on non-retryable
     errors or after attempts are exhausted.
     """
-    attempt = 0
-    while True:
-        attempt += 1
-        try:
-            return fn()
-        except RateLimitError as exc:
-            retry_after = _retry_after_seconds(exc)
-            if attempt >= max_attempts:
-                log.error("openai.retry_exhausted", attempts=attempt, error=str(exc))
-                raise
-            delay = retry_after if retry_after is not None else _backoff(attempt, base_delay, max_delay)
-            log.warning("openai.rate_limited", attempt=attempt, delay_s=delay)
-            time.sleep(delay)
-        except APIStatusError as exc:
-            if exc.status_code not in _RETRYABLE_STATUSES or attempt >= max_attempts:
-                raise
-            delay = _backoff(attempt, base_delay, max_delay)
-            log.warning("openai.api_status_retry", attempt=attempt, status=exc.status_code, delay_s=delay)
-            time.sleep(delay)
-        except APIConnectionError as exc:
-            if attempt >= max_attempts:
-                raise
-            delay = _backoff(attempt, base_delay, max_delay)
-            log.warning("openai.connection_retry", attempt=attempt, delay_s=delay, error=str(exc))
-            time.sleep(delay)
+    with tracer.start_as_current_span(
+        "openai.chat_completion",
+        attributes={
+            "gen_ai.system": "azure_openai",
+            "gen_ai.request.model": model_name,
+        },
+    ) as span:
+        attempt = 0
+        while True:
+            attempt += 1
+            try:
+                result = fn()
+                usage = getattr(result, "usage", None)
+                total = getattr(usage, "total_tokens", None) if usage is not None else None
+                if total is not None:
+                    try:
+                        openai_tokens_histogram.record(int(total), {"model": model_name})
+                        span.set_attribute("gen_ai.usage.total_tokens", int(total))
+                    except Exception:
+                        pass
+                return result
+            except RateLimitError as exc:
+                retry_after = _retry_after_seconds(exc)
+                if attempt >= max_attempts:
+                    log.error("openai.retry_exhausted", attempts=attempt, error=str(exc))
+                    raise
+                delay = retry_after if retry_after is not None else _backoff(attempt, base_delay, max_delay)
+                log.warning("openai.rate_limited", attempt=attempt, delay_s=delay)
+                time.sleep(delay)
+            except APIStatusError as exc:
+                if exc.status_code not in _RETRYABLE_STATUSES or attempt >= max_attempts:
+                    raise
+                delay = _backoff(attempt, base_delay, max_delay)
+                log.warning("openai.api_status_retry", attempt=attempt, status=exc.status_code, delay_s=delay)
+                time.sleep(delay)
+            except APIConnectionError as exc:
+                if attempt >= max_attempts:
+                    raise
+                delay = _backoff(attempt, base_delay, max_delay)
+                log.warning("openai.connection_retry", attempt=attempt, delay_s=delay, error=str(exc))
+                time.sleep(delay)
 
 
 def _backoff(attempt: int, base: float, cap: float) -> float:

@@ -10,6 +10,7 @@ from __future__ import annotations
 import datetime as dt
 import hashlib
 import math
+import time
 from typing import Iterable
 
 from sqlalchemy import delete, select
@@ -19,6 +20,7 @@ from config import settings
 from data.reference_archs import REFERENCE_ARCHS
 from db import RagDocument, session_scope
 from middleware.logging import get_logger
+from observability import rag_cache_hit_latency_histogram, tracer
 from services.docs_service import search_azure_docs
 from services.embeddings_service import embed_text, embed_texts
 
@@ -125,32 +127,42 @@ async def search(
     top_k: int | None = None,
 ) -> list[dict]:
     """Cosine-similarity search across one or more corpora."""
-    if not query.strip():
-        return []
     k = top_k or settings.rag_top_k
-    q_vec = embed_text(query)
-    stmt = select(RagDocument)
-    if corpora:
-        stmt = stmt.where(RagDocument.corpus.in_(corpora))
-    rows = (await session.execute(stmt)).scalars().all()
-    scored = [
-        (_cosine(q_vec, row.embedding), row)
-        for row in rows
-    ]
-    scored.sort(key=lambda x: x[0], reverse=True)
-    return [
-        {
-            "score": score,
-            "corpus": row.corpus,
-            "source_id": row.source_id,
-            "title": row.title,
-            "url": row.url,
-            "content": row.content,
-            "metadata": row.doc_metadata,
-        }
-        for score, row in scored[:k]
-        if score > 0
-    ]
+    with tracer.start_as_current_span(
+        "rag.search",
+        attributes={"rag.top_k": k, "rag.query_len": len(query)},
+    ):
+        start = time.perf_counter()
+        if not query.strip():
+            return []
+        q_vec = embed_text(query)
+        stmt = select(RagDocument)
+        if corpora:
+            stmt = stmt.where(RagDocument.corpus.in_(corpora))
+        rows = (await session.execute(stmt)).scalars().all()
+        scored = [
+            (_cosine(q_vec, row.embedding), row)
+            for row in rows
+        ]
+        scored.sort(key=lambda x: x[0], reverse=True)
+        result = [
+            {
+                "score": score,
+                "corpus": row.corpus,
+                "source_id": row.source_id,
+                "title": row.title,
+                "url": row.url,
+                "content": row.content,
+                "metadata": row.doc_metadata,
+            }
+            for score, row in scored[:k]
+            if score > 0
+        ]
+        try:
+            rag_cache_hit_latency_histogram.record((time.perf_counter() - start) * 1000.0)
+        except Exception:
+            pass
+        return result
 
 
 async def cached_learn_search(query: str, top: int = 5) -> list[dict]:

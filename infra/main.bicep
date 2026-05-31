@@ -47,6 +47,22 @@ param backendImage string = 'mcr.microsoft.com/azuredocs/aci-helloworld:latest'
 @description('Frontend container image (set after first ACR build, e.g. <acr>.azurecr.io/aa-frontend:<tag>).')
 param frontendImage string = 'mcr.microsoft.com/azuredocs/aci-helloworld:latest'
 
+@description('VNet address space.')
+param vnetAddressPrefix string = '10.50.0.0/20'
+
+@description('PostgreSQL admin password.')
+@secure()
+param postgresAdminPassword string
+
+@description('Set true to deploy Azure AI Search.')
+param deploySearch bool = false
+
+@description('Set true to deploy Front Door fronting the frontend container app.')
+param deployFrontDoor bool = true
+
+@description('Email address that receives on-call alerts.')
+param oncallEmail string
+
 var rgName = '${prefix}-${env}-rg'
 
 resource rg 'Microsoft.Resources/resourceGroups@2024-07-01' = {
@@ -63,6 +79,18 @@ module identity 'modules/identity.bicep' = {
     env: env
     location: location
     tags: tags
+  }
+}
+
+module network 'modules/network.bicep' = {
+  name: 'network'
+  scope: rg
+  params: {
+    prefix: prefix
+    env: env
+    location: location
+    tags: tags
+    addressPrefix: vnetAddressPrefix
   }
 }
 
@@ -87,6 +115,8 @@ module kv 'modules/keyvault.bicep' = {
     location: location
     tags: tags
     miPrincipalId: identity.outputs.principalId
+    privateDnsZoneId: network.outputs.privateDnsZoneIds.keyvault
+    peSubnetId: network.outputs.peSubnetId
   }
 }
 
@@ -111,6 +141,49 @@ module openai 'modules/openai.bicep' = {
     tags: tags
     miPrincipalId: identity.outputs.principalId
     deployments: openAiDeployments
+    privateDnsZoneId: network.outputs.privateDnsZoneIds.openai
+    peSubnetId: network.outputs.peSubnetId
+  }
+}
+
+module postgres 'modules/postgres.bicep' = {
+  name: 'postgres'
+  scope: rg
+  params: {
+    prefix: prefix
+    env: env
+    location: location
+    tags: tags
+    delegatedSubnetId: network.outputs.dataSubnetId
+    privateDnsZoneId: network.outputs.privateDnsZoneIds.postgres
+    administratorLoginPassword: postgresAdminPassword
+  }
+}
+
+module monitoring 'modules/monitoring.bicep' = {
+  name: 'monitoring'
+  scope: rg
+  params: {
+    prefix: prefix
+    env: env
+    location: location
+    tags: tags
+    targetContainerAppId: backendApp.outputs.id
+    oncallEmail: oncallEmail
+  }
+}
+
+module search 'modules/search.bicep' = if (deploySearch) {
+  name: 'search'
+  scope: rg
+  params: {
+    prefix: prefix
+    env: env
+    location: location
+    tags: tags
+    usePrivateEndpoint: true
+    peSubnetId: network.outputs.peSubnetId
+    privateDnsZoneId: network.outputs.privateDnsZoneIds.search
   }
 }
 
@@ -200,3 +273,18 @@ output acrLoginServer string = acr.outputs.loginServer
 output managedIdentityClientId string = identity.outputs.clientId
 output keyVaultName string = kv.outputs.name
 output openAiEndpoint string = openai.outputs.endpoint
+output vnetId string = network.outputs.vnetId
+output postgresFqdn string = postgres.outputs.serverFqdn
+output appInsightsConnectionString string = monitoring.outputs.appInsightsConnectionString
+output frontDoorHostname string = deployFrontDoor ? frontdoor.outputs.endpointHostname : ''
+
+module frontdoor 'modules/frontdoor.bicep' = if (deployFrontDoor) {
+  name: 'frontdoor'
+  scope: rg
+  params: {
+    prefix: prefix
+    env: env
+    tags: tags
+    originHostname: frontendApp.outputs.internalFqdn
+  }
+}
