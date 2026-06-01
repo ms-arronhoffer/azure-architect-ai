@@ -890,6 +890,9 @@ MODE_TEMPLATES = {
     "finops": FINOPS_SYSTEM,
     "securityposture": SECURITY_POSTURE_SYSTEM,
     "multicloud": MULTICLOUD_SYSTEM,
+    "governance": LANDING_ZONE_SYSTEM,
+    "security": SECURITY_POSTURE_SYSTEM,
+    "ops": RELIABILITY_SYSTEM,
 }
 
 

@@ -86,6 +86,14 @@ TOOLS_BY_MODE: dict[str, list] = {
     "securityposture": get_tools("search_azure_docs", "assess_security_posture",
                                  "assess_waf_pillar", "map_compliance"),
     "multicloud":     get_tools("search_azure_docs", "compare_clouds", "compare_services"),
+    "governance":     get_tools("search_azure_docs", "design_landing_zone", "map_compliance",
+                                "validate_resource_naming", "suggest_resource_name"),
+    "security":       get_tools("search_azure_docs", "assess_security_posture",
+                                "generate_threat_register", "design_rbac_model",
+                                "assess_waf_pillar", "map_compliance"),
+    "ops":            get_tools("search_azure_docs", "generate_monitoring_config",
+                                "define_slo_framework", "assess_waf_pillar",
+                                "generate_kql_queries", "generate_remediation_runbook"),
 }
 
 # Modes that benefit from MCP tools (informational/guidance, not subscription-bound actions)
@@ -95,6 +103,7 @@ _MCP_ENABLED_MODES = {
     "aiarchitecture", "dataplatform", "apim", "network", "landingzone", "identity",
     "threatmodel", "devsecops", "reliability", "sizing", "troubleshoot",
     "devops", "finops", "securityposture", "multicloud",
+    "governance", "security", "ops",
 }
 
 
