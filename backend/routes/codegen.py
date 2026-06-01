@@ -3,11 +3,12 @@
 import json
 from typing import AsyncGenerator
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from openai import BadRequestError, AuthenticationError, APIError
 from pydantic import BaseModel
 
+from auth import require_user, user_id_from_claims
 from models import ModelConfig
 from services.github_service import create_repo, get_authenticated_user, push_file
 from services.openai_service import TOOL_INCOMPATIBLE_MODELS, resolve_client_and_model
@@ -83,22 +84,30 @@ async def _stream_codegen(req: GenerateRequest, provider: str, model: str, githu
 
 
 @router.post("/codegen/generate")
-async def codegen_generate(req: GenerateRequest):
+async def codegen_generate(req: GenerateRequest, claims=Depends(require_user)):
     app_settings = await load_settings()
     mc = req.llm_config or app_settings.mode_models.get("codegen")
     provider = mc.provider if mc else "github-copilot"
     model = mc.model if mc else "gpt-4o"
+    from db import session_scope
+    from services.secret_store import get_secret
+    user_id = user_id_from_claims(claims)
+    async with session_scope() as session:
+        github_token = await get_secret(session, user_id, "github_pat") or ""
     return StreamingResponse(
-        _stream_codegen(req, provider, model, app_settings.github_token),
+        _stream_codegen(req, provider, model, github_token),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
 
 
 @router.post("/codegen/push")
-async def codegen_push(req: PushRequest):
-    app_settings = await load_settings()
-    token = app_settings.github_token
+async def codegen_push(req: PushRequest, claims=Depends(require_user)):
+    from db import session_scope
+    from services.secret_store import get_secret
+    user_id = user_id_from_claims(claims)
+    async with session_scope() as session:
+        token = await get_secret(session, user_id, "github_pat") or ""
     if not token:
         raise HTTPException(status_code=400, detail="GitHub token not configured in settings.")
 

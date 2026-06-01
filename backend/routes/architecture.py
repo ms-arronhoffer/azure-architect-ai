@@ -6,11 +6,12 @@ Streams typed SSE events including diagram, runbook, Bicep, and cost estimate.
 import json
 from typing import AsyncGenerator
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
 from openai import BadRequestError, AuthenticationError, APIError
 from pydantic import BaseModel
 
+from auth import require_user, user_id_from_claims
 from models import ModelConfig
 from prompts.system_prompt import MODE_TEMPLATES
 from services.diagram_service import generate_diagram
@@ -513,13 +514,20 @@ def _safe_json(s: str) -> dict:
 
 
 @router.post("/architecture")
-async def architecture(req: ArchRequest):
+async def architecture(req: ArchRequest, claims=Depends(require_user)):
     app_settings = await load_settings()
     mc = req.llm_config or app_settings.mode_models.get(req.mode)
     provider = mc.provider if mc else "azure"
     model = mc.model if mc else ""
+    github_token = ""
+    if provider in {"github-models", "github-copilot"}:
+        from db import session_scope
+        from services.secret_store import get_secret
+        user_id = user_id_from_claims(claims)
+        async with session_scope() as session:
+            github_token = await get_secret(session, user_id, "github_pat") or ""
     return StreamingResponse(
-        _stream_architecture(req, provider, model, app_settings.github_token),
+        _stream_architecture(req, provider, model, github_token),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
