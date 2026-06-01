@@ -69,7 +69,11 @@ async def index_documents(
         return 0
     if replace:
         await session.execute(delete(RagDocument).where(RagDocument.corpus == corpus))
-    vectors = embed_texts([d["content"] for d in items])
+    try:
+        vectors = embed_texts([d["content"] for d in items])
+    except Exception as e:
+        log.warning("rag.index_embed_failed", corpus=corpus, error=str(e))
+        return 0
     now = dt.datetime.now(dt.UTC)
     for doc, vec in zip(items, vectors):
         doc_id = _doc_id(corpus, doc["source_id"])
@@ -135,7 +139,11 @@ async def search(
         start = time.perf_counter()
         if not query.strip():
             return []
-        q_vec = embed_text(query)
+        try:
+            q_vec = embed_text(query)
+        except Exception as e:
+            log.warning("rag.embed_failed", error=str(e))
+            return []
         stmt = select(RagDocument)
         if corpora:
             stmt = stmt.where(RagDocument.corpus.in_(corpora))
