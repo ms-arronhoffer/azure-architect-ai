@@ -11,7 +11,6 @@ NODE_W, NODE_H = 60, 60
 X_GAP = 260      # center-to-center horizontal spacing (was 200 — labels overlapped)
 Y_GAP = 300      # center-to-center vertical spacing (was 220 — needed for label + edge channel)
 Y_START = 140    # y of first tier row center
-MAX_PER_ROW = 8  # nodes per tier before wrapping (was 6 — prefer wider over taller)
 JETTY = 28       # explicit orthogonal jetty in px so parallel edges separate visibly
 
 
@@ -21,8 +20,7 @@ def _assign_positions(components: list[dict], connections: list[dict]) -> None:
 
     Uses a barycenter heuristic: within each tier, nodes are sorted by the
     average X of their already-placed neighbors so that connections tend to
-    run straight rather than crossing each other.  When a tier has more than
-    MAX_PER_ROW nodes it is split into sub-rows to keep the diagram readable.
+    run straight rather than crossing each other.
     """
     needs_layout = [c for c in components if "x" not in c or "y" not in c]
     if not needs_layout:
@@ -38,8 +36,8 @@ def _assign_positions(components: list[dict], connections: list[dict]) -> None:
         adj[conn["from"]].add(conn["to"])
         adj[conn["to"]].add(conn["from"])
 
-    # Max nodes in any single row (capped at MAX_PER_ROW) drives page width
-    max_in_row = max((min(len(row), MAX_PER_ROW) for row in tiers.values()), default=1)
+    # Page width grows to fit the widest tier — no artificial cap.
+    max_in_row = max((len(row) for row in tiers.values()), default=1)
     page_width = max(1169, max_in_row * X_GAP + 240)
 
     placed_x: dict[str, float] = {}  # comp id -> assigned center x
@@ -58,17 +56,14 @@ def _assign_positions(components: list[dict], connections: list[dict]) -> None:
 
         row.sort(key=_bary)
 
-        # Split into sub-rows to avoid very wide single rows
-        sub_rows = [row[i : i + MAX_PER_ROW] for i in range(0, len(row), MAX_PER_ROW)]
-        for sub_row in sub_rows:
-            total_span = (len(sub_row) - 1) * X_GAP
-            x_start = max(80, (page_width - total_span) // 2)
-            for j, comp in enumerate(sub_row):
-                cx = x_start + j * X_GAP
-                comp["x"] = cx - NODE_W // 2
-                comp["y"] = row_y - NODE_H // 2
-                placed_x[comp["id"]] = float(cx)
-            row_y += Y_GAP
+        total_span = (len(row) - 1) * X_GAP
+        x_start = max(80, (page_width - total_span) // 2)
+        for j, comp in enumerate(row):
+            cx = x_start + j * X_GAP
+            comp["x"] = cx - NODE_W // 2
+            comp["y"] = row_y - NODE_H // 2
+            placed_x[comp["id"]] = float(cx)
+        row_y += Y_GAP
 
 
 def _edge_style(
