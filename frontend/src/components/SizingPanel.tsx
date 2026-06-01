@@ -492,7 +492,7 @@ Include specific percentage savings estimates for each category.`;
   return (
     <PanelGroup orientation="horizontal" style={{ height: "100%", overflow: "hidden" }}>
       {/* ── Left Sidebar ───────────────────────────────────────────────── */}
-      <Panel defaultSize={32} minSize={15} maxSize={65}>
+      <Panel defaultSize="32%" minSize="15%" maxSize="65%">
         <div style={{ height: "100%", overflowY: "auto", padding: "20px 16px", borderRight: `1px solid ${tokens.colorNeutralStroke2}`, display: "flex", flexDirection: "column", gap: "16px", background: tokens.colorNeutralBackground1 }}>
         <div>
           <Text weight="semibold" size={400}>Capacity Sizing</Text>

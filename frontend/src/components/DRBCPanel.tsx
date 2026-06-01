@@ -560,7 +560,7 @@ Format as a structured runbook with numbered steps.`;
       {isDragging && <div className={styles.dropOverlay}><Text size={400} weight="semibold">Drop files to attach</Text></div>}
       <PanelGroup orientation="horizontal" style={{ height: "100%" }}>
         {/* ── Left Sidebar ───────────────────────────────────────────────────── */}
-        <Panel defaultSize={32} minSize={15} maxSize={65}>
+        <Panel defaultSize="32%" minSize="15%" maxSize="65%">
           <div style={{ height: "100%", overflowY: "auto", padding: "20px 16px", borderRight: `1px solid ${tokens.colorNeutralStroke2}`, display: "flex", flexDirection: "column", gap: "16px", background: tokens.colorNeutralBackground1 }}>
             <Text weight="semibold" size={500}>DR/BC Design</Text>
             <Text size={200} style={{ color: tokens.colorNeutralForeground3, marginTop: "-10px" }}>

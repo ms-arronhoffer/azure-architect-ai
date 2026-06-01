@@ -500,7 +500,7 @@ For each phase, include: objectives, specific Azure services to add/configure, i
   return (
     <PanelGroup orientation="horizontal" style={{ height: "100%", overflow: "hidden" }}>
       {/* ── Left Sidebar ─────────────────────────────────────────────────────── */}
-      <Panel defaultSize={32} minSize={15} maxSize={65}>
+      <Panel defaultSize="32%" minSize="15%" maxSize="65%">
         <div style={{ height: "100%", overflowY: "auto", padding: "20px 16px", borderRight: `1px solid ${tokens.colorNeutralStroke2}`, display: "flex", flexDirection: "column", gap: "16px", background: tokens.colorNeutralBackground1 }}>
         <Text weight="semibold" size={500}>WAF Assessment</Text>
         <Text size={200} style={{ color: tokens.colorNeutralForeground3, marginTop: "-10px" }}>
