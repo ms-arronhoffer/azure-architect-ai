@@ -486,7 +486,7 @@ def _build_prompt(req: ArchRequest, mode: str) -> str:
             + base
             + "Call design_dr_strategy with your recommendation. Include a full failover runbook."
         )
-    include = set(req.include_components) if req.include_components else {"diagram", "runbook", "bicep", "cost", "adr"}
+    include = set(req.include_components) if req.include_components else {"diagram", "runbook", "bicep", "cost", "adr", "gantt"}
     tool_instructions = ["Call search_azure_docs to find relevant reference architectures."]
     if "diagram" in include or "runbook" in include:
         tool_instructions.append(
@@ -498,6 +498,12 @@ def _build_prompt(req: ArchRequest, mode: str) -> str:
         tool_instructions.append("Call estimate_costs for monthly budget.")
     if "adr" in include:
         tool_instructions.append("Call generate_adr to document the primary architectural decision.")
+    if "gantt" in include:
+        tool_instructions.append(
+            "Call generate_project_timeline with realistic implementation phases (id, name, "
+            "start_week, duration_weeks, owner, dependencies, is_milestone), total_weeks, and "
+            "critical_path so an implementation Gantt chart can be rendered."
+        )
     tool_instructions.append("After the tool calls, provide a detailed explanation.")
     return (
         f"Design an Azure architecture for the following requirements:\n\n"
