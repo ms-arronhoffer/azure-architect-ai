@@ -37,3 +37,4 @@ Thumbs.db
 # Runtime data
 backend/conversations.db
 backend/user_settings.json
+backend/data/
