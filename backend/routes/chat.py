@@ -14,7 +14,7 @@ from pydantic import BaseModel
 from auth import require_user, user_id_from_claims
 from models import ModelConfig
 from observability import tool_calls_counter
-from prompts.system_prompt import MODE_TEMPLATES
+from prompts.system_prompt import get_system_prompt
 from services.docs_service import search_azure_docs
 from services.rag_service import cached_learn_search
 from services.mcp_service import call_mcp_tool, is_mcp_tool
@@ -68,7 +68,7 @@ async def _stream_chat(mode: str, messages: list[dict], provider: str = "azure",
     except ValueError as e:
         yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
         return
-    system = MODE_TEMPLATES.get(mode, MODE_TEMPLATES["qa"])
+    system = get_system_prompt(mode)
     tools = [] if model in TOOL_INCOMPATIBLE_MODELS else get_tools_for_mode(mode)
 
     full_messages = [{"role": "system", "content": system}] + messages
