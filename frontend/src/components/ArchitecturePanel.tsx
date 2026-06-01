@@ -597,7 +597,7 @@ window.mxBasePath = 'https://viewer.diagrams.net/';
       )}
 
       <PanelGroup orientation="horizontal" style={{ height: "100%" }}>
-        <Panel defaultSize={28} minSize={18} maxSize={45}>
+        <Panel defaultSize={32} minSize={15} maxSize={65}>
           <div style={{ height: "100%", overflowY: "auto", padding: "20px 16px", borderRight: `1px solid ${tokens.colorNeutralStroke2}`, display: "flex", flexDirection: "column", gap: "18px", background: tokens.colorNeutralBackground1, boxSizing: "border-box" }}>
             <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
               {onModeChange ? (

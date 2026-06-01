@@ -260,7 +260,7 @@ export default function ReliabilityPanel({ onRefine, sessionId, onSave, initialS
   return (
     <div className={styles.panel}>
       <PanelGroup orientation="horizontal" style={{ height: "100%", overflow: "hidden" }}>
-        <Panel defaultSize={28} minSize={18} maxSize={45}>
+        <Panel defaultSize={32} minSize={15} maxSize={65}>
           <div style={{ height: "100%", overflowY: "auto", padding: "20px 16px", borderRight: `1px solid ${tokens.colorNeutralStroke2}`, background: tokens.colorNeutralBackground1, display: "flex", flexDirection: "column", gap: "14px" }}>
           <Text weight="semibold" size={400}>Reliability & SLO</Text>
           <Text size={200} style={{ color: tokens.colorNeutralForeground3, marginTop: "-8px" }}>

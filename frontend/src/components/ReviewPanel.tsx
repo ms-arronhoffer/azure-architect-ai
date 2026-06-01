@@ -606,7 +606,7 @@ export default function ReviewPanel({ onRefine, conversationId, onSave, initialS
       {isDragging && <div className={styles.dropOverlay}><Text size={400} weight="semibold">Drop files to attach</Text></div>}
       <PanelGroup orientation="horizontal" style={{ height: "100%" }}>
         {/* Left sidebar */}
-        <Panel defaultSize={28} minSize={18} maxSize={45}>
+        <Panel defaultSize={32} minSize={15} maxSize={65}>
           <div style={{ height: "100%", overflowY: "auto", padding: "16px", borderRight: `1px solid ${tokens.colorNeutralStroke2}`, display: "flex", flexDirection: "column", gap: "12px", background: tokens.colorNeutralBackground1 }}>
         <Text weight="semibold" size={400}>Architecture Review</Text>
         <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>

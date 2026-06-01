@@ -543,7 +543,7 @@ Provide specific dollar estimates where possible.`;
   return (
     <PanelGroup orientation="horizontal" style={{ height: "100%", overflow: "hidden" }}>
       {/* ── Left Sidebar ───────────────────────────────────────────────── */}
-      <Panel defaultSize={28} minSize={18} maxSize={45}>
+      <Panel defaultSize={32} minSize={15} maxSize={65}>
         <div style={{ height: "100%", overflowY: "auto", padding: "20px 16px", borderRight: `1px solid ${tokens.colorNeutralStroke2}`, display: "flex", flexDirection: "column", gap: "16px", background: tokens.colorNeutralBackground1 }}>
         <div>
           <Text weight="semibold" size={400}>TCO Analysis</Text>
