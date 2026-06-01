@@ -8,10 +8,11 @@ from collections import defaultdict
 from services.icon_service import get_icon_style
 
 NODE_W, NODE_H = 60, 60
-X_GAP = 200      # center-to-center horizontal spacing
-Y_GAP = 220      # center-to-center vertical spacing
-Y_START = 120    # y of first tier row center
-MAX_PER_ROW = 6  # nodes per tier before wrapping to a sub-row
+X_GAP = 260      # center-to-center horizontal spacing (was 200 — labels overlapped)
+Y_GAP = 300      # center-to-center vertical spacing (was 220 — needed for label + edge channel)
+Y_START = 140    # y of first tier row center
+MAX_PER_ROW = 8  # nodes per tier before wrapping (was 6 — prefer wider over taller)
+JETTY = 28       # explicit orthogonal jetty in px so parallel edges separate visibly
 
 
 def _assign_positions(components: list[dict], connections: list[dict]) -> None:
@@ -70,15 +71,24 @@ def _assign_positions(components: list[dict], connections: list[dict]) -> None:
             row_y += Y_GAP
 
 
-def _edge_style(src_comp: dict | None, tgt_comp: dict | None) -> str:
+def _edge_style(
+    src_comp: dict | None,
+    tgt_comp: dict | None,
+    src_port: float = 0.5,
+    tgt_port: float = 0.5,
+) -> str:
     """
     Choose entry/exit connector points based on the relative positions of the
     two nodes.  Routing out of the bottom and into the top (for downward
     connections) keeps hierarchical architecture diagrams free of crossings.
     Lateral and upward connections get matching horizontal or inverse vertical
     exits so the orthogonal router never has to loop around.
+
+    `src_port` / `tgt_port` slide the connector along the chosen side
+    (0.0..1.0) so multiple edges sharing the same node fan out instead of
+    stacking on a single midpoint pixel.
     """
-    base = "edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;"
+    base = f"edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize={JETTY};"
 
     if not src_comp or not tgt_comp:
         return base
@@ -90,17 +100,18 @@ def _edge_style(src_comp: dict | None, tgt_comp: dict | None) -> str:
 
     dy = tgt_cy - src_cy
     dx = tgt_cx - src_cx
+    s, t = f"{src_port:.3f}", f"{tgt_port:.3f}"
 
     if abs(dy) >= abs(dx):              # primarily vertical
         if dy >= 0:                     # downward — standard flow direction
-            ports = "exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;"
+            ports = f"exitX={s};exitY=1;exitDx=0;exitDy=0;entryX={t};entryY=0;entryDx=0;entryDy=0;"
         else:                           # upward (e.g. monitoring back-channel)
-            ports = "exitX=0.5;exitY=0;exitDx=0;exitDy=0;entryX=0.5;entryY=1;entryDx=0;entryDy=0;"
+            ports = f"exitX={s};exitY=0;exitDx=0;exitDy=0;entryX={t};entryY=1;entryDx=0;entryDy=0;"
     else:                               # primarily horizontal (same-tier)
         if dx >= 0:                     # rightward
-            ports = "exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;"
+            ports = f"exitX=1;exitY={s};exitDx=0;exitDy=0;entryX=0;entryY={t};entryDx=0;entryDy=0;"
         else:                           # leftward
-            ports = "exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=1;entryY=0.5;entryDx=0;entryDy=0;"
+            ports = f"exitX=0;exitY={s};exitDx=0;exitDy=0;entryX=1;entryY={t};entryDx=0;entryDy=0;"
 
     return base + ports
 
@@ -155,6 +166,32 @@ def generate_diagram(
             **{"as": "geometry"},
         )
 
+    # Pre-compute per-side edge counts so we can fan out ports.
+    # Side key = ("out"|"in", node_id, "v"|"h", direction_sign) where direction_sign
+    # is +1 (down/right) or -1 (up/left). All edges that exit the same side of the
+    # same node share a slot pool, evenly distributed across that side.
+    def _side_key(src: dict, tgt: dict, end: str) -> tuple:
+        dy = (tgt.get("y", 0) + NODE_H / 2) - (src.get("y", 0) + NODE_H / 2)
+        dx = (tgt.get("x", 0) + NODE_W / 2) - (src.get("x", 0) + NODE_W / 2)
+        axis = "v" if abs(dy) >= abs(dx) else "h"
+        sign = 1 if (dy >= 0 if axis == "v" else dx >= 0) else -1
+        node_id = src["id"] if end == "out" else tgt["id"]
+        return (end, node_id, axis, sign)
+
+    side_counts: dict[tuple, int] = defaultdict(int)
+    side_slots: list[tuple[tuple, int, tuple, int]] = []  # per-edge: (out_key, out_idx, in_key, in_idx)
+    for conn in connections:
+        s_c = comp_by_id.get(conn["from"])
+        t_c = comp_by_id.get(conn["to"])
+        if not (s_c and t_c):
+            side_slots.append(((), 0, (), 0))
+            continue
+        ok = _side_key(s_c, t_c, "out")
+        ik = _side_key(s_c, t_c, "in")
+        oi = side_counts[ok]; side_counts[ok] += 1
+        ii = side_counts[ik]; side_counts[ik] += 1
+        side_slots.append((ok, oi, ik, ii))
+
     for i, conn in enumerate(connections):
         src_id, tgt_id = conn["from"], conn["to"]
         src_cell = node_ids.get(src_id, "")
@@ -162,7 +199,11 @@ def generate_diagram(
         if not (src_cell and tgt_cell):
             continue
 
-        style = _edge_style(comp_by_id.get(src_id), comp_by_id.get(tgt_id))
+        ok, oi, ik, ii = side_slots[i]
+        src_port = (oi + 1) / (side_counts[ok] + 1) if ok else 0.5
+        tgt_port = (ii + 1) / (side_counts[ik] + 1) if ik else 0.5
+
+        style = _edge_style(comp_by_id.get(src_id), comp_by_id.get(tgt_id), src_port, tgt_port)
         cell = ET.SubElement(
             root, "mxCell",
             id=f"edge_{i}",
