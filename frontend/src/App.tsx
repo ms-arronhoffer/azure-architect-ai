@@ -147,7 +147,7 @@ export default function App() {
     if (ARCH_MODES.includes(mode)) {
       return (
         <ArchitecturePanel
-          key="arch"
+          key={selectedPanelSession?.id ?? "arch"}
           mode={mode}
           onRefine={handleRefine}
           onModeChange={handleModeChange}

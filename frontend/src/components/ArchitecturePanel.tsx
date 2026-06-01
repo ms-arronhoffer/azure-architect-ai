@@ -279,6 +279,8 @@ export default function ArchitecturePanel({ mode = "architecture", onRefine, onM
       adrRecord?: AdrRecord | null;
       networkTopology?: NetworkTopology | null;
       wafResults?: Record<string, WafPillarResult>;
+      runbook?: string | null;
+      projectTimeline?: ProjectTimeline | null;
     };
     if (sr.explanation) setExplanation(sr.explanation);
     if (sr.diagramXml) setDiagramXml(sr.diagramXml);
@@ -287,6 +289,8 @@ export default function ArchitecturePanel({ mode = "architecture", onRefine, onM
     if (sr.adrRecord) setAdrRecord(sr.adrRecord);
     if (sr.networkTopology) setNetworkTopology(sr.networkTopology);
     if (sr.wafResults) setWafResults(sr.wafResults);
+    if (sr.runbook) setRunbook(sr.runbook);
+    if (sr.projectTimeline) setProjectTimeline(sr.projectTimeline);
   }, []);
 
   useEffect(() => {
