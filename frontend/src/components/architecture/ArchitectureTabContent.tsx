@@ -20,6 +20,7 @@ import {
   DialogActions,
   DialogTrigger,
   Link,
+  Checkbox,
 } from "@fluentui/react-components";
 import {
   ArrowDownloadRegular,
@@ -31,7 +32,15 @@ import { lookupService } from "../../utils/serviceMetadata";
 import type { BicepResult, CostEstimate, AdrRecord, NetworkTopology, WafPillarResult, ProjectTimeline } from "../../types";
 import type { DiagramNode } from "../../utils/diagramParser";
 
-export type ResultTab = "explanation" | "diagram" | "runbook" | "bicep" | "cost" | "adr" | "waf" | "network" | "gantt";
+export type ResultTab = "explanation" | "diagram" | "runbook" | "iac" | "cost" | "adr" | "waf" | "network" | "gantt";
+
+export type IacKind = "bicep" | "terraform" | "arm";
+
+export interface IacFilesResult {
+  files: Record<string, string>;
+  pattern_name?: string;
+  notes?: string[];
+}
 
 const useStyles = makeStyles({
   tabContent: {
@@ -95,6 +104,8 @@ export interface ArchitectureTabContentProps {
   diagramNodes: DiagramNode[];
   runbook: string | null;
   bicepResult: BicepResult | null;
+  terraformResult: IacFilesResult | null;
+  armResult: IacFilesResult | null;
   costEstimate: CostEstimate | null;
   adrRecord: AdrRecord | null;
   wafResults: Record<string, WafPillarResult>;
@@ -109,6 +120,9 @@ export interface ArchitectureTabContentProps {
   deliverableStreaming: boolean;
   requirements: string;
   generateDeliverable: (component: string, tabKey: ResultTab) => void;
+  generateIac: (kinds: IacKind[]) => void;
+  selectedIac: Set<IacKind>;
+  toggleIac: (kind: IacKind) => void;
   downloadDiagram: () => void;
   openInDrawio: () => void;
   setShowEditor: (v: boolean) => void;
@@ -117,6 +131,7 @@ export interface ArchitectureTabContentProps {
   downloadGantt: () => void;
   downloadBicep: () => void;
   downloadParamFile: () => void;
+  downloadIacFiles: (kind: "terraform" | "arm") => void;
 }
 
 export default function ArchitectureTabContent(props: ArchitectureTabContentProps) {
@@ -128,7 +143,10 @@ export default function ArchitectureTabContent(props: ArchitectureTabContentProp
     generatingTab, isAnyStreaming, deliverableStreaming, requirements,
     generateDeliverable, downloadDiagram, openInDrawio, setShowEditor,
     setPopoverServiceLabel, cancelService, downloadGantt, downloadBicep, downloadParamFile,
+    downloadIacFiles, generateIac, selectedIac, toggleIac,
   } = props;
+  const terraformResult = props.terraformResult;
+  const armResult = props.armResult;
 
   function renderEmptyTab(tabKey: ResultTab, label: string, hint: string, component: string) {
     const isGenerating = generatingTab === tabKey;
@@ -228,40 +246,117 @@ export default function ArchitectureTabContent(props: ArchitectureTabContentProp
         ) : renderEmptyTab("runbook", "Runbook", "Generate an operational runbook with deployment steps, health checks, and rollback procedures.", "runbook")
       )}
 
-      {/* IaC / Bicep */}
-      {activeTab === "bicep" && (
-        bicepResult ? (
+      {/* IaC — Bicep / Terraform / ARM */}
+      {activeTab === "iac" && (() => {
+        const hasAny = !!bicepResult || (!!terraformResult && Object.keys(terraformResult.files).length > 0) || (!!armResult && Object.keys(armResult.files).length > 0);
+        const generating = generatingTab === "iac";
+        const selectedList = Array.from(selectedIac);
+        return (
           <div>
-            <div className={styles.bicepActions}>
-              <Button size="small" appearance="outline" icon={<ArrowSyncRegular />} onClick={() => generateDeliverable("bicep", "bicep")} disabled={isAnyStreaming}>Regenerate</Button>
-              <Button size="small" icon={<ArrowDownloadRegular />} onClick={downloadBicep}>Download main.bicep</Button>
-              {bicepResult.param_file && <Button size="small" icon={<ArrowDownloadRegular />} onClick={downloadParamFile}>Download .bicepparam</Button>}
+            <div style={{ border: `1px solid ${tokens.colorNeutralStroke2}`, borderRadius: 8, padding: "12px 14px", marginBottom: 16, background: tokens.colorNeutralBackground2 }}>
+              <Text size={300} weight="semibold" block style={{ marginBottom: 8 }}>Choose IaC formats to generate</Text>
+              <div style={{ display: "flex", gap: 18, flexWrap: "wrap", marginBottom: 10 }}>
+                <Checkbox label="Bicep" checked={selectedIac.has("bicep")} onChange={() => toggleIac("bicep")} disabled={isAnyStreaming} />
+                <Checkbox label="Terraform" checked={selectedIac.has("terraform")} onChange={() => toggleIac("terraform")} disabled={isAnyStreaming} />
+                <Checkbox label="ARM" checked={selectedIac.has("arm")} onChange={() => toggleIac("arm")} disabled={isAnyStreaming} />
+              </div>
+              {generating
+                ? <Spinner size="small" label="Generating IaC..." />
+                : <Button appearance="primary" icon={<ArrowSyncRegular />} onClick={() => generateIac(selectedList)} disabled={selectedList.length === 0 || !requirements.trim() || deliverableStreaming}>
+                    {hasAny ? "Regenerate selected" : "Generate selected"}
+                  </Button>}
             </div>
-            <Text weight="semibold" size={300} block style={{ marginBottom: 6 }}>main.bicep</Text>
-            <div className={styles.prose}><pre><code>{bicepResult.bicep_code}</code></pre></div>
-            {bicepResult.param_file && (
-              <>
-                <Text weight="semibold" size={300} block style={{ margin: "16px 0 6px" }}>main.bicepparam</Text>
-                <div className={styles.prose}><pre><code>{bicepResult.param_file}</code></pre></div>
-              </>
-            )}
-            {bicepResult.deploy_commands.length > 0 && (
-              <>
-                <Text weight="semibold" size={300} block style={{ margin: "16px 0 6px" }}>Deploy Commands</Text>
-                <div className={styles.prose}><pre><code>{bicepResult.deploy_commands.join("\n")}</code></pre></div>
-              </>
-            )}
-            {bicepResult.notes.length > 0 && (
-              <div className={styles.tipsSection}>
-                <Text size={200} weight="semibold" block style={{ marginBottom: 4 }}>Notes</Text>
-                <ul style={{ margin: 0, paddingLeft: 16 }}>
-                  {bicepResult.notes.map((n, i) => <li key={i}><Text size={200}>{n}</Text></li>)}
-                </ul>
+
+            {bicepResult && (
+              <div style={{ marginBottom: 24 }}>
+                <Text size={400} weight="semibold" block style={{ marginBottom: 8 }}>Bicep</Text>
+                <div className={styles.bicepActions}>
+                  <Button size="small" icon={<ArrowDownloadRegular />} onClick={downloadBicep}>Download main.bicep</Button>
+                  {bicepResult.param_file && <Button size="small" icon={<ArrowDownloadRegular />} onClick={downloadParamFile}>Download .bicepparam</Button>}
+                </div>
+                <Text weight="semibold" size={300} block style={{ marginBottom: 6 }}>main.bicep</Text>
+                <div className={styles.prose}><pre><code>{bicepResult.bicep_code}</code></pre></div>
+                {bicepResult.param_file && (
+                  <>
+                    <Text weight="semibold" size={300} block style={{ margin: "16px 0 6px" }}>main.bicepparam</Text>
+                    <div className={styles.prose}><pre><code>{bicepResult.param_file}</code></pre></div>
+                  </>
+                )}
+                {bicepResult.deploy_commands.length > 0 && (
+                  <>
+                    <Text weight="semibold" size={300} block style={{ margin: "16px 0 6px" }}>Deploy Commands</Text>
+                    <div className={styles.prose}><pre><code>{bicepResult.deploy_commands.join("\n")}</code></pre></div>
+                  </>
+                )}
+                {bicepResult.notes.length > 0 && (
+                  <div className={styles.tipsSection}>
+                    <Text size={200} weight="semibold" block style={{ marginBottom: 4 }}>Notes</Text>
+                    <ul style={{ margin: 0, paddingLeft: 16 }}>
+                      {bicepResult.notes.map((n, i) => <li key={i}><Text size={200}>{n}</Text></li>)}
+                    </ul>
+                  </div>
+                )}
               </div>
             )}
+
+            {terraformResult && Object.keys(terraformResult.files).length > 0 && (
+              <div style={{ marginBottom: 24 }}>
+                <Text size={400} weight="semibold" block style={{ marginBottom: 8 }}>Terraform</Text>
+                <div className={styles.bicepActions}>
+                  <Button size="small" icon={<ArrowDownloadRegular />} onClick={() => downloadIacFiles("terraform")}>Download all files</Button>
+                </div>
+                {terraformResult.pattern_name && (
+                  <Text size={200} block style={{ color: tokens.colorNeutralForeground3, marginBottom: 8 }}>Pattern: {terraformResult.pattern_name}</Text>
+                )}
+                {Object.entries(terraformResult.files).map(([fname, content]) => (
+                  <div key={fname}>
+                    <Text weight="semibold" size={300} block style={{ margin: "12px 0 6px" }}>{fname}</Text>
+                    <div className={styles.prose}><pre><code>{content}</code></pre></div>
+                  </div>
+                ))}
+                {terraformResult.notes && terraformResult.notes.length > 0 && (
+                  <div className={styles.tipsSection}>
+                    <Text size={200} weight="semibold" block style={{ marginBottom: 4 }}>Notes</Text>
+                    <ul style={{ margin: 0, paddingLeft: 16 }}>
+                      {terraformResult.notes.map((n, i) => <li key={i}><Text size={200}>{n}</Text></li>)}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {armResult && Object.keys(armResult.files).length > 0 && (
+              <div style={{ marginBottom: 24 }}>
+                <Text size={400} weight="semibold" block style={{ marginBottom: 8 }}>ARM</Text>
+                <div className={styles.bicepActions}>
+                  <Button size="small" icon={<ArrowDownloadRegular />} onClick={() => downloadIacFiles("arm")}>Download all files</Button>
+                </div>
+                {armResult.pattern_name && (
+                  <Text size={200} block style={{ color: tokens.colorNeutralForeground3, marginBottom: 8 }}>Pattern: {armResult.pattern_name}</Text>
+                )}
+                {Object.entries(armResult.files).map(([fname, content]) => (
+                  <div key={fname}>
+                    <Text weight="semibold" size={300} block style={{ margin: "12px 0 6px" }}>{fname}</Text>
+                    <div className={styles.prose}><pre><code>{content}</code></pre></div>
+                  </div>
+                ))}
+                {armResult.notes && armResult.notes.length > 0 && (
+                  <div className={styles.tipsSection}>
+                    <Text size={200} weight="semibold" block style={{ marginBottom: 4 }}>Notes</Text>
+                    <ul style={{ margin: 0, paddingLeft: 16 }}>
+                      {armResult.notes.map((n, i) => <li key={i}><Text size={200}>{n}</Text></li>)}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {!hasAny && !generating && (
+              <Text style={{ color: tokens.colorNeutralForeground3 }}>Pick one or more formats above and click Generate.</Text>
+            )}
           </div>
-        ) : renderEmptyTab("bicep", "IaC / Bicep", "Generate Bicep infrastructure-as-code with a parameter file and deployment commands.", "bicep")
-      )}
+        );
+      })()}
 
       {/* Cost */}
       {activeTab === "cost" && (

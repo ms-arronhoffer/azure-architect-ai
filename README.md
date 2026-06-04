@@ -53,13 +53,104 @@ The backend uses `DefaultAzureCredential`, so `az login` on the host is the simp
 
 ## Quick start (Docker dev)
 
+The container authenticates to Azure OpenAI with an Entra ID **service principal** (app registration) — no `az login` mount required.
+
+**1. One-time: create an app registration**
+
+```bash
+# Create app + service principal
+az ad sp create-for-rbac --name azure-architect-ai-dev --skip-assignment
+# Note the appId (= AZURE_CLIENT_ID), password (= AZURE_CLIENT_SECRET), tenant (= AZURE_TENANT_ID)
+
+# Grant it data-plane access on your Azure OpenAI resource
+AOAI_ID=$(az cognitiveservices account show -n <aoai-name> -g <rg> --query id -o tsv)
+az role assignment create \
+  --assignee <appId> \
+  --role "Cognitive Services OpenAI User" \
+  --scope "$AOAI_ID"
+```
+
+**2. Add to `backend/.env`**
+
+```env
+AZURE_TENANT_ID=<tenant-guid>
+AZURE_CLIENT_ID=<appId>
+AZURE_CLIENT_SECRET=<password>
+```
+
+`DefaultAzureCredential`'s `EnvironmentCredential` picks these up automatically.
+
+**3. Run**
+
 ```bash
 docker compose up --build
 # backend  http://localhost:8000
 # frontend http://localhost:5173
 ```
 
-`docker-compose.yml` bind-mounts source for hot reload and mounts your host `~/.azure` into the backend container so `DefaultAzureCredential` picks up your existing `az login` session.
+`docker-compose.yml` bind-mounts source for hot reload. No host `~/.azure` mount is needed.
+
+> **Note:** This app registration is for the **backend → Azure OpenAI** call. The separate `AUTH_ENABLED` / `ENTRA_AUDIENCE` settings (user → API auth) require their own API + SPA app registrations — see [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
+
+## Protected login (Docker, optional)
+
+To put the Docker app behind an Entra ID popup login, create two more app registrations and add their IDs to `.env`. The frontend uses MSAL popup; all `/api/*` calls then require a bearer JWT.
+
+**1. Create the API app registration**
+
+```bash
+# API (the resource being called)
+API_APP=$(az ad app create --display-name azure-architect-ai-api \
+  --query appId -o tsv)
+# Expose a scope so the SPA can request it
+az ad app update --id $API_APP --identifier-uris api://$API_APP
+az ad app update --id $API_APP --set api.oauth2PermissionScopes="[{
+  \"adminConsentDescription\":\"Access Azure Architect API\",
+  \"adminConsentDisplayName\":\"Access API\",
+  \"id\":\"$(uuidgen)\",
+  \"isEnabled\":true,
+  \"type\":\"User\",
+  \"userConsentDescription\":\"Access Azure Architect API on your behalf\",
+  \"userConsentDisplayName\":\"Access API\",
+  \"value\":\"access_as_user\"
+}]"
+```
+
+**2. Create the SPA app registration**
+
+```bash
+SPA_APP=$(az ad app create --display-name azure-architect-ai-spa \
+  --spa-redirect-uris http://localhost:5173 \
+  --query appId -o tsv)
+# Pre-authorize the SPA against the API scope (avoids extra consent prompts)
+az ad app permission add --id $SPA_APP \
+  --api $API_APP --api-permissions <scope-id>=Scope
+az ad app permission grant --id $SPA_APP --api $API_APP \
+  --scope access_as_user
+```
+
+**3. Add to repo-root `.env`** (next to `docker-compose.yml`)
+
+```env
+# Backend
+AUTH_ENABLED=true
+ENTRA_TENANT_ID=<tenant-guid>
+ENTRA_AUDIENCE=api://<API_APP>     # or just <API_APP>
+
+# Frontend (forwarded into the SPA container by docker-compose)
+VITE_AUTH_ENABLED=true
+VITE_ENTRA_TENANT_ID=<tenant-guid>
+VITE_ENTRA_CLIENT_ID=<SPA_APP>
+VITE_ENTRA_API_SCOPE=api://<API_APP>/access_as_user
+```
+
+**4. Restart**
+
+```bash
+docker compose up --build
+```
+
+The SPA now shows a sign-in page; after popup login it stores the access token in `sessionStorage` and adds `Authorization: Bearer …` to every `/api/*` request. With `AUTH_ENABLED=false` (the default), the gate is bypassed entirely.
 
 ## Quick start (Docker "prod-like")
 
@@ -99,7 +190,7 @@ Defined in `backend/config.py`.
 | Environment | Backend auth | Azure OpenAI auth | Notes |
 | --- | --- | --- | --- |
 | Local (`uvicorn`) | `AUTH_ENABLED=false` (default) → `require_user` returns `{"sub":"default"}` (`backend/auth/entra.py:127`) | Host `az login` → `DefaultAzureCredential` | Easiest dev path |
-| Docker dev | Same as local | Host `~/.azure` mounted into container | See `docker-compose.yml` |
+| Docker dev | Same as local | SP env vars (`AZURE_TENANT_ID`/`AZURE_CLIENT_ID`/`AZURE_CLIENT_SECRET`) → `EnvironmentCredential` | App registration with `Cognitive Services OpenAI User` role |
 | Docker prod-like | Optional `AUTH_ENABLED=true` | Either `AZURE_OPENAI_KEY` or mounted credentials | For local prod parity |
 | Container Apps | `AUTH_ENABLED=true` + Entra JWT validation (`backend/auth/entra.py`) | User-assigned managed identity (`infra/modules/identity.bicep`) | Production target |
 

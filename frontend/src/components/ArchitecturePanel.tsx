@@ -29,7 +29,7 @@ import {
 } from "@fluentui/react-icons";
 import { useSSE } from "../hooks/useSSE";
 import DiagramEditor from "./DiagramEditor";
-import ArchitectureTabContent, { type ResultTab } from "./architecture/ArchitectureTabContent";
+import ArchitectureTabContent, { type ResultTab, type IacFilesResult, type IacKind } from "./architecture/ArchitectureTabContent";
 import { parseDiagramNodes } from "../utils/diagramParser";
 import { toPromptPrefix } from "../hooks/useWorkloadContext";
 import { exportArchitectureToDocx } from "../utils/architectureDocxExport";
@@ -248,6 +248,8 @@ export default function ArchitecturePanel({ mode = "architecture", onRefine, onM
   const [diagramXml, setDiagramXml] = useState<string | null>(null);
   const [runbook, setRunbook] = useState<string | null>(null);
   const [bicepResult, setBicepResult] = useState<BicepResult | null>(null);
+  const [terraformResult, setTerraformResult] = useState<IacFilesResult | null>(null);
+  const [armResult, setArmResult] = useState<IacFilesResult | null>(null);
   const [costEstimate, setCostEstimate] = useState<CostEstimate | null>(null);
   const [adrRecord, setAdrRecord] = useState<AdrRecord | null>(null);
   const [citations, setCitations] = useState<Citation[]>([]);
@@ -257,6 +259,16 @@ export default function ArchitecturePanel({ mode = "architecture", onRefine, onM
   const [showEditor, setShowEditor] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [generatingTab, setGeneratingTab] = useState<string | null>(null);
+  const [selectedIac, setSelectedIac] = useState<Set<IacKind>>(new Set());
+
+  function toggleIac(kind: IacKind) {
+    setSelectedIac((prev) => {
+      const next = new Set(prev);
+      if (next.has(kind)) next.delete(kind);
+      else next.add(kind);
+      return next;
+    });
+  }
 
   const [diagramNodes, setDiagramNodes] = useState<DiagramNode[]>([]);
   const [popoverServiceLabel, setPopoverServiceLabel] = useState<string | null>(null);
@@ -275,6 +287,8 @@ export default function ArchitecturePanel({ mode = "architecture", onRefine, onM
       explanation?: string;
       diagramXml?: string | null;
       bicepResult?: BicepResult | null;
+      terraformResult?: IacFilesResult | null;
+      armResult?: IacFilesResult | null;
       costEstimate?: CostEstimate | null;
       adrRecord?: AdrRecord | null;
       networkTopology?: NetworkTopology | null;
@@ -285,6 +299,8 @@ export default function ArchitecturePanel({ mode = "architecture", onRefine, onM
     if (sr.explanation) setExplanation(sr.explanation);
     if (sr.diagramXml) setDiagramXml(sr.diagramXml);
     if (sr.bicepResult) setBicepResult(sr.bicepResult);
+    if (sr.terraformResult) setTerraformResult(sr.terraformResult);
+    if (sr.armResult) setArmResult(sr.armResult);
     if (sr.costEstimate) setCostEstimate(sr.costEstimate);
     if (sr.adrRecord) setAdrRecord(sr.adrRecord);
     if (sr.networkTopology) setNetworkTopology(sr.networkTopology);
@@ -362,6 +378,8 @@ window.mxBasePath = 'https://viewer.diagrams.net/';
     setDiagramXml(null);
     setRunbook(null);
     setBicepResult(null);
+    setTerraformResult(null);
+    setArmResult(null);
     setCostEstimate(null);
     setAdrRecord(null);
     setCitations([]);
@@ -449,6 +467,8 @@ window.mxBasePath = 'https://viewer.diagrams.net/';
     if (event.type === "diagram") { setDiagramXml(event.xml); }
     if (event.type === "runbook") setRunbook(event.markdown);
     if (event.type === "bicep") setBicepResult({ bicep_code: event.code, param_file: event.param_file, deploy_commands: event.deploy_commands ?? [], notes: event.notes ?? [] });
+    if (event.type === "terraform_files") setTerraformResult({ files: event.files, pattern_name: event.pattern_name, notes: event.notes });
+    if (event.type === "arm_files") setArmResult({ files: event.files, pattern_name: event.pattern_name, notes: event.notes });
     if (event.type === "cost_estimate") setCostEstimate(event.estimate);
     if (event.type === "adr") setAdrRecord(event.data as AdrRecord);
     if (event.type === "citations") setCitations(event.citations);
@@ -466,6 +486,8 @@ window.mxBasePath = 'https://viewer.diagrams.net/';
     let localExplanation = "";
     let localDiagramXml: string | null = null;
     let localBicepResult: BicepResult | null = null;
+    let localTerraformResult: IacFilesResult | null = null;
+    let localArmResult: IacFilesResult | null = null;
     let localCostEstimate: CostEstimate | null = null;
     let localAdrRecord: AdrRecord | null = null;
     let localNetworkTopology: NetworkTopology | null = null;
@@ -476,6 +498,8 @@ window.mxBasePath = 'https://viewer.diagrams.net/';
       if (event.type === "token") localExplanation += event.content;
       if (event.type === "diagram") localDiagramXml = event.xml;
       if (event.type === "bicep") localBicepResult = { bicep_code: event.code, param_file: event.param_file, deploy_commands: event.deploy_commands ?? [], notes: event.notes ?? [] };
+      if (event.type === "terraform_files") localTerraformResult = { files: event.files, pattern_name: event.pattern_name, notes: event.notes };
+      if (event.type === "arm_files") localArmResult = { files: event.files, pattern_name: event.pattern_name, notes: event.notes };
       if (event.type === "cost_estimate") localCostEstimate = event.estimate;
       if (event.type === "adr") localAdrRecord = event.data as AdrRecord;
       if (event.type === "network_topology") localNetworkTopology = event.topology;
@@ -494,6 +518,8 @@ window.mxBasePath = 'https://viewer.diagrams.net/';
         explanation: localExplanation,
         diagramXml: localDiagramXml,
         bicepResult: localBicepResult,
+        terraformResult: localTerraformResult,
+        armResult: localArmResult,
         costEstimate: localCostEstimate,
         adrRecord: localAdrRecord,
         networkTopology: localNetworkTopology,
@@ -508,6 +534,15 @@ window.mxBasePath = 'https://viewer.diagrams.net/';
     setGeneratingTab(tabKey);
     setActiveTab(tabKey);
     await deliverableStream("/api/architecture", buildPayload([component]), applyEvent);
+    setStatusMsg("");
+    setGeneratingTab(null);
+  }
+
+  async function generateIac(kinds: IacKind[]) {
+    if (deliverableStreaming || !requirements.trim() || kinds.length === 0) return;
+    setGeneratingTab("iac");
+    setActiveTab("iac");
+    await deliverableStream("/api/architecture", buildPayload(kinds), applyEvent);
     setStatusMsg("");
     setGeneratingTab(null);
   }
@@ -577,6 +612,18 @@ window.mxBasePath = 'https://viewer.diagrams.net/';
     const a = document.createElement("a");
     a.href = url; a.download = "main.bicepparam"; a.click();
     URL.revokeObjectURL(url);
+  }
+
+  function downloadIacFiles(kind: "terraform" | "arm") {
+    const result = kind === "terraform" ? terraformResult : armResult;
+    if (!result) return;
+    for (const [fname, content] of Object.entries(result.files)) {
+      const blob = new Blob([content], { type: "text/plain" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = fname; a.click();
+      URL.revokeObjectURL(url);
+    }
   }
 
   const designType = DESIGN_TYPES.find((dt) => dt.mode === mode);
@@ -735,7 +782,7 @@ window.mxBasePath = 'https://viewer.diagrams.net/';
                 <Tab value="explanation">Explanation{explanation && <span className={styles.tabDot} />}</Tab>
                 <Tab value="diagram">Diagram{diagramXml && <span className={styles.tabDot} />}</Tab>
                 <Tab value="runbook">Runbook{runbook && <span className={styles.tabDot} />}</Tab>
-                <Tab value="bicep" icon={<CodeRegular />}>IaC{bicepResult && <span className={styles.tabDot} />}</Tab>
+                <Tab value="iac" icon={<CodeRegular />}>IaC{(bicepResult || terraformResult || armResult) && <span className={styles.tabDot} />}</Tab>
                 <Tab value="cost" icon={<MoneyRegular />}>Cost{costEstimate && <span className={styles.tabDot} />}</Tab>
                 <Tab value="adr" icon={<BookOpenRegular />}>ADR{adrRecord && <span className={styles.tabDot} />}</Tab>
                 <Tab value="waf" icon={<ShieldCheckmarkRegular />}>WAF{Object.keys(wafResults).length > 0 && <span className={styles.tabDot} />}</Tab>
@@ -752,6 +799,8 @@ window.mxBasePath = 'https://viewer.diagrams.net/';
               diagramNodes={diagramNodes}
               runbook={runbook}
               bicepResult={bicepResult}
+              terraformResult={terraformResult}
+              armResult={armResult}
               costEstimate={costEstimate}
               adrRecord={adrRecord}
               wafResults={wafResults}
@@ -774,6 +823,10 @@ window.mxBasePath = 'https://viewer.diagrams.net/';
               downloadGantt={downloadGantt}
               downloadBicep={downloadBicep}
               downloadParamFile={downloadParamFile}
+              downloadIacFiles={downloadIacFiles}
+              generateIac={generateIac}
+              selectedIac={selectedIac}
+              toggleIac={toggleIac}
             />
           </div>
         </Panel>

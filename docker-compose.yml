@@ -4,12 +4,15 @@ services:
     ports:
       - "8000:8000"
     env_file: .env
+    # Auth to Azure OpenAI uses Entra ID via a service principal (app registration).
+    # Set AZURE_TENANT_ID, AZURE_CLIENT_ID, AZURE_CLIENT_SECRET in .env — these are
+    # picked up by DefaultAzureCredential's EnvironmentCredential. The SP must have
+    # the "Cognitive Services OpenAI User" role on your AOAI resource.
+    #
+    # User → API auth: when AUTH_ENABLED=true in .env, the backend validates Entra
+    # JWTs on /api/* (see ENTRA_TENANT_ID, ENTRA_AUDIENCE).
     volumes:
       - ./backend:/app
-      # Mount host Azure CLI tokens so DefaultAzureCredential works inside the
-      # container without an API key. Run `az login` on the host first.
-      # Docker Desktop expands ~ on Windows, macOS, and Linux.
-      - ~/.azure:/root/.azure:ro
     command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 
   frontend:
@@ -18,6 +21,17 @@ services:
       - "5173:5173"
     depends_on:
       - backend
+    # MSAL popup login for the SPA. Set in .env at the repo root:
+    #   VITE_AUTH_ENABLED=true
+    #   VITE_ENTRA_TENANT_ID=<tenant-guid>
+    #   VITE_ENTRA_CLIENT_ID=<spa-app-registration-client-id>
+    #   VITE_ENTRA_API_SCOPE=api://<api-app-registration-client-id>/access_as_user
+    # Vite needs these at build time; they're forwarded into the dev server here.
+    environment:
+      VITE_AUTH_ENABLED: ${VITE_AUTH_ENABLED:-false}
+      VITE_ENTRA_TENANT_ID: ${VITE_ENTRA_TENANT_ID:-}
+      VITE_ENTRA_CLIENT_ID: ${VITE_ENTRA_CLIENT_ID:-}
+      VITE_ENTRA_API_SCOPE: ${VITE_ENTRA_API_SCOPE:-}
     volumes:
       - ./frontend:/app
       - /app/node_modules
