@@ -3,7 +3,7 @@ services:
     build: ./backend
     ports:
       - "8500:8000"
-    #env_file: .env
+    env_file: .env
     # Auth to Azure OpenAI uses Entra ID via a service principal (app registration).
     # Set AZURE_TENANT_ID, AZURE_CLIENT_ID, AZURE_CLIENT_SECRET in .env — these are
     # picked up by DefaultAzureCredential's EnvironmentCredential. The SP must have
