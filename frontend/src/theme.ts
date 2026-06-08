@@ -23,16 +23,16 @@ const azureBrand: BrandVariants = {
 
 export const azureDarkTheme: Theme = {
   ...createDarkTheme(azureBrand),
-  // Deep navy backgrounds — Azure Portal dark mode inspired
-  colorNeutralBackground1: "#0E1E33",
-  colorNeutralBackground2: "#091628",
-  colorNeutralBackground3: "#152B44",
-  colorNeutralBackground4: "#1C3A58",
-  colorNeutralBackground5: "#1F4168",
-  colorNeutralBackground6: "#244878",
-  colorNeutralStroke1: "#1E334E",
-  colorNeutralStroke2: "#182A3E",
-  colorNeutralStroke3: "#132236",
+  // Deep near-black navy — Azure Portal inspired, richer than before
+  colorNeutralBackground1: "#070E1A",
+  colorNeutralBackground2: "#050C16",
+  colorNeutralBackground3: "#0D1B2E",
+  colorNeutralBackground4: "#132438",
+  colorNeutralBackground5: "#1A3050",
+  colorNeutralBackground6: "#213D66",
+  colorNeutralStroke1: "rgba(255,255,255,0.08)",
+  colorNeutralStroke2: "rgba(255,255,255,0.05)",
+  colorNeutralStroke3: "rgba(255,255,255,0.03)",
 };
 
 export const azureLightTheme: Theme = {

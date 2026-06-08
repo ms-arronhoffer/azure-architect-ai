@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db import Conversation, get_session, select
@@ -38,31 +39,46 @@ async def list_conversations(session: AsyncSession = Depends(get_session)):
     ]
 
 
+def _apply_update(row: Conversation, record: "ConversationRecord") -> None:
+    row.mode = record.mode
+    row.title = record.title
+    row.updated_at = record.updatedAt
+    row.messages = record.messages
+    row.structured_result = record.structuredResult
+
+
 @router.post("/conversations", status_code=200)
 async def upsert_conversation(
     record: ConversationRecord,
     session: AsyncSession = Depends(get_session),
 ):
     existing = await session.get(Conversation, record.id)
-    if existing is None:
-        session.add(
-            Conversation(
-                id=record.id,
-                mode=record.mode,
-                title=record.title,
-                created_at=record.createdAt,
-                updated_at=record.updatedAt,
-                messages=record.messages,
-                structured_result=record.structuredResult,
-            )
+    if existing is not None:
+        _apply_update(existing, record)
+        await session.commit()
+        return {"ok": True}
+
+    session.add(
+        Conversation(
+            id=record.id,
+            mode=record.mode,
+            title=record.title,
+            created_at=record.createdAt,
+            updated_at=record.updatedAt,
+            messages=record.messages,
+            structured_result=record.structuredResult,
         )
-    else:
-        existing.mode = record.mode
-        existing.title = record.title
-        existing.updated_at = record.updatedAt
-        existing.messages = record.messages
-        existing.structured_result = record.structuredResult
-    await session.commit()
+    )
+    try:
+        await session.commit()
+    except IntegrityError:
+        # Concurrent insert won the race — roll back and update the existing row.
+        await session.rollback()
+        existing = await session.get(Conversation, record.id)
+        if existing is None:
+            raise
+        _apply_update(existing, record)
+        await session.commit()
     return {"ok": True}
 
 

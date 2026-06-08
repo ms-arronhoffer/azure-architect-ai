@@ -37,7 +37,7 @@ TOOLS_BY_MODE: dict[str, list] = {
                               "generate_bicep", "generate_terraform", "generate_arm",
                               "estimate_costs", "generate_adr",
                               "generate_project_timeline", "validate_resource_naming",
-                              "suggest_resource_name"),
+                              "suggest_resource_name", "design_network_topology"),
     "reference":    get_tools("search_azure_docs"),
     "compare":      get_tools("search_azure_docs", "compare_services"),
     "waf":          get_tools("search_azure_docs", "assess_waf_pillar"),

@@ -10,6 +10,7 @@ import WAFPanel from "./components/WAFPanel";
 import ReviewPanel from "./components/ReviewPanel";
 import DRBCPanel from "./components/DRBCPanel";
 import ReferenceLibrary from "./components/ReferenceLibrary";
+import StrategyPanel from "./components/StrategyPanel";
 import PresentationPanel from "./components/PresentationPanel";
 import SettingsDrawer from "./components/SettingsDrawer";
 import CodegenPanel from "./components/CodegenPanel";
@@ -24,9 +25,12 @@ import LandingZonePanel from "./components/LandingZonePanel";
 import ThreatModelPanel from "./components/ThreatModelPanel";
 import ReliabilityPanel from "./components/ReliabilityPanel";
 import TroubleshootingPanel from "./components/TroubleshootingPanel";
+import WhatsNewPanel from "./components/WhatsNewPanel";
+import ServiceHealthPanel from "./components/ServiceHealthPanel";
 import { useConversationHistory } from "./hooks/useConversationHistory";
 import { useWorkloadContext } from "./hooks/useWorkloadContext";
 import { useSettings } from "./hooks/useSettings";
+import { useServiceHealth } from "./hooks/useServiceHealth";
 import type { Mode, ConversationRecord, ChatMessage } from "./types";
 
 const useStyles = makeStyles({
@@ -52,7 +56,7 @@ const useStyles = makeStyles({
 });
 
 const ARCH_MODES: Mode[] = ["architecture", "network", "aiarchitecture", "dataplatform", "apim"];
-const PANEL_MODES: Mode[] = [...ARCH_MODES, "waf", "review", "drbc", "sizing", "tco", "threatmodel", "reliability", "landingzone", "troubleshoot"];
+const PANEL_MODES: Mode[] = [...ARCH_MODES, "waf", "review", "drbc", "sizing", "tco", "threatmodel", "reliability", "landingzone", "troubleshoot", "strategy"];
 
 export default function App() {
   const styles = useStyles();
@@ -68,6 +72,7 @@ export default function App() {
   const { conversations, upsert, remove, clear, fork } = useConversationHistory();
   const { context: workloadContext, setContext: setWorkloadContext, clearContext } = useWorkloadContext();
   const { settings, saveSettings, githubTokenConfigured, setGithubToken, clearGithubToken } = useSettings();
+  const { incidents: healthIncidents, incidentCount, loading: healthLoading, error: healthError, lastChecked: healthLastChecked, refresh: refreshHealth } = useServiceHealth();
 
   const wafSessionId = useRef(crypto.randomUUID()).current;
   const reviewSessionId = useRef(crypto.randomUUID()).current;
@@ -78,6 +83,7 @@ export default function App() {
   const reliabilitySessionId = useRef(crypto.randomUUID()).current;
   const landingZoneSessionId = useRef(crypto.randomUUID()).current;
   const troubleshootSessionId = useRef(crypto.randomUUID()).current;
+  const strategySessionId = useRef(crypto.randomUUID()).current;
 
   function handleModeChange(m: Mode) {
     setMode(m);
@@ -185,6 +191,9 @@ export default function App() {
     if (mode === "reliability") return <ReliabilityPanel key="reliability" onRefine={handleRefine} sessionId={reliabilitySessionId} onSave={handlePanelSave} initialSession={panelSession("reliability")} />;
     if (mode === "troubleshoot") return <TroubleshootingPanel key="troubleshoot" onRefine={handleRefine} sessionId={troubleshootSessionId} onSave={handlePanelSave} initialSession={panelSession("troubleshoot")} />;
     if (mode === "reference") return <ReferenceLibrary key="reference" />;
+    if (mode === "strategy") return <StrategyPanel key="strategy" onRefine={handleRefine} sessionId={strategySessionId} onSave={handlePanelSave} initialSession={panelSession("strategy")} workloadContext={workloadContext} />;
+    if (mode === "whatsnew") return <WhatsNewPanel key="whatsnew" />;
+    if (mode === "servicehealth") return <ServiceHealthPanel key="servicehealth" incidents={healthIncidents} loading={healthLoading} error={healthError} lastChecked={healthLastChecked} onRefresh={refreshHealth} />;
     if (mode === "presentation") return <PresentationPanel key="presentation" />;
     if (mode === "codegen") return <CodegenPanel key="codegen" onRefine={handleRefine} />;
     if (mode === "learningplan") return <LearningPlanPanel key="learningplan" />;
@@ -220,6 +229,7 @@ export default function App() {
           onModeChange={handleModeChange}
           collapsed={navCollapsed}
           onToggleCollapsed={() => setNavCollapsed((v) => !v)}
+          badgeCounts={incidentCount > 0 ? { servicehealth: incidentCount } : {}}
         />
         <div className={styles.main}>
           <Header

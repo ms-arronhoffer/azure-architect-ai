@@ -277,6 +277,7 @@ export default function ArchitecturePanel({ mode = "architecture", onRefine, onM
   const [diagramHtml, setDiagramHtml] = useState<string | null>(null);
   const [projectTimeline, setProjectTimeline] = useState<ProjectTimeline | null>(null);
   const [ganttHtml, setGanttHtml] = useState<string | null>(null);
+  const [networkHtml, setNetworkHtml] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
 
   const sessionId = useRef(crypto.randomUUID()).current;
@@ -360,6 +361,30 @@ window.mxBasePath = 'https://viewer.diagrams.net/';
 </body>
 </html>`);
   }, [projectTimeline]);
+
+  useEffect(() => {
+    if (!networkTopology?.diagramXml) { setNetworkHtml(null); return; }
+    const xmlLiteral = JSON.stringify(networkTopology.diagramXml).replace(/<\/script>/gi, "<\\/script>");
+    setNetworkHtml(`<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>html,body{margin:0;padding:0;width:100%;height:100%;overflow:hidden;background:#fff;}</style>
+</head>
+<body>
+<div class="mxgraph" style="width:100%;height:100%;max-width:initial;"></div>
+<script>
+window.mxBasePath = 'https://viewer.diagrams.net/';
+(function(){
+  var xml = ${xmlLiteral};
+  var cfg = JSON.stringify({highlight:'#0000ff',nav:true,resize:true,xml:xml});
+  document.querySelector('.mxgraph').setAttribute('data-mxgraph', cfg);
+})();
+</script>
+<script type="text/javascript" src="https://viewer.diagrams.net/js/viewer-static.min.js"></script>
+</body>
+</html>`);
+  }, [networkTopology]);
 
   useEffect(() => {
     if (!popoverServiceLabel) return;
@@ -597,6 +622,20 @@ window.mxBasePath = 'https://viewer.diagrams.net/';
     URL.revokeObjectURL(url);
   }
 
+  function downloadNetworkDiagram() {
+    if (!networkTopology?.diagramXml) return;
+    const blob = new Blob([networkTopology.diagramXml], { type: "text/xml" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = "network-topology.drawio"; a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function openNetworkInDrawio() {
+    if (!networkTopology?.diagramXml) return;
+    window.open(`https://viewer.diagrams.net/?xml=${encodeURIComponent(networkTopology.diagramXml)}`, "_blank");
+  }
+
   function downloadBicep() {
     const blob = new Blob([bicepResult!.bicep_code], { type: "text/plain" });
     const url = URL.createObjectURL(blob);
@@ -805,6 +844,9 @@ window.mxBasePath = 'https://viewer.diagrams.net/';
               adrRecord={adrRecord}
               wafResults={wafResults}
               networkTopology={networkTopology}
+              networkHtml={networkHtml}
+              downloadNetworkDiagram={downloadNetworkDiagram}
+              openNetworkInDrawio={openNetworkInDrawio}
               projectTimeline={projectTimeline}
               ganttHtml={ganttHtml}
               popoverServiceLabel={popoverServiceLabel}
