@@ -361,3 +361,230 @@ def generate_gantt_xml(phases: list[dict], total_weeks: int, critical_path: list
 
     return _serialize(mxfile)
 
+
+def generate_network_diagram(topology: dict) -> str:
+    """
+    Generate a draw.io XML network topology diagram.
+
+    Layout:
+    - hub-spoke / vwan: hub VNet centered on top row, spokes spread on row below
+    - peered / single-vnet: VNets laid out left-to-right in a single row
+    - VNets are swimlane containers; subnets are nested rectangles
+    - Hub-spoke peerings rendered as bidirectional edges between hub and each spoke
+    - Firewall, DNS design, and NSG rule summary rendered as a footer note
+    - Private endpoints annotated on their target subnet
+    """
+    topology_type = topology.get("topology_type", "single-vnet")
+    vnets = topology.get("vnets", []) or []
+    nsg_rules = topology.get("nsg_rules", []) or []
+    private_endpoints = topology.get("private_endpoints", []) or []
+    firewall = topology.get("firewall", "")
+    dns_design = topology.get("dns_design", "")
+
+    VNET_W = 320
+    VNET_HEADER_H = 30
+    SUBNET_H = 44
+    SUBNET_PAD_X = 12
+    SUBNET_GAP_Y = 8
+    SUBNET_TOP_OFFSET = VNET_HEADER_H + 12
+    H_GAP = 80
+    V_GAP = 110
+    MARGIN = 40
+
+    pe_by_subnet: dict[str, list[dict]] = defaultdict(list)
+    for pe in private_endpoints:
+        pe_by_subnet[pe.get("subnet", "")].append(pe)
+
+    def _vnet_height(v: dict) -> int:
+        subnets = v.get("subnets", []) or []
+        rows = max(1, len(subnets))
+        extra = sum(10 for s in subnets if pe_by_subnet.get(s.get("name", "")))
+        return SUBNET_TOP_OFFSET + rows * (SUBNET_H + SUBNET_GAP_Y) + extra + 16
+
+    is_hub_spoke = topology_type in ("hub-spoke", "vwan") and len(vnets) >= 2
+    positions: list[tuple[dict, int, int, int, int]] = []
+
+    if is_hub_spoke:
+        hub = vnets[0]
+        spokes = vnets[1:]
+        hub_h = _vnet_height(hub)
+        spoke_heights = [_vnet_height(s) for s in spokes]
+        max_spoke_h = max(spoke_heights, default=0)
+        spokes_total_w = len(spokes) * VNET_W + max(0, len(spokes) - 1) * H_GAP
+        canvas_w = max(VNET_W, spokes_total_w) + 2 * MARGIN
+        hub_x = (canvas_w - VNET_W) // 2
+        hub_y = MARGIN
+        positions.append((hub, hub_x, hub_y, VNET_W, hub_h))
+        spoke_y = hub_y + hub_h + V_GAP
+        spoke_x_start = (canvas_w - spokes_total_w) // 2
+        for i, s in enumerate(spokes):
+            sx = spoke_x_start + i * (VNET_W + H_GAP)
+            positions.append((s, sx, spoke_y, VNET_W, spoke_heights[i]))
+        canvas_h = spoke_y + max_spoke_h + MARGIN
+    else:
+        heights = [_vnet_height(v) for v in vnets] or [200]
+        total_w = len(vnets) * VNET_W + max(0, len(vnets) - 1) * H_GAP
+        canvas_w = max(VNET_W, total_w) + 2 * MARGIN
+        canvas_h = max(heights) + 2 * MARGIN
+        for i, v in enumerate(vnets):
+            x = MARGIN + i * (VNET_W + H_GAP)
+            positions.append((v, x, MARGIN, VNET_W, heights[i]))
+
+    page_w = max(1169, canvas_w + 60)
+    page_h = max(827, canvas_h + 200)  # leave room for footer note
+
+    mxfile = ET.Element("mxfile", host="azure-architect-ai")
+    diagram = ET.SubElement(mxfile, "diagram", id="network", name="Network Topology")
+    model = ET.SubElement(
+        diagram, "mxGraphModel",
+        dx="1422", dy="762", grid="1", gridSize="10",
+        connect="1", arrows="1", fold="1", page="1", pageScale="1",
+        pageWidth=str(page_w), pageHeight=str(page_h),
+        math="0", shadow="0",
+    )
+    root = ET.SubElement(model, "root")
+    ET.SubElement(root, "mxCell", id="0")
+    ET.SubElement(root, "mxCell", id="1", parent="0")
+
+    for idx, (vnet, vx, vy, vw, vh) in enumerate(positions):
+        is_hub = is_hub_spoke and idx == 0
+        title = vnet.get("name", "VNet")
+        cidr = vnet.get("cidr", "")
+        region = vnet.get("region", "")
+        header_bits = [title]
+        if cidr:
+            header_bits.append(cidr)
+        if region:
+            header_bits.append(region)
+        vnet_label = " — ".join(header_bits)
+
+        fill = "#dae8fc" if is_hub else "#e1d5e7"
+        stroke = "#6c8ebf" if is_hub else "#9673a6"
+        vnet_style = (
+            f"swimlane;fontStyle=1;align=center;verticalAlign=top;horizontal=1;"
+            f"startSize={VNET_HEADER_H};collapsible=0;"
+            f"fillColor={fill};strokeColor={stroke};swimlaneFillColor=#ffffff;fontSize=12;"
+        )
+        vcell = ET.SubElement(
+            root, "mxCell",
+            id=f"vnet_{idx}",
+            value=vnet_label,
+            style=vnet_style,
+            vertex="1",
+            parent="1",
+        )
+        ET.SubElement(
+            vcell, "mxGeometry",
+            x=str(vx), y=str(vy),
+            width=str(vw), height=str(vh),
+            **{"as": "geometry"},
+        )
+
+        subnet_y = SUBNET_TOP_OFFSET
+        for sidx, subnet in enumerate(vnet.get("subnets", []) or []):
+            sname = subnet.get("name", "")
+            scidr = subnet.get("cidr", "")
+            purpose = subnet.get("purpose", "")
+            pe_list = pe_by_subnet.get(sname, [])
+
+            label_parts = [f"<b>{sname}</b> &nbsp; {scidr}"]
+            if purpose:
+                label_parts.append(f'<font style="font-size:9px;color:#555">{purpose}</font>')
+            if pe_list:
+                pe_names = ", ".join(pe.get("resource", "") for pe in pe_list)
+                label_parts.append(f'<font style="font-size:9px;color:#2e7d32">PE: {pe_names}</font>')
+            slabel = "<br/>".join(label_parts)
+
+            sub_style = (
+                "rounded=0;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;"
+                "verticalAlign=middle;align=center;fontSize=10;"
+            )
+            sub_h = SUBNET_H + (10 if pe_list else 0)
+            scell = ET.SubElement(
+                root, "mxCell",
+                id=f"subnet_{idx}_{sidx}",
+                value=slabel,
+                style=sub_style,
+                vertex="1",
+                parent=f"vnet_{idx}",
+            )
+            ET.SubElement(
+                scell, "mxGeometry",
+                x=str(SUBNET_PAD_X), y=str(subnet_y),
+                width=str(vw - 2 * SUBNET_PAD_X), height=str(sub_h),
+                **{"as": "geometry"},
+            )
+            subnet_y += sub_h + SUBNET_GAP_Y
+
+    # Peering edges
+    if is_hub_spoke and len(vnets) >= 2:
+        for i in range(1, len(vnets)):
+            edge = ET.SubElement(
+                root, "mxCell",
+                id=f"peer_{i}",
+                value="VNet Peering",
+                style=(
+                    "endArrow=classic;startArrow=classic;html=1;rounded=0;"
+                    "edgeStyle=orthogonalEdgeStyle;strokeColor=#6c8ebf;fontSize=10;"
+                ),
+                edge="1",
+                source="vnet_0",
+                target=f"vnet_{i}",
+                parent="1",
+            )
+            ET.SubElement(edge, "mxGeometry", relative="1", **{"as": "geometry"})
+    elif topology_type == "peered" and len(vnets) >= 2:
+        for i in range(len(vnets) - 1):
+            edge = ET.SubElement(
+                root, "mxCell",
+                id=f"peer_{i}",
+                value="Peering",
+                style=(
+                    "endArrow=classic;startArrow=classic;html=1;rounded=0;"
+                    "edgeStyle=orthogonalEdgeStyle;strokeColor=#6c8ebf;fontSize=10;"
+                ),
+                edge="1",
+                source=f"vnet_{i}",
+                target=f"vnet_{i+1}",
+                parent="1",
+            )
+            ET.SubElement(edge, "mxGeometry", relative="1", **{"as": "geometry"})
+
+    # Footer note: firewall, DNS, NSG summary
+    note_lines: list[str] = []
+    if firewall:
+        note_lines.append(f"<b>Firewall:</b> {firewall}")
+    if dns_design:
+        note_lines.append(f"<b>DNS:</b> {dns_design}")
+    if nsg_rules:
+        rules_summary = ", ".join(
+            f"{r.get('name', '')} ({r.get('action', '')} {r.get('port', '')})"
+            for r in nsg_rules[:5]
+        )
+        suffix = " …" if len(nsg_rules) > 5 else ""
+        note_lines.append(f"<b>NSG Rules:</b> {rules_summary}{suffix}")
+
+    if note_lines:
+        note_style = (
+            "text;html=1;align=left;verticalAlign=top;fillColor=#f5f5f5;strokeColor=#666666;"
+            "rounded=1;fontSize=10;spacing=8;whiteSpace=wrap;"
+        )
+        note_cell = ET.SubElement(
+            root, "mxCell",
+            id="notes",
+            value="<br/>".join(note_lines),
+            style=note_style,
+            vertex="1",
+            parent="1",
+        )
+        note_w = min(canvas_w - 2 * MARGIN, 720)
+        note_h = 22 * len(note_lines) + 16
+        ET.SubElement(
+            note_cell, "mxGeometry",
+            x=str(MARGIN), y=str(canvas_h + 16),
+            width=str(note_w), height=str(note_h),
+            **{"as": "geometry"},
+        )
+
+    return _serialize(mxfile)
+

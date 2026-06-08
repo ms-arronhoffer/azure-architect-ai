@@ -26,3 +26,33 @@ body {
 code, pre, kbd {
   font-family: "Cascadia Code", "Fira Code", "Consolas", monospace;
 }
+
+/* ── Design tokens ─────────────────────────────────────────────────────────── */
+:root {
+  --glass-bg: rgba(13, 27, 46, 0.75);
+  --glass-bg-hover: rgba(13, 27, 46, 0.95);
+  --glass-border: rgba(255, 255, 255, 0.06);
+  --glass-border-hover: rgba(0, 120, 212, 0.35);
+  --glass-shadow: 0 4px 24px rgba(0, 120, 212, 0.10);
+  --glass-shadow-hover: 0 6px 32px rgba(0, 120, 212, 0.20);
+  --gradient-azure: linear-gradient(135deg, #0078D4 0%, #50E6FF 100%);
+  --gradient-header: linear-gradient(180deg, #070E1A 0%, #0D1B2E 100%);
+  --gradient-accent: linear-gradient(90deg, transparent 0%, #0078D4 25%, #50E6FF 50%, #0078D4 75%, transparent 100%);
+}
+
+/* ── Glass card utility ─────────────────────────────────────────────────────── */
+.glass-card {
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-radius: 8px;
+  transition: box-shadow 0.15s, border-color 0.15s, background 0.15s;
+}
+
+.glass-card:hover {
+  background: var(--glass-bg-hover);
+  border-color: var(--glass-border-hover);
+  box-shadow: var(--glass-shadow-hover);
+}

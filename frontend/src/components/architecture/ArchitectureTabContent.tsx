@@ -110,6 +110,7 @@ export interface ArchitectureTabContentProps {
   adrRecord: AdrRecord | null;
   wafResults: Record<string, WafPillarResult>;
   networkTopology: NetworkTopology | null;
+  networkHtml: string | null;
   projectTimeline: ProjectTimeline | null;
   ganttHtml: string | null;
   popoverServiceLabel: string | null;
@@ -129,6 +130,8 @@ export interface ArchitectureTabContentProps {
   setPopoverServiceLabel: (v: string | null) => void;
   cancelService: () => void;
   downloadGantt: () => void;
+  downloadNetworkDiagram: () => void;
+  openNetworkInDrawio: () => void;
   downloadBicep: () => void;
   downloadParamFile: () => void;
   downloadIacFiles: (kind: "terraform" | "arm") => void;
@@ -138,11 +141,12 @@ export default function ArchitectureTabContent(props: ArchitectureTabContentProp
   const styles = useStyles();
   const {
     activeTab, explanation, diagramXml, diagramHtml, diagramNodes, runbook,
-    bicepResult, costEstimate, adrRecord, wafResults, networkTopology,
+    bicepResult, costEstimate, adrRecord, wafResults, networkTopology, networkHtml,
     projectTimeline, ganttHtml, popoverServiceLabel, popoverStreamText, popoverLoading,
     generatingTab, isAnyStreaming, deliverableStreaming, requirements,
     generateDeliverable, downloadDiagram, openInDrawio, setShowEditor,
-    setPopoverServiceLabel, cancelService, downloadGantt, downloadBicep, downloadParamFile,
+    setPopoverServiceLabel, cancelService, downloadGantt, downloadNetworkDiagram,
+    openNetworkInDrawio, downloadBicep, downloadParamFile,
     downloadIacFiles, generateIac, selectedIac, toggleIac,
   } = props;
   const terraformResult = props.terraformResult;
@@ -471,10 +475,19 @@ export default function ArchitectureTabContent(props: ArchitectureTabContentProp
       {activeTab === "network" && (
         networkTopology ? (
           <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-            <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+            <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
               <Badge appearance="tint" color="brand">{networkTopology.topology_type}</Badge>
               <Button size="small" appearance="outline" icon={<ArrowSyncRegular />} onClick={() => generateDeliverable("network", "network")} disabled={isAnyStreaming}>Regenerate</Button>
+              {networkTopology.diagramXml && (
+                <>
+                  <Button size="small" icon={<ArrowDownloadRegular />} onClick={downloadNetworkDiagram}>Download .drawio</Button>
+                  <Button size="small" icon={<OpenRegular />} onClick={openNetworkInDrawio}>Open in draw.io</Button>
+                </>
+              )}
             </div>
+            {networkTopology.diagramXml && (
+              <iframe className={styles.diagramFrame} srcDoc={networkHtml ?? undefined} title="Network Topology" />
+            )}
             {networkTopology.vnets.map((vnet, i) => (
               <div key={i} style={{ border: `1px solid ${tokens.colorNeutralStroke2}`, borderRadius: "8px", overflow: "hidden" }}>
                 <div style={{ padding: "8px 14px", background: tokens.colorNeutralBackground3, display: "flex", gap: "10px", alignItems: "center" }}>

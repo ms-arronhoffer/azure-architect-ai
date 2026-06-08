@@ -10,7 +10,6 @@ import {
   ChatRegular,
   SlideTextRegular,
   BuildingRegular,
-  CollectionsRegular,
   ShieldCheckmarkRegular,
   ClipboardTaskRegular,
   ArrowSyncRegular,
@@ -27,6 +26,8 @@ import {
   ShieldErrorRegular,
   HeartPulseRegular,
   WrenchScrewdriverRegular,
+  MegaphoneLoudRegular,
+  TargetRegular,
 } from "@fluentui/react-icons";
 import type { Mode } from "../types";
 
@@ -67,9 +68,9 @@ const NAV_SECTIONS: NavSectionDef[] = [
     label: "Design & Build",
     items: [
       { mode: "architecture", label: "Architecture Design", icon: <BuildingRegular />, description: "Architecture, Network, AI, Data Platform, APIM", activeWhen: ARCH_MODES },
+      { mode: "strategy", label: "Strategy Builder", icon: <TargetRegular />, description: "AI-generated Azure strategy document" },
       { mode: "bootstrap", label: "Bootstrapper", icon: <RocketRegular />, description: "4-step guided wizard with ZIP download" },
       { mode: "landingzone", label: "Landing Zone", icon: <LayerRegular />, description: "Azure CAF landing zone design with management groups" },
-      { mode: "reference", label: "Reference Library", icon: <CollectionsRegular />, description: "Browse curated Azure reference architectures" },
     ],
   },
   {
@@ -91,6 +92,13 @@ const NAV_SECTIONS: NavSectionDef[] = [
       { mode: "sizing", label: "Capacity Sizing", icon: <ResizeRegular />, description: "Workload profile to SKU recommendations" },
     ],
   },
+  {
+    label: "Communications",
+    items: [
+      { mode: "whatsnew", label: "What's New", icon: <MegaphoneLoudRegular />, description: "Microsoft announcements & draft customer emails" },
+      { mode: "servicehealth", label: "Service Health", icon: <HeartPulseRegular />, description: "Azure service incidents and health advisories" },
+    ],
+  },
 ];
 
 const useStyles = makeStyles({
@@ -99,7 +107,7 @@ const useStyles = makeStyles({
     flexDirection: "column",
     height: "100%",
     background: tokens.colorNeutralBackground1,
-    borderRight: `1px solid ${tokens.colorNeutralStroke2}`,
+    borderRight: "1px solid rgba(255,255,255,0.05)",
     overflow: "hidden",
     transition: "width 0.2s ease",
     flexShrink: 0,
@@ -109,8 +117,8 @@ const useStyles = makeStyles({
     alignItems: "center",
     justifyContent: "flex-end",
     padding: "10px 8px",
-    borderBottom: `1px solid ${tokens.colorNeutralStroke2}`,
-    height: "52px",
+    borderBottom: "1px solid rgba(255,255,255,0.05)",
+    height: "56px",
     flexShrink: 0,
   },
   sections: {
@@ -132,7 +140,7 @@ const useStyles = makeStyles({
   },
   sectionDivider: {
     height: "1px",
-    background: tokens.colorNeutralStroke3,
+    background: "rgba(255,255,255,0.04)",
     margin: "6px 12px 0",
   },
   navItem: {
@@ -144,18 +152,19 @@ const useStyles = makeStyles({
     borderRadius: "6px",
     cursor: "pointer",
     userSelect: "none",
-    transition: "background 0.12s",
+    transition: "background 0.12s, box-shadow 0.12s",
     borderLeft: "3px solid transparent",
     "&:hover": {
-      background: tokens.colorNeutralBackground3,
+      background: "rgba(0, 120, 212, 0.08)",
     },
   },
   navItemActive: {
-    background: "rgba(0, 120, 212, 0.1)",
+    background: "rgba(0, 120, 212, 0.12)",
     borderLeftColor: "#0078D4",
+    boxShadow: "inset 3px 0 0 #0078D4",
     paddingLeft: "10px",
     "&:hover": {
-      background: "rgba(0, 120, 212, 0.15)",
+      background: "rgba(0, 120, 212, 0.18)",
     },
   },
   navItemCollapsed: {
@@ -164,8 +173,9 @@ const useStyles = makeStyles({
     paddingLeft: "8px",
   },
   navItemCollapsedActive: {
-    background: "rgba(0, 120, 212, 0.1)",
+    background: "rgba(0, 120, 212, 0.12)",
     borderLeftColor: "#0078D4",
+    boxShadow: "inset 3px 0 0 #0078D4",
   },
   navItemIcon: {
     flexShrink: 0,
@@ -173,9 +183,14 @@ const useStyles = makeStyles({
     color: tokens.colorNeutralForeground3,
     display: "flex",
     alignItems: "center",
+    transition: "transform 0.12s, color 0.12s",
+    "&:hover": {
+      transform: "scale(1.08)",
+    },
   },
   navItemIconActive: {
     color: "#0078D4",
+    filter: "drop-shadow(0 0 4px rgba(0,120,212,0.4))",
   },
   navItemLabel: {
     fontSize: "13px",
@@ -189,6 +204,24 @@ const useStyles = makeStyles({
     color: tokens.colorNeutralForeground1,
     fontWeight: 600,
   },
+  alertDot: {
+    position: "absolute",
+    top: "-2px",
+    right: "-3px",
+    width: "8px",
+    height: "8px",
+    borderRadius: "50%",
+    background: "#C50F1F",
+    border: "1px solid rgba(0,0,0,0.4)",
+    boxShadow: "0 0 6px rgba(197,15,31,0.7)",
+    flexShrink: 0,
+  },
+  navItemIconWrap: {
+    position: "relative",
+    display: "flex",
+    alignItems: "center",
+    flexShrink: 0,
+  },
 });
 
 interface SideNavProps {
@@ -196,9 +229,10 @@ interface SideNavProps {
   onModeChange: (m: Mode) => void;
   collapsed: boolean;
   onToggleCollapsed: () => void;
+  badgeCounts?: Partial<Record<Mode, number>>;
 }
 
-export default function SideNav({ mode, onModeChange, collapsed, onToggleCollapsed }: SideNavProps) {
+export default function SideNav({ mode, onModeChange, collapsed, onToggleCollapsed, badgeCounts = {} }: SideNavProps) {
   const styles = useStyles();
 
   return (
@@ -221,6 +255,7 @@ export default function SideNav({ mode, onModeChange, collapsed, onToggleCollaps
 
             {section.items.map((item) => {
               const isActive = item.activeWhen ? item.activeWhen.includes(mode) : mode === item.mode;
+              const alertCount = badgeCounts[item.mode] ?? 0;
               const itemEl = (
                 <div
                   key={item.mode}
@@ -231,8 +266,11 @@ export default function SideNav({ mode, onModeChange, collapsed, onToggleCollaps
                   }
                   onClick={() => onModeChange(item.mode)}
                 >
-                  <span className={`${styles.navItemIcon} ${isActive ? styles.navItemIconActive : ""}`}>
-                    {item.icon}
+                  <span className={styles.navItemIconWrap}>
+                    <span className={`${styles.navItemIcon} ${isActive ? styles.navItemIconActive : ""}`}>
+                      {item.icon}
+                    </span>
+                    {alertCount > 0 && <span className={styles.alertDot} />}
                   </span>
                   {!collapsed && (
                     <Text className={`${styles.navItemLabel} ${isActive ? styles.navItemLabelActive : ""}`}>
@@ -243,7 +281,7 @@ export default function SideNav({ mode, onModeChange, collapsed, onToggleCollaps
               );
 
               return collapsed ? (
-                <Tooltip key={item.mode} content={`${item.label} — ${item.description}`} relationship="label" positioning="after">
+                <Tooltip key={item.mode} content={alertCount > 0 ? `${item.label} — ${alertCount} active incident${alertCount !== 1 ? "s" : ""}` : `${item.label} — ${item.description}`} relationship="label" positioning="after">
                   {itemEl}
                 </Tooltip>
               ) : itemEl;

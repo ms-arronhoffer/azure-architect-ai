@@ -209,7 +209,14 @@ async def _stream_architecture(req: ArchRequest, provider: str = "azure", model:
 
                 elif name == "design_network_topology":
                     yield f"data: {json.dumps({'type': 'status', 'message': 'Building network topology...'})}\n\n"
-                    yield f"data: {json.dumps({'type': 'network_topology', 'topology': args})}\n\n"
+                    try:
+                        from services.diagram_service import generate_network_diagram
+                        net_xml = generate_network_diagram(args)
+                        topology_payload = {**args, "diagramXml": net_xml}
+                    except Exception as e:
+                        topology_payload = args
+                        yield f"data: {json.dumps({'type': 'error', 'message': f'Network diagram error: {e}'})}\n\n"
+                    yield f"data: {json.dumps({'type': 'network_topology', 'topology': topology_payload})}\n\n"
                     result = {"status": "network_topology_received"}
 
                 elif name == "assess_waf_pillar":
@@ -509,6 +516,13 @@ def _build_prompt(req: ArchRequest, mode: str) -> str:
             "Call assess_waf_pillar exactly five times — once for each Well-Architected pillar "
             "('reliability', 'security', 'cost', 'operational-excellence', 'performance') — with "
             "a 1-5 score, key findings, and recommendations grounded in this architecture."
+        )
+    if "network" in include:
+        tool_instructions.append(
+            "Call design_network_topology with a complete network topology: topology_type, "
+            "vnets (each with name, cidr, region, subnets[name/cidr/purpose]), nsg_rules, "
+            "private_endpoints, dns_design, firewall. Make CIDR ranges, subnet purposes, and "
+            "NSG rules specific to this workload's requirements."
         )
     tool_instructions.append("After the tool calls, provide a detailed explanation.")
     return (

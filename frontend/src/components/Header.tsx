@@ -50,6 +50,9 @@ const MODE_LABELS: Record<Mode, string> = {
   ops: "Observability & SRE",
   intake: "Requirements Studio",
   analyze: "Workload Analysis",
+  whatsnew: "What's New",
+  servicehealth: "Service Health",
+  strategy: "Strategy Builder",
 };
 
 const MODE_SECTION: Partial<Record<Mode, string>> = {
@@ -84,6 +87,9 @@ const MODE_SECTION: Partial<Record<Mode, string>> = {
   tco: "Operations",
   sizing: "Operations",
   dataplatform: "Operations",
+  whatsnew: "Communications",
+  servicehealth: "Communications",
+  strategy: "Design & Build",
 };
 
 const useStyles = makeStyles({
@@ -91,12 +97,16 @@ const useStyles = makeStyles({
     display: "flex",
     alignItems: "center",
     padding: "0 20px",
-    height: "52px",
+    height: "56px",
     flexShrink: 0,
-    background: tokens.colorNeutralBackground1,
-    borderBottom: `1px solid ${tokens.colorNeutralStroke2}`,
+    background: "var(--gradient-header)",
+    backdropFilter: "blur(8px)",
+    WebkitBackdropFilter: "blur(8px)",
+    borderBottom: "1px solid rgba(255,255,255,0.05)",
+    boxShadow: "0 1px 0 rgba(0,120,212,0.35)",
     gap: "14px",
     position: "relative",
+    zIndex: 10,
   },
   accentLine: {
     position: "absolute",
@@ -104,8 +114,8 @@ const useStyles = makeStyles({
     left: 0,
     right: 0,
     height: "2px",
-    background: "linear-gradient(90deg, transparent 0%, #0078D4 25%, #50E6FF 50%, #0078D4 75%, transparent 100%)",
-    opacity: 0.8,
+    background: "var(--gradient-accent)",
+    opacity: 0.9,
     pointerEvents: "none",
   },
   brandIcon: {
@@ -114,12 +124,13 @@ const useStyles = makeStyles({
     display: "flex",
     alignItems: "center",
     flexShrink: 0,
+    filter: "drop-shadow(0 0 6px rgba(0,120,212,0.5))",
   },
   brand: {
     fontWeight: 700,
     fontSize: "15px",
     letterSpacing: "-0.2px",
-    background: "linear-gradient(135deg, #0078D4 0%, #50E6FF 100%)",
+    background: "var(--gradient-azure)",
     WebkitBackgroundClip: "text",
     WebkitTextFillColor: "transparent",
     backgroundClip: "text",
@@ -130,7 +141,7 @@ const useStyles = makeStyles({
   divider: {
     width: "1px",
     height: "18px",
-    background: tokens.colorNeutralStroke1,
+    background: "rgba(255,255,255,0.1)",
     flexShrink: 0,
   },
   breadcrumb: {

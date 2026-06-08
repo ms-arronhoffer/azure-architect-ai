@@ -33,7 +33,80 @@ export type Mode =
   | "ops"
   | "intake"
   | "analyze"
-  | "troubleshoot";
+  | "troubleshoot"
+  | "whatsnew"
+  | "servicehealth"
+  | "strategy";
+
+// ── Strategy Builder ─────────────────────────────────────────────────────────
+
+export interface StrategicPillar {
+  name: string;
+  description: string;
+  rationale: string;
+}
+
+export interface CapabilityRow {
+  capability_area: string;
+  azure_services: string[];
+  justification: string;
+  alternatives: string[];
+}
+
+export interface WafPillarResult {
+  status: "Strong" | "Adequate" | "Gap";
+  score: number;
+  recommendations: string[];
+}
+
+export interface RiskItem {
+  risk: string;
+  category: string;
+  impact: "H" | "M" | "L";
+  likelihood: "H" | "M" | "L";
+  mitigation: string;
+}
+
+export interface StrategyReference {
+  title: string;
+  url: string;
+}
+
+export interface RoadmapPhase {
+  phase: string;
+  focus: string;
+  key_initiatives: string[];
+  success_metrics: string[];
+}
+
+export interface StrategyResult {
+  executive_summary: string;
+  strategic_pillars: StrategicPillar[];
+  capability_map: CapabilityRow[];
+  waf_alignment: {
+    reliability: WafPillarResult;
+    security: WafPillarResult;
+    cost_optimization: WafPillarResult;
+    operational_excellence: WafPillarResult;
+    performance_efficiency: WafPillarResult;
+    overall_score?: number;
+  };
+  risk_register: RiskItem[];
+  strategic_roadmap?: RoadmapPhase[];
+  references: StrategyReference[];
+}
+
+// ── What's New ───────────────────────────────────────────────────────────────
+
+export interface Announcement {
+  id: string;
+  title: string;
+  description: string;
+  url: string;
+  pub_date: string;
+  source: string;
+  source_label: string;
+}
 
 // ── Navigation ──────────────────────────────────────────────────────────────
 
@@ -339,6 +412,7 @@ export interface NetworkTopology {
   private_endpoints: PrivateEndpoint[];
   dns_design?: string;
   firewall?: string;
+  diagramXml?: string;
 }
 
 // ── Landing zone types ────────────────────────────────────────────────────────
@@ -887,6 +961,7 @@ export type SseEvent =
   | { type: "cost_alerts"; alerts: CostAlertsResult }
   | { type: "security_posture"; posture: SecurityPostureResult }
   | { type: "multicloud_comparison"; comparison: MulticloudComparisonResult }
+  | { type: "strategy_result"; result: StrategyResult }
   | { type: "done" }
   | { type: "status"; message: string }
   | { type: "error"; message: string };
