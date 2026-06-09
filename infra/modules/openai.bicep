@@ -41,7 +41,7 @@ resource modelDeployments 'Microsoft.CognitiveServices/accounts/deployments@2024
   parent: aoai
   name: d.name
   sku: {
-    name: 'Standard'
+    name: 'GlobalStandard'
     capacity: d.capacity
   }
   properties: {
