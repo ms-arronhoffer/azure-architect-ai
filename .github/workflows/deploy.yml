@@ -117,7 +117,7 @@ jobs:
             -g ${{ needs.detect.outputs.rg }} \
             -n ${{ needs.detect.outputs.backendApp }} \
             --image ${{ needs.detect.outputs.acr }}.azurecr.io/aa-backend:${{ env.IMAGE_TAG }} \
-            --revision-suffix sha-${{ env.IMAGE_TAG }}
+            --revision-suffix sha-${IMAGE_TAG:0:7}
 
   frontend:
     needs: [detect, infra]
@@ -152,7 +152,7 @@ jobs:
             -g ${{ needs.detect.outputs.rg }} \
             -n ${{ needs.detect.outputs.frontendApp }} \
             --image ${{ needs.detect.outputs.acr }}.azurecr.io/aa-frontend:${{ env.IMAGE_TAG }} \
-            --revision-suffix sha-${{ env.IMAGE_TAG }}
+            --revision-suffix sha-${IMAGE_TAG:0:7}
 
   smoke:
     needs: [detect, backend, frontend]
