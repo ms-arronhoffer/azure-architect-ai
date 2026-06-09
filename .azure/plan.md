@@ -45,7 +45,9 @@ Infrastructure is fully deployed. Both container apps are running the placeholde
 | Azure OpenAI | `https://aarch-dev-aoai.openai.azure.com/` |
 | PostgreSQL | `aarch-dev-pg-7s6kzxncbhezw.postgres.database.azure.com` |
 | Entra SPA App | `azure-architect-ai-spa` (`e9616e6b-3c8b-4153-b814-b01817c9ade2`) |
-| Frontend URL | `https://aarch-dev-frontend.bluefield-debdcece.centralus.azurecontainerapps.io` |
+| Frontend URL | `https://aarch-dev-frontend.victoriouswave-14404e90.centralus.azurecontainerapps.io` |
+| ACA Environment | VNet-injected (`aca-subnet`), workload profile Consumption |
+| Models | `gpt-5.4` (2026-03-05), `gpt-5.4-mini` (2026-03-17) |
 
 ---
 

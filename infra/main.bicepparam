@@ -31,6 +31,12 @@ param openAiDeployments = [
     version: '2026-03-17'
     capacity: 50
   }
+  {
+    name: 'text-embedding-ada-002'
+    model: 'text-embedding-ada-002'
+    version: '2'
+    capacity: 50
+  }
 ]
 
 // Secrets sourced from environment at deploy time (set in GitHub Actions job env).

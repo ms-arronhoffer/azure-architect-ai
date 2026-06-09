@@ -230,8 +230,9 @@ module backendApp 'modules/containerapp.bicep' = {
     envVars: [
       { name: 'AZURE_OPENAI_ENDPOINT', value: openai.outputs.endpoint }
       { name: 'AZURE_CLIENT_ID', value: identity.outputs.clientId }
-      { name: 'AZURE_OPENAI_DEPLOYMENT', value: 'gpt-5.4' }
-      { name: 'AZURE_OPENAI_MINI_DEPLOYMENT', value: 'gpt-5.4-mini' }
+      { name: 'AZURE_OPENAI_DEPLOYMENT_ARCH', value: 'gpt-5.4' }
+      { name: 'AZURE_OPENAI_DEPLOYMENT_CHAT', value: 'gpt-5.4' }
+      { name: 'AZURE_OPENAI_DEPLOYMENT_EMBEDDING', value: 'text-embedding-ada-002' }
       { name: 'ENABLE_MCP', value: 'true' }
       { name: 'AUTH_ENABLED', value: 'true' }
       { name: 'ENTRA_TENANT_ID', value: entraTenantId }
