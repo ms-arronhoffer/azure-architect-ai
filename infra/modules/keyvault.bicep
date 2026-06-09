@@ -15,7 +15,7 @@ param peSubnetId string = ''
 
 var deployPrivateEndpoint = !empty(privateDnsZoneId) && !empty(peSubnetId)
 
-var kvName = take(toLower(replace('${prefix}-${env}-kv-${uniqueString(resourceGroup().id)}', '_', '-')), 24)
+var kvName = take(toLower(replace('${prefix}-${env}-kv-${uniqueString(resourceGroup().id, location)}', '_', '-')), 24)
 
 resource kv 'Microsoft.KeyVault/vaults@2024-11-01' = {
   name: kvName
