@@ -1,14 +1,11 @@
-// Container Apps environment with attached Log Analytics + App Insights, plus
-// an environment-scoped Azure Files storage definition that the backend mounts.
+// Container Apps environment with attached Log Analytics + App Insights,
+// VNet-injected into aca-subnet so it can reach private Postgres.
 
 param prefix string
 param env string
 param location string
 param tags object
-param storageAccountName string
-@secure()
-param storageAccountKey string
-param fileShareName string
+param acaSubnetId string
 
 var lawName = '${prefix}-${env}-law'
 var aiName  = '${prefix}-${env}-ai'
@@ -42,6 +39,15 @@ resource cae 'Microsoft.App/managedEnvironments@2025-01-01' = {
   location: location
   tags: tags
   properties: {
+    vnetConfiguration: {
+      infrastructureSubnetId: acaSubnetId
+    }
+    workloadProfiles: [
+      {
+        name: 'Consumption'
+        workloadProfileType: 'Consumption'
+      }
+    ]
     appLogsConfiguration: {
       destination: 'log-analytics'
       logAnalyticsConfiguration: {
@@ -53,20 +59,6 @@ resource cae 'Microsoft.App/managedEnvironments@2025-01-01' = {
   }
 }
 
-resource caeStorage 'Microsoft.App/managedEnvironments/storages@2025-01-01' = {
-  parent: cae
-  name: 'data'
-  properties: {
-    azureFile: {
-      accountName: storageAccountName
-      accountKey: storageAccountKey
-      shareName: fileShareName
-      accessMode: 'ReadWrite'
-    }
-  }
-}
-
 output environmentId string = cae.id
 output environmentName string = cae.name
 output appInsightsConnectionString string = ai.properties.ConnectionString
-output storageName string = caeStorage.name

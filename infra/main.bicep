@@ -28,15 +28,15 @@ param tags object = {
 @description('Azure OpenAI model deployments to create. Each entry: { name, model, version, capacity }.')
 param openAiDeployments array = [
   {
-    name: 'gpt-4.1'
-    model: 'gpt-4.1'
-    version: '2025-04-14'
+    name: 'gpt-5.4'
+    model: 'gpt-5.4'
+    version: '2026-03-05'
     capacity: 50
   }
   {
-    name: 'gpt-4.1-mini'
-    model: 'gpt-4.1-mini'
-    version: '2025-04-14'
+    name: 'gpt-5.4-mini'
+    model: 'gpt-5.4-mini'
+    version: '2026-03-17'
     capacity: 50
   }
 ]
@@ -130,17 +130,6 @@ module kv 'modules/keyvault.bicep' = {
   }
 }
 
-module storage 'modules/storage.bicep' = {
-  name: 'storage'
-  scope: rg
-  params: {
-    prefix: prefix
-    env: env
-    location: location
-    tags: tags
-  }
-}
-
 module openai 'modules/openai.bicep' = {
   name: 'openai'
   scope: rg
@@ -215,9 +204,7 @@ module acaEnv 'modules/containerapps-env.bicep' = {
     env: env
     location: location
     tags: tags
-    storageAccountName: storage.outputs.accountName
-    storageAccountKey: storage.outputs.accountKey
-    fileShareName: storage.outputs.fileShareName
+    acaSubnetId: network.outputs.acaSubnetId
   }
 }
 
@@ -243,8 +230,8 @@ module backendApp 'modules/containerapp.bicep' = {
     envVars: [
       { name: 'AZURE_OPENAI_ENDPOINT', value: openai.outputs.endpoint }
       { name: 'AZURE_CLIENT_ID', value: identity.outputs.clientId }
-      { name: 'AZURE_OPENAI_DEPLOYMENT', value: 'gpt-4.1' }
-      { name: 'AZURE_OPENAI_MINI_DEPLOYMENT', value: 'gpt-4.1-mini' }
+      { name: 'AZURE_OPENAI_DEPLOYMENT', value: 'gpt-5.4' }
+      { name: 'AZURE_OPENAI_MINI_DEPLOYMENT', value: 'gpt-5.4-mini' }
       { name: 'ENABLE_MCP', value: 'true' }
       { name: 'AUTH_ENABLED', value: 'true' }
       { name: 'ENTRA_TENANT_ID', value: entraTenantId }
@@ -263,19 +250,6 @@ module backendApp 'modules/containerapp.bicep' = {
         name: 'secret-encryption-key'
         keyVaultUrl: '${kv.outputs.uri}secrets/secret-encryption-key'
         identity: identity.outputs.id
-      }
-    ]
-    volumeMounts: [
-      {
-        volumeName: 'data'
-        mountPath: '/app/data'
-      }
-    ]
-    volumes: [
-      {
-        name: 'data'
-        storageType: 'AzureFile'
-        storageName: acaEnv.outputs.storageName
       }
     ]
   }
@@ -301,6 +275,7 @@ module frontendApp 'modules/containerapp.bicep' = {
     maxReplicas: 3
     envVars: [
       { name: 'BACKEND_HOST', value: backendApp.outputs.internalFqdn }
+      { name: 'BACKEND_PORT', value: '80' }
     ]
   }
 }
