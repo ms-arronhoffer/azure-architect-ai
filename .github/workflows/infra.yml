@@ -17,7 +17,7 @@ permissions:
   pull-requests: write
 
 env:
-  AZURE_LOCATION: eastus2
+  AZURE_LOCATION: centralus
   DEPLOYMENT_NAME: main
 
 jobs:

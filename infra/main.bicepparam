@@ -2,7 +2,7 @@ using './main.bicep'
 
 param prefix = 'aarch'
 param env = 'dev'
-param location = 'eastus'
+param location = 'centralus'
 
 param tags = {
   app: 'azure-architect-ai'
