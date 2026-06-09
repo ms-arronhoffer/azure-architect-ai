@@ -55,6 +55,13 @@ const ARCH_MODES: Mode[] = ["architecture", "network", "aiarchitecture", "datapl
 
 const NAV_SECTIONS: NavSectionDef[] = [
   {
+    label: "Communications",
+    items: [
+      { mode: "whatsnew", label: "What's New", icon: <MegaphoneLoudRegular />, description: "Microsoft announcements & draft customer emails" },
+      { mode: "servicehealth", label: "Service Health", icon: <HeartPulseRegular />, description: "Azure service incidents and health advisories" },
+    ],
+  },
+  {
     label: "Advisory",
     items: [
       { mode: "intake", label: "Requirements Studio", icon: <FormRegular />, description: "Capture workload requirements — injected everywhere" },
@@ -90,13 +97,6 @@ const NAV_SECTIONS: NavSectionDef[] = [
       { mode: "troubleshoot", label: "Troubleshoot", icon: <WrenchScrewdriverRegular />, description: "Diagnose and resolve Azure issues" },
       { mode: "codegen", label: "Code Generator", icon: <CodeRegular />, description: "Generate code with Copilot and push to GitHub" },
       { mode: "sizing", label: "Capacity Sizing", icon: <ResizeRegular />, description: "Workload profile to SKU recommendations" },
-    ],
-  },
-  {
-    label: "Communications",
-    items: [
-      { mode: "whatsnew", label: "What's New", icon: <MegaphoneLoudRegular />, description: "Microsoft announcements & draft customer emails" },
-      { mode: "servicehealth", label: "Service Health", icon: <HeartPulseRegular />, description: "Azure service incidents and health advisories" },
     ],
   },
 ];

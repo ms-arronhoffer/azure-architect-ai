@@ -53,7 +53,7 @@ export interface CapabilityRow {
   alternatives: string[];
 }
 
-export interface WafPillarResult {
+export interface StrategyWafAlignment {
   status: "Strong" | "Adequate" | "Gap";
   score: number;
   recommendations: string[];
@@ -84,11 +84,11 @@ export interface StrategyResult {
   strategic_pillars: StrategicPillar[];
   capability_map: CapabilityRow[];
   waf_alignment: {
-    reliability: WafPillarResult;
-    security: WafPillarResult;
-    cost_optimization: WafPillarResult;
-    operational_excellence: WafPillarResult;
-    performance_efficiency: WafPillarResult;
+    reliability: StrategyWafAlignment;
+    security: StrategyWafAlignment;
+    cost_optimization: StrategyWafAlignment;
+    operational_excellence: StrategyWafAlignment;
+    performance_efficiency: StrategyWafAlignment;
     overall_score?: number;
   };
   risk_register: RiskItem[];
@@ -190,6 +190,18 @@ export interface CostLineItem {
   monthly_estimate: number | null;
   currency: string;
   note?: string;
+  requested_sku?: string;
+  sku_swapped?: boolean;
+  sku_status?: "unknown";
+  source?: string;
+}
+
+export interface SkuValidationSummary {
+  total_lines: number;
+  swapped: number;
+  missing: number;
+  data_source: string;
+  last_queried_at: string;
 }
 
 export interface CostEstimate {
@@ -198,6 +210,7 @@ export interface CostEstimate {
   currency: string;
   disclaimer: string;
   optimization_tips?: string[];
+  sku_validation?: SkuValidationSummary;
 }
 
 // ── Monitoring config types ──────────────────────────────────────────────────
@@ -917,6 +930,40 @@ export interface RemediationRunbook {
   estimated_resolution_minutes?: number;
 }
 
+// ── Bundled design (Full Design Pipeline) ────────────────────────────────────
+
+export interface BicepResource {
+  name: string;
+  type: string;
+  api_version: string;
+  location: string | null;
+}
+
+export interface BicepDiagnostic {
+  line: number;
+  col: number;
+  severity: "Error" | "Warning";
+  code: string;
+  message: string;
+}
+
+export interface BicepPreview {
+  valid: boolean;
+  errors: BicepDiagnostic[];
+  resources: BicepResource[];
+  total_count: number;
+  arm_template: string | null;
+}
+
+export interface BundledDesign {
+  workload_name: string;
+  generated_at: string;
+  architecture: { text: string; runbook?: string; bicep?: string; bicep_preview?: BicepPreview | null };
+  sizing: { text: string };
+  security: { text: string };
+  waf: { pillars: WafPillarResult[] };
+}
+
 // ── SSE event union ──────────────────────────────────────────────────────────
 
 export type SseEvent =
@@ -925,6 +972,7 @@ export type SseEvent =
   | { type: "diagram"; xml: string }
   | { type: "runbook"; markdown: string }
   | { type: "bicep"; code: string; param_file?: string; deploy_commands?: string[]; notes?: string[] }
+  | { type: "bicep_preview"; preview: BicepPreview }
   | { type: "cost_estimate"; estimate: CostEstimate }
   | { type: "monitoring_config"; config: MonitoringConfig }
   | { type: "compliance_result"; result: ComplianceResult }
@@ -962,6 +1010,7 @@ export type SseEvent =
   | { type: "security_posture"; posture: SecurityPostureResult }
   | { type: "multicloud_comparison"; comparison: MulticloudComparisonResult }
   | { type: "strategy_result"; result: StrategyResult }
+  | { type: "bundled_design"; workload_name: string; generated_at: string; architecture: BundledDesign["architecture"]; sizing: BundledDesign["sizing"]; security: BundledDesign["security"]; waf: BundledDesign["waf"] }
   | { type: "done" }
   | { type: "status"; message: string }
   | { type: "error"; message: string };

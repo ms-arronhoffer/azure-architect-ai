@@ -1,5 +1,7 @@
 # Serves the Vite-built SPA and proxies /api/* to the backend service.
-# In ACA, BACKEND_HOST defaults to the internal FQDN of the backend container app.
+# Rendered by nginx's envsubst on container start. In ACA, BACKEND_HOST is set
+# to the backend container app's internal FQDN; in Docker compose it defaults
+# to the `backend` service name.
 
 server {
     listen 8080;
@@ -23,7 +25,7 @@ server {
     # this and hits the API directly — but leaving the proxy in place keeps the
     # same-origin deploy pattern working too.
     location /api/ {
-        proxy_pass http://backend:8000;
+        proxy_pass http://${BACKEND_HOST}:${BACKEND_PORT};
         proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;

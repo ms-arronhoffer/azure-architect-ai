@@ -13,6 +13,10 @@ on:
         description: "Comma-separated services to deploy: backend,frontend"
         required: false
         default: "backend,frontend"
+      deploy_infra:
+        description: "Run subscription-scoped Bicep deploy first (creates/updates RG and platform resources)"
+        required: false
+        default: "false"
 
 permissions:
   id-token: write
@@ -24,7 +28,34 @@ env:
   IMAGE_TAG: ${{ github.sha }}
 
 jobs:
+  infra:
+    if: github.event_name == 'workflow_dispatch' && inputs.deploy_infra == 'true'
+    runs-on: ubuntu-latest
+    environment: dev
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      - name: Deploy subscription template
+        env:
+          PG_ADMIN_PASSWORD: ${{ secrets.PG_ADMIN_PASSWORD }}
+          SECRET_ENCRYPTION_KEY: ${{ secrets.SECRET_ENCRYPTION_KEY }}
+          ENTRA_TENANT_ID: ${{ vars.VITE_ENTRA_TENANT_ID }}
+          ENTRA_AUDIENCE: ${{ vars.ENTRA_AUDIENCE }}
+          ONCALL_EMAIL: ${{ vars.ONCALL_EMAIL }}
+        run: |
+          az deployment sub create \
+            -n ${{ env.DEPLOYMENT_NAME }} \
+            -l ${{ env.AZURE_LOCATION }} \
+            -f infra/main.bicep \
+            -p infra/main.bicepparam
+
   detect:
+    needs: [infra]
+    if: always() && (needs.infra.result == 'success' || needs.infra.result == 'skipped')
     runs-on: ubuntu-latest
     outputs:
       backend: ${{ steps.changes.outputs.backend }}
@@ -60,8 +91,11 @@ jobs:
           echo "frontendApp=$(az containerapp list -g $RG --query "[?contains(name, 'frontend')].name | [0]" -o tsv)" >> $GITHUB_OUTPUT
 
   backend:
-    needs: detect
-    if: needs.detect.outputs.backend == 'true' || github.event_name == 'workflow_dispatch'
+    needs: [detect, infra]
+    if: |
+      always() &&
+      (needs.infra.result == 'success' || needs.infra.result == 'skipped') &&
+      (needs.detect.outputs.backend == 'true' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     environment: dev
     steps:
@@ -86,8 +120,11 @@ jobs:
             --revision-suffix sha-${{ env.IMAGE_TAG }}
 
   frontend:
-    needs: detect
-    if: needs.detect.outputs.frontend == 'true' || github.event_name == 'workflow_dispatch'
+    needs: [detect, infra]
+    if: |
+      always() &&
+      (needs.infra.result == 'success' || needs.infra.result == 'skipped') &&
+      (needs.detect.outputs.frontend == 'true' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     environment: dev
     steps:
@@ -102,7 +139,13 @@ jobs:
           az acr build -r ${{ needs.detect.outputs.acr }} \
             -t aa-frontend:${{ env.IMAGE_TAG }} \
             -t aa-frontend:latest \
-            -f frontend/Dockerfile.prod ./frontend
+            -f frontend/Dockerfile.prod \
+            --build-arg VITE_API_BASE_URL="" \
+            --build-arg VITE_AUTH_ENABLED=true \
+            --build-arg VITE_ENTRA_TENANT_ID=${{ vars.VITE_ENTRA_TENANT_ID }} \
+            --build-arg VITE_ENTRA_CLIENT_ID=${{ vars.VITE_ENTRA_CLIENT_ID }} \
+            --build-arg VITE_ENTRA_API_SCOPE=${{ vars.VITE_ENTRA_API_SCOPE }} \
+            ./frontend
       - name: Update container app revision
         run: |
           az containerapp update \

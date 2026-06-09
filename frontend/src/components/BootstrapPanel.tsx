@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import {
@@ -17,6 +17,9 @@ import {
   AccordionItem,
   AccordionPanel,
   ProgressBar,
+  MessageBar,
+  MessageBarBody,
+  MessageBarActions,
 } from "@fluentui/react-components";
 import {
   ArrowRightRegular,
@@ -26,6 +29,8 @@ import {
   ChatRegular,
 } from "@fluentui/react-icons";
 import { useSSE } from "../hooks/useSSE";
+import { useWorkloadSpec } from "../hooks/useWorkloadSpec";
+import { specToBootstrapState } from "../utils/specMappers";
 import { downloadBootstrapZip } from "../utils/zipExport";
 import type { SseEvent, BootstrapOutputs, ChatMessage } from "../types";
 
@@ -108,6 +113,7 @@ const STEP_LABELS = ["Workload", "Scale & Region", "Security", "Budget"];
 export default function BootstrapPanel({ onRefine }: { onRefine?: (context: ChatMessage[]) => void }) {
   const styles = useStyles();
   const { stream, isStreaming, cancel } = useSSE();
+  const { spec } = useWorkloadSpec();
 
   const [step, setStep] = useState(0);
 
@@ -131,6 +137,50 @@ export default function BootstrapPanel({ onRefine }: { onRefine?: (context: Chat
   const [budget, setBudget] = useState("$5k–20k/mo");
   const [sla, setSla] = useState("99.9%");
   const [includeDr, setIncludeDr] = useState(false);
+
+  const [loadedFromSpec, setLoadedFromSpec] = useState(false);
+  const autofillAppliedRef = useRef(false);
+
+  useEffect(() => {
+    if (autofillAppliedRef.current) return;
+    if (!spec.name) return;
+    const pristine = !workloadName && !workloadDescription && !usersPerDay && !dataVolume;
+    if (!pristine) return;
+    autofillAppliedRef.current = true;
+    const mapped = specToBootstrapState(spec);
+    if (mapped.workloadName !== undefined) setWorkloadName(mapped.workloadName);
+    if (mapped.workloadType !== undefined) setWorkloadType(mapped.workloadType);
+    if (mapped.workloadDescription !== undefined) setWorkloadDescription(mapped.workloadDescription);
+    if (mapped.usersPerDay !== undefined) setUsersPerDay(mapped.usersPerDay);
+    if (mapped.dataVolume !== undefined) setDataVolume(mapped.dataVolume);
+    if (mapped.primaryRegion !== undefined) setPrimaryRegion(mapped.primaryRegion);
+    if (mapped.drRegion !== undefined) setDrRegion(mapped.drRegion);
+    if (mapped.compliance !== undefined) setCompliance(mapped.compliance);
+    if (mapped.identity !== undefined) setIdentity(mapped.identity);
+    if (mapped.networkIsolation !== undefined) setNetworkIsolation(mapped.networkIsolation);
+    if (mapped.budget !== undefined) setBudget(mapped.budget);
+    if (mapped.sla !== undefined) setSla(mapped.sla);
+    if (mapped.includeDr !== undefined) setIncludeDr(mapped.includeDr);
+    setLoadedFromSpec(true);
+  }, [spec.name]);
+
+  function handleClearAutofill() {
+    setWorkloadName("");
+    setWorkloadType("Web App");
+    setWorkloadDescription("");
+    setUsersPerDay("");
+    setDataVolume("");
+    setPrimaryRegion("East US");
+    setDrRegion("");
+    setCompliance("None");
+    setIdentity("Entra ID (workforce)");
+    setNetworkIsolation(false);
+    setBudget("$5k–20k/mo");
+    setSla("99.9%");
+    setIncludeDr(false);
+    setLoadedFromSpec(false);
+    autofillAppliedRef.current = true;
+  }
 
   // Results
   const [outputs, setOutputs] = useState<BootstrapOutputs>({});
@@ -236,6 +286,14 @@ export default function BootstrapPanel({ onRefine }: { onRefine?: (context: Chat
           {/* Step 0: Workload */}
           {step === 0 && !isStreaming && !isComplete && (
             <>
+              {loadedFromSpec && (
+                <MessageBar intent="info">
+                  <MessageBarBody>Loaded from Requirements Studio.</MessageBarBody>
+                  <MessageBarActions>
+                    <Button size="small" appearance="transparent" onClick={handleClearAutofill}>Clear</Button>
+                  </MessageBarActions>
+                </MessageBar>
+              )}
               <Field label="Workload Name" required>
                 <Input value={workloadName} onChange={(_, d) => setWorkloadName(d.value)} placeholder="e.g. Customer Portal" />
               </Field>

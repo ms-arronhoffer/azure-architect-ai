@@ -22,6 +22,9 @@ param envVars array = []
 param volumeMounts array = []
 param volumes array = []
 
+@description('Container App secrets. Either { name, value } or KV-backed { name, keyVaultUrl, identity }. Referenced via secretRef in envVars.')
+param secrets array = []
+
 resource app 'Microsoft.App/containerApps@2025-01-01' = {
   name: name
   location: location
@@ -48,6 +51,7 @@ resource app 'Microsoft.App/containerApps@2025-01-01' = {
           identity: miId
         }
       ]
+      secrets: secrets
     }
     template: {
       containers: [

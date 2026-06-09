@@ -14,6 +14,7 @@ from pydantic import BaseModel
 from auth import require_user, user_id_from_claims
 from models import ModelConfig
 from prompts.system_prompt import MODE_TEMPLATES
+from services.bicep_service import build_and_preview as build_bicep_preview
 from services.diagram_service import generate_diagram
 from services.docs_service import search_azure_docs
 from services.mcp_service import call_mcp_tool, is_mcp_tool
@@ -168,7 +169,13 @@ async def _stream_architecture(req: ArchRequest, provider: str = "azure", model:
                 elif name == "generate_bicep":
                     yield f"data: {json.dumps({'type': 'status', 'message': 'Generating Bicep IaC...'})}\n\n"
                     bicep_data = args
-                    yield f"data: {json.dumps({'type': 'bicep', 'code': args.get('bicep_code', ''), 'target_scope': args.get('target_scope', 'resourceGroup'), 'param_file': args.get('param_file'), 'deploy_commands': args.get('deploy_commands', []), 'notes': args.get('notes', [])})}\n\n"
+                    bicep_code = args.get('bicep_code', '')
+                    yield f"data: {json.dumps({'type': 'bicep', 'code': bicep_code, 'target_scope': args.get('target_scope', 'resourceGroup'), 'param_file': args.get('param_file'), 'deploy_commands': args.get('deploy_commands', []), 'notes': args.get('notes', [])})}\n\n"
+                    try:
+                        preview = await build_bicep_preview(bicep_code)
+                        yield f"data: {json.dumps({'type': 'bicep_preview', 'preview': preview})}\n\n"
+                    except Exception as e:
+                        yield f"data: {json.dumps({'type': 'bicep_preview', 'preview': {'valid': False, 'errors': [{'line': 0, 'col': 0, 'severity': 'Error', 'code': 'BCP_BUILD_FAIL', 'message': str(e)}], 'resources': [], 'total_count': 0, 'arm_template': None}})}\n\n"
                     result = {"status": "bicep_received"}
 
                 elif name == "generate_terraform":

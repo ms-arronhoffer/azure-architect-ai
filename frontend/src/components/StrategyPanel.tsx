@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Panel, Group as PanelGroup, Separator as PanelResizeHandle } from "react-resizable-panels";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -12,6 +12,9 @@ import {
   Tab,
   Select,
   Badge,
+  MessageBar,
+  MessageBarBody,
+  MessageBarActions,
 } from "@fluentui/react-components";
 import {
   TargetRegular,
@@ -28,6 +31,8 @@ import type {
   WorkloadContext,
 } from "../types";
 import { useSSE } from "../hooks/useSSE";
+import { useWorkloadSpec } from "../hooks/useWorkloadSpec";
+import { specToStrategyInputs } from "../utils/specMappers";
 import {
   Document,
   Paragraph,
@@ -82,7 +87,9 @@ const MATURITY_OPTIONS = [
   "Cloud-Optimizing (already in cloud, improving)",
 ];
 
-const WAF_PILLARS: { key: keyof StrategyResult["waf_alignment"]; label: string }[] = [
+type StrategyWafPillarKey = Exclude<keyof StrategyResult["waf_alignment"], "overall_score">;
+
+const WAF_PILLARS: { key: StrategyWafPillarKey; label: string }[] = [
   { key: "reliability", label: "Reliability" },
   { key: "security", label: "Security" },
   { key: "cost_optimization", label: "Cost Optimization" },
@@ -185,11 +192,11 @@ const useStyles = makeStyles({
     cursor: "pointer",
     fontFamily: "inherit",
     transition: "all 0.12s",
-    "&:hover": { background: "rgba(0,120,212,0.08)", borderColor: "#0078D4" },
+    "&:hover": { background: "rgba(0,120,212,0.08)", border: "1px solid #0078D4" },
   },
   chipActive: {
     background: "rgba(0,120,212,0.15)",
-    borderColor: "#0078D4",
+    border: "1px solid #0078D4",
     color: "#50A6E8",
     fontWeight: 600,
   },
@@ -639,11 +646,15 @@ export default function StrategyPanel({
 }: StrategyPanelProps) {
   const styles = useStyles();
   const { stream, isStreaming } = useSSE();
+  const { spec, setSpec } = useWorkloadSpec();
   const [step, setStep] = useState(1);
   const [inputs, setInputs] = useState<FormInputs>(DEFAULT_INPUTS);
   const [result, setResult] = useState<StrategyResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<string>("overview");
+  const [loadedFromSpec, setLoadedFromSpec] = useState(false);
+  const [applyMessage, setApplyMessage] = useState<string | null>(null);
+  const autofillAppliedRef = useRef(false);
 
   useEffect(() => {
     if (!initialSession?.structuredResult) return;
@@ -651,6 +662,28 @@ export default function StrategyPanel({
     if (sr.inputs) setInputs(sr.inputs);
     if (sr.result) { setResult(sr.result); setStep(4); }
   }, []);
+
+  useEffect(() => {
+    if (autofillAppliedRef.current) return;
+    if (initialSession?.structuredResult) return;
+    if (!spec.name) return;
+    const pristine =
+      inputs.workloadName === DEFAULT_INPUTS.workloadName &&
+      inputs.workloadType === DEFAULT_INPUTS.workloadType &&
+      inputs.description === DEFAULT_INPUTS.description &&
+      inputs.maturity === DEFAULT_INPUTS.maturity &&
+      inputs.constraints === DEFAULT_INPUTS.constraints;
+    if (!pristine) return;
+    autofillAppliedRef.current = true;
+    setInputs((prev) => ({ ...prev, ...specToStrategyInputs(spec) }));
+    setLoadedFromSpec(true);
+  }, [spec.name]);
+
+  function handleClearAutofill() {
+    setInputs(DEFAULT_INPUTS);
+    setLoadedFromSpec(false);
+    autofillAppliedRef.current = true; // suppress re-apply
+  }
 
   function toggleDriver(driver: string) {
     setInputs((prev) => {
@@ -700,6 +733,25 @@ export default function StrategyPanel({
     onRefine([msg]);
   }
 
+  function handleApplyServicesToSpec() {
+    if (!result) return;
+    const fromMap = result.capability_map.flatMap((row) => row.azure_services || []);
+    const lowerSeen = new Set<string>();
+    const merged: string[] = [];
+    for (const svc of [...(spec.existingServices || []), ...fromMap]) {
+      const trimmed = (svc || "").trim();
+      if (!trimmed) continue;
+      const key = trimmed.toLowerCase();
+      if (lowerSeen.has(key)) continue;
+      lowerSeen.add(key);
+      merged.push(trimmed);
+    }
+    const added = merged.length - (spec.existingServices?.length || 0);
+    setSpec({ existingServices: merged });
+    setApplyMessage(`Added ${added} service${added === 1 ? "" : "s"} to Workload Spec.`);
+    setTimeout(() => setApplyMessage(null), 4000);
+  }
+
   async function handleExport() {
     if (!result) return;
     const blob = await buildDocxExport(inputs, result);
@@ -720,6 +772,14 @@ export default function StrategyPanel({
               <span className={styles.stepBadge}>1</span>
               <span className={styles.stepTitle}>Workload Profile</span>
             </div>
+            {loadedFromSpec && (
+              <MessageBar intent="info">
+                <MessageBarBody>Loaded from Requirements Studio. Business drivers, success criteria, and timeline are left blank for you to choose.</MessageBarBody>
+                <MessageBarActions>
+                  <Button size="small" appearance="transparent" onClick={handleClearAutofill}>Clear</Button>
+                </MessageBarActions>
+              </MessageBar>
+            )}
             <div>
               <span className={styles.label}>Workload Name</span>
               <input
@@ -1157,12 +1217,26 @@ export default function StrategyPanel({
                 </Button>
                 <Button
                   appearance="subtle"
+                  onClick={handleApplyServicesToSpec}
+                  size="small"
+                >
+                  Apply pillar choices to Workload Spec
+                </Button>
+                <Button
+                  appearance="subtle"
                   icon={<ArrowDownloadRegular />}
                   onClick={handleExport}
                   size="small"
                 >
                   Export Word (.docx)
                 </Button>
+              </div>
+            )}
+            {applyMessage && (
+              <div style={{ padding: "0 16px 12px" }}>
+                <MessageBar intent="success">
+                  <MessageBarBody>{applyMessage}</MessageBarBody>
+                </MessageBar>
               </div>
             )}
           </div>

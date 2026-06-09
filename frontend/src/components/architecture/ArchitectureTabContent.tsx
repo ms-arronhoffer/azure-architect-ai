@@ -21,6 +21,8 @@ import {
   DialogTrigger,
   Link,
   Checkbox,
+  MessageBar,
+  MessageBarBody,
 } from "@fluentui/react-components";
 import {
   ArrowDownloadRegular,
@@ -29,8 +31,9 @@ import {
   ArrowSyncRegular,
 } from "@fluentui/react-icons";
 import { lookupService } from "../../utils/serviceMetadata";
-import type { BicepResult, CostEstimate, AdrRecord, NetworkTopology, WafPillarResult, ProjectTimeline } from "../../types";
+import type { BicepResult, BicepPreview, CostEstimate, AdrRecord, NetworkTopology, WafPillarResult, ProjectTimeline } from "../../types";
 import type { DiagramNode } from "../../utils/diagramParser";
+import BicepPreviewCard from "../BicepPreviewCard";
 
 export type ResultTab = "explanation" | "diagram" | "runbook" | "iac" | "cost" | "adr" | "waf" | "network" | "gantt";
 
@@ -96,6 +99,19 @@ const useStyles = makeStyles({
 
 const adrStatusColor: Record<string, "success" | "warning" | "danger"> = { Accepted: "success", Proposed: "warning", Deprecated: "danger" };
 
+function relativeTime(iso: string): string {
+  const t = Date.parse(iso);
+  if (isNaN(t)) return iso;
+  const diff = Math.max(0, Date.now() - t);
+  const sec = Math.round(diff / 1000);
+  if (sec < 60) return `${sec}s ago`;
+  const min = Math.round(sec / 60);
+  if (min < 60) return `${min}m ago`;
+  const hr = Math.round(min / 60);
+  if (hr < 24) return `${hr}h ago`;
+  return `${Math.round(hr / 24)}d ago`;
+}
+
 export interface ArchitectureTabContentProps {
   activeTab: ResultTab;
   explanation: string;
@@ -104,6 +120,7 @@ export interface ArchitectureTabContentProps {
   diagramNodes: DiagramNode[];
   runbook: string | null;
   bicepResult: BicepResult | null;
+  bicepPreview?: BicepPreview | null;
   terraformResult: IacFilesResult | null;
   armResult: IacFilesResult | null;
   costEstimate: CostEstimate | null;
@@ -141,7 +158,7 @@ export default function ArchitectureTabContent(props: ArchitectureTabContentProp
   const styles = useStyles();
   const {
     activeTab, explanation, diagramXml, diagramHtml, diagramNodes, runbook,
-    bicepResult, costEstimate, adrRecord, wafResults, networkTopology, networkHtml,
+    bicepResult, bicepPreview, costEstimate, adrRecord, wafResults, networkTopology, networkHtml,
     projectTimeline, ganttHtml, popoverServiceLabel, popoverStreamText, popoverLoading,
     generatingTab, isAnyStreaming, deliverableStreaming, requirements,
     generateDeliverable, downloadDiagram, openInDrawio, setShowEditor,
@@ -280,6 +297,7 @@ export default function ArchitectureTabContent(props: ArchitectureTabContentProp
                 </div>
                 <Text weight="semibold" size={300} block style={{ marginBottom: 6 }}>main.bicep</Text>
                 <div className={styles.prose}><pre><code>{bicepResult.bicep_code}</code></pre></div>
+                <BicepPreviewCard preview={bicepPreview} />
                 {bicepResult.param_file && (
                   <>
                     <Text weight="semibold" size={300} block style={{ margin: "16px 0 6px" }}>main.bicepparam</Text>
@@ -373,6 +391,32 @@ export default function ArchitectureTabContent(props: ArchitectureTabContentProp
               <Badge appearance="filled" color="success" size="large">${costEstimate.total_monthly_estimate.toLocaleString()}/mo</Badge>
               <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>{costEstimate.currency} · estimated</Text>
             </div>
+            {costEstimate.sku_validation && (() => {
+              const v = costEstimate.sku_validation;
+              const firstSwapped = costEstimate.line_items.find((li) => li.sku_swapped);
+              return (
+                <div style={{ display: "flex", flexDirection: "column", gap: "6px", marginBottom: "10px" }}>
+                  <Text size={100} style={{ color: tokens.colorNeutralForeground3 }}>
+                    Live prices from {v.data_source} · queried {relativeTime(v.last_queried_at)}
+                  </Text>
+                  {v.swapped > 0 && (
+                    <MessageBar intent="warning">
+                      <MessageBarBody>
+                        {v.swapped} of {v.total_lines} SKUs were auto-corrected
+                        {firstSwapped?.requested_sku ? ` (e.g. ${firstSwapped.requested_sku} → ${firstSwapped.sku})` : ""}. Verify before committing.
+                      </MessageBarBody>
+                    </MessageBar>
+                  )}
+                  {v.missing > 0 && (
+                    <MessageBar intent="error">
+                      <MessageBarBody>
+                        {v.missing} SKU{v.missing === 1 ? "" : "s"} could not be priced — they will show as $0 in the total.
+                      </MessageBarBody>
+                    </MessageBar>
+                  )}
+                </div>
+              );
+            })()}
             <Table size="small">
               <TableHeader>
                 <TableRow>
@@ -387,7 +431,17 @@ export default function ArchitectureTabContent(props: ArchitectureTabContentProp
                 {costEstimate.line_items.map((item, i) => (
                   <TableRow key={i}>
                     <TableCell><Text size={200}>{item.service}</Text></TableCell>
-                    <TableCell><Text size={200}>{item.sku || "—"}</Text></TableCell>
+                    <TableCell>
+                      <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
+                        <Text size={200}>{item.sku || "—"}</Text>
+                        {item.sku_swapped && (
+                          <Badge appearance="filled" color="warning" size="small" title={item.requested_sku ? `Requested: ${item.requested_sku}` : undefined}>Auto-corrected</Badge>
+                        )}
+                        {item.sku_status === "unknown" && (
+                          <Badge appearance="filled" color="danger" size="small">No price</Badge>
+                        )}
+                      </div>
+                    </TableCell>
                     <TableCell><Text size={200}>{item.region || "—"}</Text></TableCell>
                     <TableCell><Text size={200}>{item.quantity}</Text></TableCell>
                     <TableCell><Text size={200}>{item.monthly_estimate != null ? `$${item.monthly_estimate.toLocaleString()}` : "—"}</Text></TableCell>

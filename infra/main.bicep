@@ -58,10 +58,20 @@ param postgresAdminPassword string
 param deploySearch bool = false
 
 @description('Set true to deploy Front Door fronting the frontend container app.')
-param deployFrontDoor bool = true
+param deployFrontDoor bool = false
 
 @description('Email address that receives on-call alerts.')
 param oncallEmail string
+
+@description('Entra ID tenant ID (single-tenant app reg lives here).')
+param entraTenantId string
+
+@description('API app registration audience (client ID or api://<id> URI). Tokens issued for this audience authorise /api/* calls.')
+param entraAudience string
+
+@description('Fernet key for at-rest secret encryption (Base64, 32 bytes). Generate once: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"')
+@secure()
+param secretEncryptionKey string
 
 var rgName = '${prefix}-${env}-rg'
 
@@ -160,6 +170,16 @@ module postgres 'modules/postgres.bicep' = {
   }
 }
 
+module kvSecrets 'modules/keyvault-secrets.bicep' = {
+  name: 'kv-secrets'
+  scope: rg
+  params: {
+    keyVaultName: kv.outputs.name
+    databaseUrl: 'postgresql+asyncpg://${postgres.outputs.administratorLogin}:${postgresAdminPassword}@${postgres.outputs.serverFqdn}:5432/${postgres.outputs.databaseName}?ssl=require'
+    secretEncryptionKey: secretEncryptionKey
+  }
+}
+
 module monitoring 'modules/monitoring.bicep' = {
   name: 'monitoring'
   scope: rg
@@ -204,6 +224,7 @@ module acaEnv 'modules/containerapps-env.bicep' = {
 module backendApp 'modules/containerapp.bicep' = {
   name: 'app-backend'
   scope: rg
+  dependsOn: [ kvSecrets ]
   params: {
     name: '${prefix}-${env}-backend'
     location: location
@@ -225,6 +246,24 @@ module backendApp 'modules/containerapp.bicep' = {
       { name: 'AZURE_OPENAI_DEPLOYMENT', value: 'gpt-4.1' }
       { name: 'AZURE_OPENAI_MINI_DEPLOYMENT', value: 'gpt-4o-mini' }
       { name: 'ENABLE_MCP', value: 'true' }
+      { name: 'AUTH_ENABLED', value: 'true' }
+      { name: 'ENTRA_TENANT_ID', value: entraTenantId }
+      { name: 'ENTRA_AUDIENCE', value: entraAudience }
+      { name: 'SESSION_COOKIE_SECURE', value: 'true' }
+      { name: 'DATABASE_URL', secretRef: 'database-url' }
+      { name: 'SECRET_ENCRYPTION_KEY', secretRef: 'secret-encryption-key' }
+    ]
+    secrets: [
+      {
+        name: 'database-url'
+        keyVaultUrl: '${kv.outputs.uri}secrets/database-url'
+        identity: identity.outputs.id
+      }
+      {
+        name: 'secret-encryption-key'
+        keyVaultUrl: '${kv.outputs.uri}secrets/secret-encryption-key'
+        identity: identity.outputs.id
+      }
     ]
     volumeMounts: [
       {
@@ -276,6 +315,7 @@ output openAiEndpoint string = openai.outputs.endpoint
 output vnetId string = network.outputs.vnetId
 output postgresFqdn string = postgres.outputs.serverFqdn
 output appInsightsConnectionString string = monitoring.outputs.appInsightsConnectionString
+#disable-next-line BCP318
 output frontDoorHostname string = deployFrontDoor ? frontdoor.outputs.endpointHostname : ''
 
 module frontdoor 'modules/frontdoor.bicep' = if (deployFrontDoor) {

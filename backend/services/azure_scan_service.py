@@ -16,6 +16,7 @@ Anything heavier (RBAC over-privilege, cost delta) is left for v2.
 """
 from __future__ import annotations
 
+import re
 from typing import Iterable
 
 from azure.identity import DefaultAzureCredential
@@ -31,6 +32,11 @@ log = get_logger("azure_scan_service")
 
 REQUIRED_TAGS = ("environment", "owner", "costCenter")
 MANAGEMENT_PORTS = {"22", "3389", "5985", "5986", "1433", "3306", "5432"}
+
+_RESOURCE_RE = re.compile(
+    r"^\s*resource\s+\S+\s+'([\w.]+/[\w./]+)@[\d\-]+(?:-preview)?'",
+    re.M,
+)
 
 _credential: DefaultAzureCredential | None = None
 _client: ResourceGraphClient | None = None
@@ -214,8 +220,60 @@ def scan_drift(
 
 
 __all__ = [
+    "extract_expected_types_from_bicep",
     "list_open_nsg_rules",
     "list_public_ips",
     "list_resources",
     "scan_drift",
+    "scan_drift_against_design",
 ]
+
+
+def extract_expected_types_from_bicep(bicep_code: str) -> list[str]:
+    """Return unique ARM resource types declared in Bicep source.
+
+    Cheap regex extraction — does not require valid Bicep compilation.
+    Useful for drift coverage checks even on imported/edited templates.
+    """
+    if not bicep_code:
+        return []
+    return sorted({m.group(1) for m in _RESOURCE_RE.finditer(bicep_code)})
+
+
+def scan_drift_against_design(
+    design_name: str,
+    bicep_code: str,
+    subscription_id: str | None = None,
+) -> dict:
+    """Drift report comparing a live subscription against the user's Bicep design."""
+    expected = extract_expected_types_from_bicep(bicep_code)
+    sub = _resolve_subscription(subscription_id)
+    with tracer.start_as_current_span(
+        "azure.scan.drift_against_design",
+        attributes={"azure.subscription_id": sub, "design": design_name},
+    ):
+        log.info("scan_design.start", subscription=sub, design=design_name, expected=len(expected))
+        resources = list_resources(sub)
+        public_ips = list_public_ips(sub)
+        open_rules = list_open_nsg_rules(sub)
+        report = {
+            "subscription_id": sub,
+            "design": {"name": design_name, "expected_types": expected},
+            "summary": {
+                "total_resources": len(resources),
+                "public_ips": len(public_ips),
+            },
+            "findings": {
+                "service_coverage": _service_coverage(resources, expected),
+                "tag_violations": _tag_violations(resources),
+                "public_exposure": _public_exposure(public_ips),
+                "open_management_ports": _management_port_exposure(open_rules),
+            },
+        }
+        log.info(
+            "scan_design.complete",
+            subscription=sub,
+            design=design_name,
+            missing=len(report["findings"]["service_coverage"]["missing"]),
+        )
+        return report

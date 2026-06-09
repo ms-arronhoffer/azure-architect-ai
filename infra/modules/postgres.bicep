@@ -85,3 +85,4 @@ output name string = pg.name
 output serverName string = pg.name
 output serverFqdn string = pg.properties.fullyQualifiedDomainName
 output databaseName string = db.name
+output administratorLogin string = administratorLogin

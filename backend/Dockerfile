@@ -19,6 +19,9 @@ RUN npm install -g @azure/mcp@latest
 RUN curl -sL https://aka.ms/InstallAzureCLIDeb | bash && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
+# Pre-install Bicep CLI so bicep_service.build_and_preview avoids first-call download.
+RUN az bicep install
+
 WORKDIR /app
 
 COPY requirements.txt .

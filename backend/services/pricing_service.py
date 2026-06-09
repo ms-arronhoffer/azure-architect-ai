@@ -1,9 +1,11 @@
 """Azure Retail Pricing API wrapper — no auth required."""
 
+from datetime import datetime, timezone
+
 import httpx
-from typing import Optional
 
 PRICING_API = "https://prices.azure.com/api/retail/prices"
+PRICING_DATA_SOURCE = "Azure Retail Pricing API (prices.azure.com)"
 
 # Maps common service labels to Azure Retail Pricing API service names
 SERVICE_NAME_MAP = {
@@ -73,15 +75,31 @@ async def estimate_line_item(
     hours_per_month: float = 730.0,
     region: str = "eastus",
 ) -> dict:
-    """Estimate monthly cost for one line item."""
+    """Estimate monthly cost for one line item. If the requested SKU is not found,
+    consult validate_sku for suggestions and auto-swap to the first suggestion."""
     prices = await get_price(service, sku, region)
+    requested_sku = sku
+    sku_swapped = False
+
+    # On miss with a specific SKU, try to recover via validate_sku suggestions
+    if not prices and sku:
+        validation = await validate_sku(service, sku, region)
+        suggestions = validation.get("suggestions") or []
+        if suggestions:
+            sku = suggestions[0]
+            sku_swapped = True
+            prices = await get_price(service, sku, region)
+
     if not prices:
         return {
             "service": service,
-            "sku": sku,
+            "sku": requested_sku,
+            "requested_sku": requested_sku,
+            "region": region,
             "quantity": quantity,
             "unit_price": None,
             "monthly_estimate": None,
+            "sku_status": "unknown",
             "note": "Price not found — check Azure Pricing Calculator for this SKU.",
         }
 
@@ -110,7 +128,7 @@ async def estimate_line_item(
     else:
         monthly = unit_price * quantity
 
-    return {
+    result = {
         "service": service,
         "sku": best.get("skuName", sku),
         "region": region,
@@ -119,8 +137,12 @@ async def estimate_line_item(
         "unit_of_measure": unit_of_measure,
         "monthly_estimate": round(monthly, 2),
         "currency": best.get("currencyCode", "USD"),
-        "source": "Azure Retail Pricing API",
+        "source": PRICING_DATA_SOURCE,
     }
+    if sku_swapped:
+        result["requested_sku"] = requested_sku
+        result["sku_swapped"] = True
+    return result
 
 
 async def validate_sku(service: str, sku: str, region: str = "eastus") -> dict:
@@ -198,10 +220,19 @@ async def estimate_architecture(line_items: list[dict]) -> dict:
     results = await asyncio.gather(*tasks)
 
     total = sum(r["monthly_estimate"] or 0 for r in results)
+    swapped = sum(1 for r in results if r.get("sku_swapped"))
+    missing = sum(1 for r in results if r.get("monthly_estimate") is None)
     return {
         "line_items": results,
         "total_monthly_estimate": round(total, 2),
         "currency": "USD",
+        "sku_validation": {
+            "total_lines": len(results),
+            "swapped": swapped,
+            "missing": missing,
+            "data_source": PRICING_DATA_SOURCE,
+            "last_queried_at": datetime.now(timezone.utc).isoformat(),
+        },
         "disclaimer": (
             "Estimates based on Azure Retail (pay-as-you-go) pricing. "
             "Reserved Instances can reduce compute costs 40-72%. "

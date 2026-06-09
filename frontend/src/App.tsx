@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { FluentProvider, makeStyles, tokens } from "@fluentui/react-components";
 import { azureDarkTheme, azureLightTheme } from "./theme";
 import SideNav from "./components/SideNav";
@@ -27,10 +27,12 @@ import ReliabilityPanel from "./components/ReliabilityPanel";
 import TroubleshootingPanel from "./components/TroubleshootingPanel";
 import WhatsNewPanel from "./components/WhatsNewPanel";
 import ServiceHealthPanel from "./components/ServiceHealthPanel";
+import TelemetryDebugDrawer from "./components/TelemetryDebugDrawer";
 import { useConversationHistory } from "./hooks/useConversationHistory";
 import { useWorkloadContext } from "./hooks/useWorkloadContext";
 import { useSettings } from "./hooks/useSettings";
 import { useServiceHealth } from "./hooks/useServiceHealth";
+import { track } from "./utils/telemetry";
 import type { Mode, ConversationRecord, ChatMessage } from "./types";
 
 const useStyles = makeStyles({
@@ -66,6 +68,7 @@ export default function App() {
   const [historyOpen, setHistoryOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [contextOpen, setContextOpen] = useState(false);
+  const [telemetryOpen, setTelemetryOpen] = useState(false);
   const [selectedConversation, setSelectedConversation] = useState<ConversationRecord | null>(null);
   const [refinementSeed, setRefinementSeed] = useState<{ id: string; messages: ChatMessage[]; suggestedReplies?: string[] } | null>(null);
   const [selectedPanelSession, setSelectedPanelSession] = useState<ConversationRecord | null>(null);
@@ -90,7 +93,19 @@ export default function App() {
     setSelectedConversation(null);
     setSelectedPanelSession(null);
     setRefinementSeed(null);
+    track({ kind: "mode_open", mode: m });
   }
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.ctrlKey && e.shiftKey && (e.key === "T" || e.key === "t")) {
+        e.preventDefault();
+        setTelemetryOpen((v) => !v);
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   function handleLoadConversation(conv: ConversationRecord) {
     setMode(conv.mode);
@@ -148,7 +163,7 @@ export default function App() {
       return <IntakePanel key="intake" onContinueIn={handleContinueIn} />;
     }
     if (mode === "analyze") {
-      return <AnalysisPanel key="analyze" onRefine={handleRefine} />;
+      return <AnalysisPanel key="analyze" onRefine={handleRefine} onContinueIn={handleContinueIn} />;
     }
     if (ARCH_MODES.includes(mode)) {
       return (
@@ -267,6 +282,7 @@ export default function App() {
         onSave={(ctx) => { setWorkloadContext(ctx); setContextOpen(false); }}
         onClear={() => { clearContext(); setContextOpen(false); }}
       />
+      <TelemetryDebugDrawer open={telemetryOpen} onClose={() => setTelemetryOpen(false)} />
     </FluentProvider>
   );
 }

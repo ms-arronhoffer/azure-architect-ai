@@ -11,6 +11,9 @@ import {
   Tooltip,
   Select,
   Label,
+  MessageBar,
+  MessageBarBody,
+  MessageBarActions,
 } from "@fluentui/react-components";
 import {
   ArrowDownloadRegular,
@@ -32,8 +35,10 @@ import DiagramEditor from "./DiagramEditor";
 import ArchitectureTabContent, { type ResultTab, type IacFilesResult, type IacKind } from "./architecture/ArchitectureTabContent";
 import { parseDiagramNodes } from "../utils/diagramParser";
 import { toPromptPrefix } from "../hooks/useWorkloadContext";
+import { useWorkloadSpec } from "../hooks/useWorkloadSpec";
+import { specToArchitectureForm } from "../utils/specMappers";
 import { exportArchitectureToDocx } from "../utils/architectureDocxExport";
-import type { SseEvent, Citation, BicepResult, CostEstimate, AdrRecord, ChatMessage, WorkloadContext, NetworkTopology, WafPillarResult, Mode, ConversationRecord, ProjectTimeline } from "../types";
+import type { SseEvent, Citation, BicepResult, BicepPreview, CostEstimate, AdrRecord, ChatMessage, WorkloadContext, NetworkTopology, WafPillarResult, Mode, ConversationRecord, ProjectTimeline } from "../types";
 import type { DiagramNode } from "../utils/diagramParser";
 import { apiPath } from "../config/api";
 
@@ -248,6 +253,7 @@ export default function ArchitecturePanel({ mode = "architecture", onRefine, onM
   const [diagramXml, setDiagramXml] = useState<string | null>(null);
   const [runbook, setRunbook] = useState<string | null>(null);
   const [bicepResult, setBicepResult] = useState<BicepResult | null>(null);
+  const [bicepPreview, setBicepPreview] = useState<BicepPreview | null>(null);
   const [terraformResult, setTerraformResult] = useState<IacFilesResult | null>(null);
   const [armResult, setArmResult] = useState<IacFilesResult | null>(null);
   const [costEstimate, setCostEstimate] = useState<CostEstimate | null>(null);
@@ -282,12 +288,36 @@ export default function ArchitecturePanel({ mode = "architecture", onRefine, onM
 
   const sessionId = useRef(crypto.randomUUID()).current;
 
+  const { spec } = useWorkloadSpec();
+  const [loadedFromSpec, setLoadedFromSpec] = useState(false);
+  const autofillAppliedRef = useRef(false);
+
+  useEffect(() => {
+    if (autofillAppliedRef.current) return;
+    if (!spec.name) return;
+    if (initialSession) return;
+    if (requirements.trim() || constraints.trim()) return;
+    const form = specToArchitectureForm(spec);
+    if (form.requirements) setRequirements(form.requirements);
+    if (form.constraints) setConstraints(form.constraints);
+    setLoadedFromSpec(true);
+    autofillAppliedRef.current = true;
+  }, [spec.name]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  function handleClearAutofill() {
+    setRequirements("");
+    setConstraints("");
+    setLoadedFromSpec(false);
+    autofillAppliedRef.current = true;
+  }
+
   useEffect(() => {
     if (!initialSession?.structuredResult) return;
     const sr = initialSession.structuredResult as {
       explanation?: string;
       diagramXml?: string | null;
       bicepResult?: BicepResult | null;
+      bicepPreview?: BicepPreview | null;
       terraformResult?: IacFilesResult | null;
       armResult?: IacFilesResult | null;
       costEstimate?: CostEstimate | null;
@@ -300,6 +330,7 @@ export default function ArchitecturePanel({ mode = "architecture", onRefine, onM
     if (sr.explanation) setExplanation(sr.explanation);
     if (sr.diagramXml) setDiagramXml(sr.diagramXml);
     if (sr.bicepResult) setBicepResult(sr.bicepResult);
+    if (sr.bicepPreview) setBicepPreview(sr.bicepPreview);
     if (sr.terraformResult) setTerraformResult(sr.terraformResult);
     if (sr.armResult) setArmResult(sr.armResult);
     if (sr.costEstimate) setCostEstimate(sr.costEstimate);
@@ -403,6 +434,7 @@ window.mxBasePath = 'https://viewer.diagrams.net/';
     setDiagramXml(null);
     setRunbook(null);
     setBicepResult(null);
+    setBicepPreview(null);
     setTerraformResult(null);
     setArmResult(null);
     setCostEstimate(null);
@@ -492,6 +524,7 @@ window.mxBasePath = 'https://viewer.diagrams.net/';
     if (event.type === "diagram") { setDiagramXml(event.xml); }
     if (event.type === "runbook") setRunbook(event.markdown);
     if (event.type === "bicep") setBicepResult({ bicep_code: event.code, param_file: event.param_file, deploy_commands: event.deploy_commands ?? [], notes: event.notes ?? [] });
+    if (event.type === "bicep_preview") setBicepPreview(event.preview);
     if (event.type === "terraform_files") setTerraformResult({ files: event.files, pattern_name: event.pattern_name, notes: event.notes });
     if (event.type === "arm_files") setArmResult({ files: event.files, pattern_name: event.pattern_name, notes: event.notes });
     if (event.type === "cost_estimate") setCostEstimate(event.estimate);
@@ -511,6 +544,7 @@ window.mxBasePath = 'https://viewer.diagrams.net/';
     let localExplanation = "";
     let localDiagramXml: string | null = null;
     let localBicepResult: BicepResult | null = null;
+    let localBicepPreview: BicepPreview | null = null;
     let localTerraformResult: IacFilesResult | null = null;
     let localArmResult: IacFilesResult | null = null;
     let localCostEstimate: CostEstimate | null = null;
@@ -523,6 +557,7 @@ window.mxBasePath = 'https://viewer.diagrams.net/';
       if (event.type === "token") localExplanation += event.content;
       if (event.type === "diagram") localDiagramXml = event.xml;
       if (event.type === "bicep") localBicepResult = { bicep_code: event.code, param_file: event.param_file, deploy_commands: event.deploy_commands ?? [], notes: event.notes ?? [] };
+      if (event.type === "bicep_preview") localBicepPreview = event.preview;
       if (event.type === "terraform_files") localTerraformResult = { files: event.files, pattern_name: event.pattern_name, notes: event.notes };
       if (event.type === "arm_files") localArmResult = { files: event.files, pattern_name: event.pattern_name, notes: event.notes };
       if (event.type === "cost_estimate") localCostEstimate = event.estimate;
@@ -543,6 +578,7 @@ window.mxBasePath = 'https://viewer.diagrams.net/';
         explanation: localExplanation,
         diagramXml: localDiagramXml,
         bicepResult: localBicepResult,
+        bicepPreview: localBicepPreview,
         terraformResult: localTerraformResult,
         armResult: localArmResult,
         costEstimate: localCostEstimate,
@@ -706,6 +742,14 @@ window.mxBasePath = 'https://viewer.diagrams.net/';
             </div>
 
             {/* Requirements */}
+            {loadedFromSpec && (
+              <MessageBar intent="info">
+                <MessageBarBody>Loaded from Requirements Studio.</MessageBarBody>
+                <MessageBarActions>
+                  <Button size="small" appearance="transparent" onClick={handleClearAutofill}>Clear</Button>
+                </MessageBarActions>
+              </MessageBar>
+            )}
             <div>
               <span className={styles.sectionLabel}>Requirements</span>
               <div className={styles.reqBox}>
@@ -838,6 +882,7 @@ window.mxBasePath = 'https://viewer.diagrams.net/';
               diagramNodes={diagramNodes}
               runbook={runbook}
               bicepResult={bicepResult}
+              bicepPreview={bicepPreview}
               terraformResult={terraformResult}
               armResult={armResult}
               costEstimate={costEstimate}
