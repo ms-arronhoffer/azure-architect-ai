@@ -34,9 +34,9 @@ param openAiDeployments array = [
     capacity: 50
   }
   {
-    name: 'gpt-4o-mini'
-    model: 'gpt-4o-mini'
-    version: '2024-07-18'
+    name: 'gpt-4.1-mini'
+    model: 'gpt-4.1-mini'
+    version: '2025-04-14'
     capacity: 50
   }
 ]
@@ -244,7 +244,7 @@ module backendApp 'modules/containerapp.bicep' = {
       { name: 'AZURE_OPENAI_ENDPOINT', value: openai.outputs.endpoint }
       { name: 'AZURE_CLIENT_ID', value: identity.outputs.clientId }
       { name: 'AZURE_OPENAI_DEPLOYMENT', value: 'gpt-4.1' }
-      { name: 'AZURE_OPENAI_MINI_DEPLOYMENT', value: 'gpt-4o-mini' }
+      { name: 'AZURE_OPENAI_MINI_DEPLOYMENT', value: 'gpt-4.1-mini' }
       { name: 'ENABLE_MCP', value: 'true' }
       { name: 'AUTH_ENABLED', value: 'true' }
       { name: 'ENTRA_TENANT_ID', value: entraTenantId }

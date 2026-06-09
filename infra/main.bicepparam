@@ -2,7 +2,7 @@ using './main.bicep'
 
 param prefix = 'aarch'
 param env = 'dev'
-param location = 'eastus2'
+param location = 'eastus'
 
 param tags = {
   app: 'azure-architect-ai'
@@ -26,9 +26,9 @@ param openAiDeployments = [
     capacity: 50
   }
   {
-    name: 'gpt-4o-mini'
-    model: 'gpt-4o-mini'
-    version: '2024-07-18'
+    name: 'gpt-4.1-mini'
+    model: 'gpt-4.1-mini'
+    version: '2025-04-14'
     capacity: 50
   }
 ]

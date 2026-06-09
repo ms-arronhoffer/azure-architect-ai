@@ -23,7 +23,7 @@ permissions:
   contents: read
 
 env:
-  AZURE_LOCATION: eastus2
+  AZURE_LOCATION: eastus
   DEPLOYMENT_NAME: main
   IMAGE_TAG: ${{ github.sha }}
 
