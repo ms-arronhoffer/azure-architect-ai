@@ -3,7 +3,7 @@ import json
 import os
 import re
 
-_AZURE_XML_PATH = os.path.join(os.path.dirname(__file__), "..", "..", "icons", "azure.xml")
+_AZURE_XML_PATH = os.path.join(os.path.dirname(__file__), "..", "icons", "azure.xml")
 
 _FALLBACK_STYLE = (
     "rounded=1;whiteSpace=wrap;fillColor=#dae8fc;strokeColor=#6c8ebf;"

@@ -12,7 +12,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certifi
 RUN npm install -g @azure/mcp@latest && npm cache clean --force
 
 WORKDIR /app
-COPY requirements.txt .
+COPY backend/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 FROM deps AS runtime
@@ -20,7 +20,8 @@ FROM deps AS runtime
 # Non-root user for runtime
 RUN useradd --create-home --uid 1000 app
 WORKDIR /app
-COPY --chown=app:app . .
+COPY --chown=app:app backend/ .
+COPY --chown=app:app icons/ icons/
 
 USER app
 EXPOSE 8000
