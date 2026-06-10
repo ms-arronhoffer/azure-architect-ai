@@ -27,13 +27,25 @@ import {
   ShieldErrorRegular,
   BranchRegular,
   HeartPulseRegular,
+  DismissRegular,
 } from "@fluentui/react-icons";
 import ChatMessage from "./ChatMessage";
 import ContextStrip from "./ContextStrip";
 import { useChat } from "../hooks/useChat";
 import { toPromptPrefix } from "../hooks/useWorkloadContext";
 import { useWorkloadSpec, toSpecPromptPrefix } from "../hooks/useWorkloadSpec";
+import { apiFetch } from "../config/api";
 import type { ChatMessage as ChatMessageType, Mode, ModelConfig, WorkloadContext } from "../types";
+
+// All file types the model supports natively (images, PDF) plus server-parsed docs
+const ACCEPTED_FILE_TYPES =
+  "image/png,image/jpeg,image/gif,image/webp,.pdf,.docx,.pptx,.txt,.md,.json,.yaml,.yml,.bicep,.tf,.ps1,.sh,.csv";
+
+interface Attachment {
+  name: string;
+  data: string; // base64 data URL for images/PDF; extracted text for DOCX/PPTX
+  kind: "image" | "pdf" | "doc";
+}
 
 interface ModeConfig {
   placeholder: string;
@@ -472,6 +484,7 @@ export default function ChatPanel({ mode, conversationId: savedId, initialMessag
   const fileInputRef = useRef<HTMLInputElement>(null);
   const config = MODE_CONFIG[effectiveMode] ?? MODE_CONFIG[mode];
   const isFirstTopicMount = useRef(true);
+  const [attachments, setAttachments] = useState<Attachment[]>([]);
 
   useEffect(() => {
     if (isFirstTopicMount.current) { isFirstTopicMount.current = false; return; }
@@ -484,7 +497,9 @@ export default function ChatPanel({ mode, conversationId: savedId, initialMessag
     if (textareaRef.current) textareaRef.current.value = "";
     const prefix = workloadContext ? toPromptPrefix(workloadContext) : toSpecPromptPrefix(spec);
     const finalVal = messages.length === 0 && prefix ? prefix + val : val;
-    sendMessage(finalVal);
+    const attachmentData = attachments.map((a) => a.data);
+    setAttachments([]);
+    sendMessage(finalVal, attachmentData.length > 0 ? attachmentData : undefined);
   }
 
   function handleKey(e: KeyboardEvent<HTMLTextAreaElement>) {
@@ -501,9 +516,50 @@ export default function ChatPanel({ mode, conversationId: savedId, initialMessag
     }
   }
 
-  function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
+  async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
+    e.target.value = "";
+
+    const lower = file.name.toLowerCase();
+
+    if (file.type.startsWith("image/")) {
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        const dataUrl = ev.target?.result as string;
+        setAttachments((prev) => [...prev, { name: file.name, data: dataUrl, kind: "image" }]);
+      };
+      reader.readAsDataURL(file);
+      return;
+    }
+
+    if (lower.endsWith(".pdf")) {
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        const dataUrl = ev.target?.result as string;
+        setAttachments((prev) => [...prev, { name: file.name, data: dataUrl, kind: "pdf" }]);
+      };
+      reader.readAsDataURL(file);
+      return;
+    }
+
+    if (lower.endsWith(".docx") || lower.endsWith(".pptx")) {
+      try {
+        const body = await file.arrayBuffer();
+        const resp = await apiFetch("/api/parse", {
+          method: "POST",
+          body,
+          headers: { "X-Filename": file.name, "Content-Type": "application/octet-stream" },
+        });
+        if (resp.ok) {
+          const { text } = await resp.json() as { text: string };
+          setAttachments((prev) => [...prev, { name: file.name, data: text, kind: "doc" }]);
+        }
+      } catch { /* ignore */ }
+      return;
+    }
+
+    // Text/code files — paste directly into textarea
     const reader = new FileReader();
     reader.onload = (ev) => {
       const text = ev.target?.result as string;
@@ -513,7 +569,6 @@ export default function ChatPanel({ mode, conversationId: savedId, initialMessag
       }
     };
     reader.readAsText(file);
-    e.target.value = "";
   }
 
   function handleBuildDeckClick() {
@@ -613,10 +668,37 @@ export default function ChatPanel({ mode, conversationId: savedId, initialMessag
         <input
           ref={fileInputRef}
           type="file"
-          accept=".txt,.md,.json,.yaml,.yml,.bicep,.tf,.ps1,.sh,.csv"
+          accept={ACCEPTED_FILE_TYPES}
           style={{ display: "none" }}
           onChange={handleFileUpload}
         />
+        {attachments.length > 0 && (
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", padding: "4px 0 6px" }}>
+            {attachments.map((att, i) => (
+              <div
+                key={i}
+                style={{
+                  display: "flex", alignItems: "center", gap: "4px",
+                  background: "rgba(0, 120, 212, 0.1)",
+                  border: "1px solid rgba(0, 120, 212, 0.3)",
+                  borderRadius: "6px", padding: "2px 6px 2px 8px",
+                  fontSize: "12px", color: tokens.colorNeutralForeground2,
+                  maxWidth: "200px",
+                }}
+              >
+                {att.kind === "image" ? "IMG" : att.kind === "pdf" ? "PDF" : "DOC"}
+                <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "120px" }}>{att.name}</span>
+                <Button
+                  appearance="transparent"
+                  size="small"
+                  icon={<DismissRegular style={{ fontSize: "10px" }} />}
+                  onClick={() => setAttachments((prev) => prev.filter((_, j) => j !== i))}
+                  style={{ minWidth: "unset", padding: "0 2px", height: "16px" }}
+                />
+              </div>
+            ))}
+          </div>
+        )}
         <div className={styles.inputBox}>
           <textarea
             ref={textareaRef}

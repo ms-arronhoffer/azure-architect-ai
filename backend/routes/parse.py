@@ -1,4 +1,4 @@
-"""Extract text from uploaded DOCX or PDF files."""
+"""Extract text from uploaded DOCX, PDF, or PPTX files."""
 
 import io
 import zipfile
@@ -21,8 +21,10 @@ async def parse_document(request: Request) -> JSONResponse:
         text = _extract_pdf(data)
     elif lower.endswith(".docx"):
         text = _extract_docx(data, filename)
+    elif lower.endswith(".pptx"):
+        text = _extract_pptx(data)
     else:
-        raise HTTPException(status_code=415, detail="Only .pdf and .docx files are supported.")
+        raise HTTPException(status_code=415, detail="Only .pdf, .docx, and .pptx files are supported.")
 
     return JSONResponse({"text": text, "filename": filename})
 
@@ -60,3 +62,24 @@ def _extract_docx(data: bytes, filename: str) -> str:
         return "\n\n".join(parts)
     except Exception as exc:
         raise HTTPException(status_code=422, detail=f"Could not read DOCX: {exc}")
+
+
+def _extract_pptx(data: bytes) -> str:
+    try:
+        from pptx import Presentation
+    except ImportError:
+        raise HTTPException(status_code=500, detail="python-pptx not installed.")
+    try:
+        prs = Presentation(io.BytesIO(data))
+        parts = []
+        for slide_num, slide in enumerate(prs.slides, 1):
+            slide_texts = [
+                shape.text.strip()
+                for shape in slide.shapes
+                if hasattr(shape, "text") and shape.text.strip()
+            ]
+            if slide_texts:
+                parts.append(f"[Slide {slide_num}]\n" + "\n".join(slide_texts))
+        return "\n\n".join(parts)
+    except Exception as exc:
+        raise HTTPException(status_code=422, detail=f"Could not read PPTX: {exc}")

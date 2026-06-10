@@ -38,6 +38,7 @@ class ChatRequest(BaseModel):
     mode: str = "qa"
     messages: list[ChatMessage]
     llm_config: ModelConfig | None = None
+    attachments: list[str] | None = None
 
 
 # Modes that get mandatory doc pre-retrieval before the LLM call.
@@ -62,7 +63,7 @@ async def _prefetch_docs(mode: str, user_message: str) -> list[dict]:
     return await cached_learn_search(query=query, top=5)
 
 
-async def _stream_chat(mode: str, messages: list[dict], provider: str = "azure", model: str = "", github_token: str = "") -> AsyncGenerator[str, None]:
+async def _stream_chat(mode: str, messages: list[dict], provider: str = "azure", model: str = "", github_token: str = "", attachments: list[str] | None = None) -> AsyncGenerator[str, None]:
     try:
         client, deployment = resolve_client_and_model(mode, provider, model, github_token)
     except ValueError as e:
@@ -70,6 +71,19 @@ async def _stream_chat(mode: str, messages: list[dict], provider: str = "azure",
         return
     system = get_system_prompt(mode)
     tools = [] if model in TOOL_INCOMPATIBLE_MODELS else get_tools_for_mode(mode)
+
+    # Apply attachments to the last user message as a content array
+    if attachments and messages:
+        last = messages[-1]
+        parts: list[dict] = [{"type": "text", "text": last["content"]}]
+        for att in attachments:
+            if att.startswith("data:image/"):
+                parts.append({"type": "image_url", "image_url": {"url": att, "detail": "high"}})
+            elif att.startswith("data:application/pdf"):
+                parts.append({"type": "file", "file": {"filename": "attachment.pdf", "file_data": att}})
+            else:
+                parts[0]["text"] += f"\n\n{att}"
+        messages = messages[:-1] + [{**last, "content": parts}]
 
     full_messages = [{"role": "system", "content": system}] + messages
     citations: list[dict] = []
@@ -418,7 +432,7 @@ async def chat(req: ChatRequest, claims=Depends(require_user)):
         async with session_scope() as session:
             github_token = await get_secret(session, user_id, "github_pat") or ""
     return StreamingResponse(
-        _stream_chat(req.mode, messages, provider, model, github_token),
+        _stream_chat(req.mode, messages, provider, model, github_token, req.attachments or []),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )

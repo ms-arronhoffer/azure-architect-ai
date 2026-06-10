@@ -30,7 +30,7 @@ export function useChat(mode: Mode, _conversationId?: string, onSave?: (msgs: Ch
   }, [messages, onSave]);
 
   const sendMessage = useCallback(
-    async (content: string) => {
+    async (content: string, attachments?: string[]) => {
       const userMsg: ChatMessage = {
         id: crypto.randomUUID(),
         role: "user",
@@ -52,7 +52,12 @@ export function useChat(mode: Mode, _conversationId?: string, onSave?: (msgs: Ch
         content: m.content,
       }));
 
-      await stream("/api/chat", { mode, messages: apiMessages, llm_config: modelConfig ?? null }, (event) => {
+      await stream("/api/chat", {
+        mode,
+        messages: apiMessages,
+        llm_config: modelConfig ?? null,
+        attachments: attachments?.length ? attachments : null,
+      }, (event) => {
         setMessages((prev) =>
           prev.map((m) => {
             if (m.id !== assistantId) return m;
@@ -90,7 +95,7 @@ export function useChat(mode: Mode, _conversationId?: string, onSave?: (msgs: Ch
   }, []);
 
   // Keep a stable ref to sendMessage so the auto-send effect doesn't re-run.
-  const sendRef = useRef(sendMessage);
+  const sendRef = useRef<(content: string, attachments?: string[]) => Promise<void>>(sendMessage);
   sendRef.current = sendMessage;
   const hasAutoSent = useRef(false);
   useEffect(() => {
