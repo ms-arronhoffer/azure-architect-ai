@@ -48,7 +48,7 @@ class RagDocument(Base):
     embedding: Mapped[list] = mapped_column(JSON, nullable=False)
     doc_metadata: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
     updated_at: Mapped[dt.datetime] = mapped_column(
-        nullable=False, default=lambda: dt.datetime.now(dt.UTC)
+        nullable=False, default=lambda: dt.datetime.now(dt.UTC).replace(tzinfo=None)
     )
 
 
@@ -61,7 +61,7 @@ class UserSecret(Base):
     name: Mapped[str] = mapped_column(String(64), primary_key=True)
     value_encrypted: Mapped[str] = mapped_column(Text, nullable=False)
     updated_at: Mapped[dt.datetime] = mapped_column(
-        nullable=False, default=lambda: dt.datetime.now(dt.UTC)
+        nullable=False, default=lambda: dt.datetime.now(dt.UTC).replace(tzinfo=None)
     )
 
 

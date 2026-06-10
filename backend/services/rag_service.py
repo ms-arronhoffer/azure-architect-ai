@@ -74,7 +74,7 @@ async def index_documents(
     except Exception as e:
         log.warning("rag.index_embed_failed", corpus=corpus, error=str(e))
         return 0
-    now = dt.datetime.now(dt.UTC)
+    now = dt.datetime.now(dt.UTC).replace(tzinfo=None)
     for doc, vec in zip(items, vectors):
         doc_id = _doc_id(corpus, doc["source_id"])
         existing = await session.get(RagDocument, doc_id)
