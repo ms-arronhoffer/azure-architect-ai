@@ -1,5 +1,7 @@
 """Azure Retail Pricing API wrapper — no auth required."""
 
+import json
+import re
 from datetime import datetime, timezone
 
 import httpx
@@ -10,29 +12,82 @@ PRICING_DATA_SOURCE = "Azure Retail Pricing API (prices.azure.com)"
 # Maps common service labels to Azure Retail Pricing API service names
 SERVICE_NAME_MAP = {
     "app service": "Azure App Service",
+    "azure app service": "Azure App Service",
     "functions": "Azure Functions",
+    "azure functions": "Azure Functions",
     "container apps": "Azure Container Apps",
+    "azure container apps": "Azure Container Apps",
     "aks": "Azure Kubernetes Service",
+    "azure kubernetes service": "Azure Kubernetes Service",
     "vm": "Virtual Machines",
     "virtual machine": "Virtual Machines",
     "sql database": "SQL Database",
+    "azure sql database": "SQL Database",
     "azure sql": "SQL Database",
     "cosmos db": "Azure Cosmos DB",
+    "azure cosmos db": "Azure Cosmos DB",
     "storage account": "Storage",
     "blob storage": "Storage",
+    "azure storage": "Storage",
+    "azure blob storage": "Storage",
     "service bus": "Service Bus",
+    "azure service bus": "Service Bus",
     "event hubs": "Event Hubs",
+    "azure event hubs": "Event Hubs",
     "key vault": "Key Vault",
+    "azure key vault": "Key Vault",
     "api management": "API Management",
+    "azure api management": "API Management",
     "front door": "Azure Front Door",
+    "azure front door": "Azure Front Door",
     "application gateway": "Application Gateway",
+    "azure application gateway": "Application Gateway",
     "log analytics": "Log Analytics",
+    "azure monitor log analytics": "Log Analytics",
     "monitor": "Azure Monitor",
+    "azure monitor": "Azure Monitor",
     "bandwidth": "Bandwidth",
     "redis": "Azure Cache for Redis",
+    "azure cache for redis": "Azure Cache for Redis",
     "cognitive services": "Cognitive Services",
     "openai": "Azure OpenAI",
+    "azure openai": "Azure OpenAI",
 }
+
+# ARM-format SKU names → Pricing API display names
+_ARM_SKU_ALIASES: dict[str, str] = {
+    "standard_lrs": "LRS",
+    "standard_grs": "GRS",
+    "standard_ragrs": "RA-GRS",
+    "standard_zrs": "ZRS",
+    "premium_lrs": "Premium LRS",
+    "premium_zrs": "Premium ZRS",
+    # PerGB2018 is a Log Analytics billing model label, not a skuName — skip filter
+    "pergb2018": "",
+    "free": "Free",
+    "standalone": "Standalone",
+}
+
+_SQL_TIER_MAP: dict[str, str] = {
+    "gp_s": "General Purpose Serverless",
+    "gp": "General Purpose",
+    "bc": "Business Critical",
+    "hs": "Hyperscale",
+}
+
+
+def _normalize_sku(sku: str) -> str:
+    """Convert ARM-format SKU names to Azure Retail Pricing API display names."""
+    if not sku:
+        return sku
+    lower = sku.lower()
+    if lower in _ARM_SKU_ALIASES:
+        return _ARM_SKU_ALIASES[lower]
+    # SQL vCore patterns: GP_S_Gen5_2, GP_Gen5_4, BC_Gen5_8, HS_Gen5_16
+    m = re.match(r"(gp_s|gp|bc|hs)_gen\d+_\d+", lower)
+    if m:
+        return _SQL_TIER_MAP.get(m.group(1), sku)
+    return sku
 
 
 async def get_price(
@@ -45,14 +100,16 @@ async def get_price(
     service_normalized = SERVICE_NAME_MAP.get(service.lower().strip(), service)
     region = region or "eastus"
 
+    effective_sku = _normalize_sku(sku_name)
+
     async def _query(include_sku: bool) -> list[dict]:
         filters = [
             f"serviceName eq '{service_normalized}'",
             f"armRegionName eq '{region}'",
             "priceType eq 'Consumption'",
         ]
-        if include_sku and sku_name:
-            filters.append(f"contains(tolower(skuName), '{sku_name.lower()}')")
+        if include_sku and effective_sku:
+            filters.append(f"contains(tolower(skuName), '{effective_sku.lower()}')")
         params = {"$filter": " and ".join(filters), "currencyCode": currency, "$top": 20}
         try:
             async with httpx.AsyncClient(timeout=10.0) as client:
@@ -66,6 +123,33 @@ async def get_price(
     if not results and sku_name:
         results = await _query(include_sku=False)
     return results
+
+
+async def _mcp_price_search(service: str, sku: str, region: str) -> list[dict]:
+    """Last-resort fallback: use azure-pricing-mcp to find price when direct API fails."""
+    try:
+        from services.mcp_service import _session_map, call_mcp_tool  # noqa: PLC0415
+        tool = next(
+            (t for t in ("azure_sku_discovery", "azure_price_search") if t in _session_map),
+            None,
+        )
+        if not tool:
+            return []
+        raw = await call_mcp_tool(f"mcp_{tool}", {"service": service, "sku_hint": sku, "region": region})
+        data = json.loads(raw) if isinstance(raw, str) else raw
+        items = data if isinstance(data, list) else data.get("items") or data.get("Items") or []
+        return [
+            {
+                "skuName": i.get("skuName") or i.get("sku_name", sku),
+                "retailPrice": i.get("retailPrice") or i.get("price") or 0,
+                "unitOfMeasure": i.get("unitOfMeasure") or i.get("unit", "1 Hour"),
+                "currencyCode": i.get("currencyCode", "USD"),
+            }
+            for i in items
+            if i.get("retailPrice") or i.get("price")
+        ]
+    except Exception:
+        return []
 
 
 async def estimate_line_item(
@@ -89,6 +173,10 @@ async def estimate_line_item(
             sku = suggestions[0]
             sku_swapped = True
             prices = await get_price(service, sku, region)
+
+    # Layer 3: MCP fallback when both direct API attempts failed
+    if not prices and requested_sku:
+        prices = await _mcp_price_search(service, requested_sku, region)
 
     if not prices:
         return {
