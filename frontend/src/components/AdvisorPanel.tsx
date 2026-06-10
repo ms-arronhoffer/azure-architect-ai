@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { makeStyles, tokens, Select, Label } from "@fluentui/react-components";
 import ChatPanel from "./ChatPanel";
 import type { ChatMessage, Mode, ModelConfig, WorkloadContext } from "../types";
@@ -81,6 +82,11 @@ interface AdvisorPanelProps {
   onContinueIn?: (mode: Mode, seed: string) => void;
 }
 
+const MODEL_OPTIONS = [
+  { value: "gpt-5.4-mini", label: "GPT-5.4 Mini" },
+  { value: "gpt-5.4", label: "GPT-5.4" },
+];
+
 export default function AdvisorPanel({
   mode,
   onModeChange,
@@ -95,6 +101,12 @@ export default function AdvisorPanel({
   onContinueIn,
 }: AdvisorPanelProps) {
   const styles = useStyles();
+  const [selectedModel, setSelectedModel] = useState<string>("gpt-5.4-mini");
+
+  const effectiveModelConfig: ModelConfig = {
+    provider: modelConfig?.provider ?? "azure",
+    model: selectedModel,
+  };
 
   return (
     <div className={styles.wrapper}>
@@ -119,13 +131,29 @@ export default function AdvisorPanel({
             </optgroup>
           ))}
         </Select>
+        <Label htmlFor="advisor-model" weight="semibold" size="small">
+          Model
+        </Label>
+        <Select
+          id="advisor-model"
+          value={selectedModel}
+          onChange={(_, data) => setSelectedModel(data.value)}
+          size="small"
+          style={{ minWidth: "140px" }}
+        >
+          {MODEL_OPTIONS.map((opt) => (
+            <option key={opt.value} value={opt.value}>
+              {opt.label}
+            </option>
+          ))}
+        </Select>
       </div>
       <ChatPanel
         mode={mode}
         conversationId={conversationId}
         initialMessages={initialMessages}
         suggestedReplies={suggestedReplies}
-        modelConfig={modelConfig}
+        modelConfig={effectiveModelConfig}
         workloadContext={workloadContext}
         onOpenContext={onOpenContext}
         onFork={onFork}
