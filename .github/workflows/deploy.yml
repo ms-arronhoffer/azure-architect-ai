@@ -110,7 +110,7 @@ jobs:
           az acr build -r ${{ needs.detect.outputs.acr }} \
             -t aa-backend:${{ env.IMAGE_TAG }} \
             -t aa-backend:latest \
-            -f backend/Dockerfile.prod ./backend
+            -f backend/Dockerfile.prod .
       - name: Update container app revision
         run: |
           az containerapp update \
