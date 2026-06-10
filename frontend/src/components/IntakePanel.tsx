@@ -28,7 +28,7 @@ import {
 } from "@fluentui/react-icons";
 import { useWorkloadSpec, toSpecPromptPrefix } from "../hooks/useWorkloadSpec";
 import type { WorkloadSpec, Mode } from "../types";
-import { apiPath } from "../config/api";
+import { apiFetch } from "../config/api";
 
 const COMPLIANCE_OPTIONS = [
   "HIPAA", "SOC 2", "PCI DSS", "ISO 27001", "FedRAMP", "GDPR", "NIST 800-53",
@@ -272,7 +272,7 @@ export default function IntakePanel({ onContinueIn }: IntakePanelProps) {
     setIsValidating(true);
     setValidationNotes([]);
     try {
-      const res = await fetch(apiPath("/api/intake/validate"), {
+      const res = await apiFetch("/api/intake/validate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(spec),

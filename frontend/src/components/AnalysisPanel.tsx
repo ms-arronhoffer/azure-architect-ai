@@ -45,7 +45,7 @@ import {
 } from "@fluentui/react-icons";
 import { useWorkloadSpec, toSpecPromptPrefix } from "../hooks/useWorkloadSpec";
 import type { WafPillarResult, ChatMessage, BundledDesign, Mode, BicepPreview } from "../types";
-import { apiPath } from "../config/api";
+import { apiFetch } from "../config/api";
 import {
   listSavedDesigns,
   saveDesign,
@@ -427,7 +427,7 @@ export default function AnalysisPanel({
     }
 
     try {
-      const res = await fetch(apiPath(endpoint), {
+      const res = await apiFetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(reqBody),
@@ -547,7 +547,7 @@ export default function AnalysisPanel({
     setDriftError(null);
     setDriftReport(null);
     try {
-      const res = await fetch(apiPath("/api/scan/drift/design"), {
+      const res = await apiFetch("/api/scan/drift/design", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -606,7 +606,7 @@ export default function AnalysisPanel({
   }
 
   async function handleExportBrief() {
-    const res = await fetch(apiPath("/api/export/brief"), {
+    const res = await apiFetch("/api/export/brief", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({

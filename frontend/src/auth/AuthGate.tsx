@@ -7,14 +7,12 @@ import { useAuth } from "./AuthProvider";
 export function AuthGate({ children }: { children: ReactNode }) {
   const { enabled, isAuthenticated, account, login, getAccessToken } = useAuth();
 
-  useEffect(() => {
-    if (!enabled) {
-      setAuthTokenProvider(null);
-      return;
-    }
-    setAuthTokenProvider(() => getAccessToken());
-    return () => setAuthTokenProvider(null);
-  }, [enabled, getAccessToken]);
+  // Set synchronously during render so child useEffect hooks have the provider
+  // available on first mount (useEffect in parents runs after children's useEffect).
+  setAuthTokenProvider(enabled ? () => getAccessToken() : null);
+
+  // Cleanup only on unmount.
+  useEffect(() => () => setAuthTokenProvider(null), []);
 
   if (!enabled) return <>{children}</>;
   if (!isAuthenticated || !account) {

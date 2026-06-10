@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState } from "react";
 import type { SseEvent } from "../types";
-import { apiPath } from "../config/api";
+import { apiFetch } from "../config/api";
 
 export type OnEvent = (event: SseEvent) => void;
 
@@ -16,7 +16,7 @@ export function useSSE() {
       setIsStreaming(true);
 
       try {
-        const resp = await fetch(apiPath(url), {
+        const resp = await apiFetch(url, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(body),

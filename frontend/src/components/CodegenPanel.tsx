@@ -26,7 +26,7 @@ import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
 import { useSSE } from "../hooks/useSSE";
 import type { CodeFile, ChatMessage } from "../types";
-import { apiPath } from "../config/api";
+import { apiFetch } from "../config/api";
 
 const LANGUAGES = ["python", "typescript", "csharp", "java", "go", "rust"];
 const LANG_LABELS: Record<string, string> = {
@@ -306,7 +306,7 @@ export default function CodegenPanel({ onRefine }: { onRefine?: (context: ChatMe
     if (!repoName.trim() || isPushing) return;
     setIsPushing(true);
     try {
-      const res = await fetch(apiPath("/api/codegen/push"), {
+      const res = await apiFetch("/api/codegen/push", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

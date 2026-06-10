@@ -40,7 +40,7 @@ import { specToArchitectureForm } from "../utils/specMappers";
 import { exportArchitectureToDocx } from "../utils/architectureDocxExport";
 import type { SseEvent, Citation, BicepResult, BicepPreview, CostEstimate, AdrRecord, ChatMessage, WorkloadContext, NetworkTopology, WafPillarResult, Mode, ConversationRecord, ProjectTimeline } from "../types";
 import type { DiagramNode } from "../utils/diagramParser";
-import { apiPath } from "../config/api";
+import { apiFetch } from "../config/api";
 
 // ── Pattern definitions ───────────────────────────────────────────────────────
 
@@ -461,7 +461,7 @@ window.mxBasePath = 'https://viewer.diagrams.net/';
         reader.readAsDataURL(file);
       } else if (isParsed) {
         try {
-          const res = await fetch(apiPath("/api/parse"), { method: "POST", headers: { "Content-Type": "application/octet-stream", "X-Filename": file.name }, body: await file.arrayBuffer() });
+          const res = await apiFetch("/api/parse", { method: "POST", headers: { "Content-Type": "application/octet-stream", "X-Filename": file.name }, body: await file.arrayBuffer() });
           if (res.ok) {
             const { text } = await res.json() as { text: string };
             setAttachments((prev) => [...prev, { name: file.name, content: text, isImage: false }]);
@@ -496,7 +496,7 @@ window.mxBasePath = 'https://viewer.diagrams.net/';
     if (!requirements.trim() || isImproving) return;
     setIsImproving(true);
     try {
-      const res = await fetch(apiPath("/api/improve"), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: requirements }) });
+      const res = await apiFetch("/api/improve", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: requirements }) });
       if (res.ok) {
         const data = await res.json() as { improved: string };
         setRequirements(data.improved);

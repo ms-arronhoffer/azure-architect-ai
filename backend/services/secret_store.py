@@ -42,12 +42,12 @@ async def set_secret(session: AsyncSession, user_id: str, name: str, value: str)
                 user_id=user_id,
                 name=name,
                 value_encrypted=token,
-                updated_at=dt.datetime.now(dt.UTC),
+                updated_at=dt.datetime.utcnow(),
             )
         )
     else:
         existing.value_encrypted = token
-        existing.updated_at = dt.datetime.now(dt.UTC)
+        existing.updated_at = dt.datetime.utcnow()
     await session.commit()
 
 
