@@ -37,6 +37,16 @@ _FEEDS = [
         "source_label": "Azure DevBlogs",
         "url": "https://devblogs.microsoft.com/feed/?category=azure",
     },
+    {
+        "source": "fabric-updates",
+        "source_label": "Microsoft Fabric Updates",
+        "url": "https://community.fabric.microsoft.com/oxcrx34285/rss/board?board.id=fbc_fabricupdatesblogs",
+    },
+    {
+        "source": "powerbi-updates",
+        "source_label": "Power BI Updates",
+        "url": "https://community.fabric.microsoft.com/oxcrx34285/rss/board?board.id=fbc_pbiupdatesblog",
+    },
 ]
 
 _HEALTH_FEEDS = [
