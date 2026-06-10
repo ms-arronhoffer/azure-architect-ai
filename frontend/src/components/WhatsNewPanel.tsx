@@ -32,6 +32,8 @@ const SOURCE_FILTERS = [
   { value: "azure-updates", label: "Azure Updates" },
   { value: "azure-sdk", label: "Azure SDK Blog" },
   { value: "azure-devblogs", label: "Azure DevBlogs" },
+  { value: "fabric-updates", label: "Microsoft Fabric Updates" },
+  { value: "powerbi-updates", label: "Power BI Updates" },
 ];
 
 const TIME_FILTERS = [
@@ -46,6 +48,8 @@ const SOURCE_COLORS: Record<string, string> = {
   "azure-updates": "#00B7C3",
   "azure-sdk": "#008272",
   "azure-devblogs": "#5C2D91",
+  "fabric-updates": "#742774",
+  "powerbi-updates": "#F2C811",
 };
 
 const useStyles = makeStyles({
