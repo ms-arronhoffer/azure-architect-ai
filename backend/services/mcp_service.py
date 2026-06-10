@@ -1,22 +1,22 @@
 """
-MCP (Model Context Protocol) client for azure-mcp and Microsoft Learn tools.
-Connects via stdio transport to @azure/mcp server subprocess at startup.
-Gracefully degrades to no MCP tools if Node.js / azure-mcp is unavailable.
+MCP client managing two stdio MCP servers:
+  1. @azure/mcp  — documentation, well-architected, bicep schema, advisor, quota
+  2. azure-pricing-mcp — dedicated Azure retail pricing (higher quality)
+Gracefully degrades if either server fails to start.
 """
 import json
 import logging
-from contextlib import AsyncExitStack
 
 log = logging.getLogger(__name__)
 
-_session = None
+# Raw tool name -> MCP ClientSession
+_session_map: dict[str, object] = {}
 _tools_cache: list[dict] | None = None
 
-# Tool name substrings that are relevant to an Azure architect assistant.
-# Filters out VM/resource-management tools that require subscription context.
-_WHITELIST = frozenset({
+# Subsets of @azure/mcp tools relevant to an architect assistant.
+# "pricing" intentionally excluded — replaced by azure-pricing-mcp.
+_AZURE_MCP_WHITELIST = frozenset({
     "documentation",
-    "pricing",
     "wellarchitect",
     "bestpractice",
     "cloudarchitect",
@@ -27,9 +27,9 @@ _WHITELIST = frozenset({
 })
 
 
-def _is_relevant(name: str) -> bool:
+def _is_azure_mcp_relevant(name: str) -> bool:
     n = name.lower()
-    return any(p in n for p in _WHITELIST)
+    return any(p in n for p in _AZURE_MCP_WHITELIST)
 
 
 def _tool_to_openai(tool) -> dict:
@@ -50,36 +50,70 @@ def _tool_to_openai(tool) -> dict:
     }
 
 
-async def init_mcp(stack: AsyncExitStack) -> None:
-    """Start azure-mcp subprocess and populate tools cache. Non-fatal on failure."""
-    global _session, _tools_cache
+async def _start_server(stack, params, filter_fn=None) -> tuple[object, list[dict]]:
+    """Start one MCP stdio server and return (session, openai_tools)."""
+    from mcp import ClientSession, StdioServerParameters  # noqa: F401
+    from mcp.client.stdio import stdio_client
+
+    read, write = await stack.enter_async_context(stdio_client(params))
+    session = await stack.enter_async_context(ClientSession(read, write))
+    await session.initialize()
+
+    tools_resp = await session.list_tools()
+    tools = tools_resp.tools
+    if filter_fn:
+        tools = [t for t in tools if filter_fn(t.name)]
+
+    return session, [_tool_to_openai(t) for t in tools]
+
+
+async def init_mcp(stack) -> None:
+    global _session_map, _tools_cache
     try:
-        from mcp import ClientSession, StdioServerParameters
-        from mcp.client.stdio import stdio_client
+        from mcp import ClientSession, StdioServerParameters  # noqa: F401
     except ImportError:
         log.warning("MCP SDK not installed — skipping MCP integration")
         _tools_cache = []
         return
 
+    from mcp import StdioServerParameters
+
+    merged_tools: list[dict] = []
+    new_map: dict[str, object] = {}
+
+    # --- @azure/mcp ---
     try:
         params = StdioServerParameters(
             command="npx",
             args=["-y", "@azure/mcp@latest", "server", "start"],
         )
-        read, write = await stack.enter_async_context(stdio_client(params))
-        session = await stack.enter_async_context(ClientSession(read, write))
-        await session.initialize()
-
-        tools_resp = await session.list_tools()
-        all_tools = tools_resp.tools
-        relevant = [t for t in all_tools if _is_relevant(t.name)]
-
-        _session = session
-        _tools_cache = [_tool_to_openai(t) for t in relevant]
-        log.info("MCP: loaded %d/%d tools from azure-mcp", len(_tools_cache), len(all_tools))
+        session, tools = await _start_server(stack, params, filter_fn=_is_azure_mcp_relevant)
+        for t in tools:
+            raw = t["function"]["name"][4:]  # strip "mcp_"
+            new_map[raw] = session
+        merged_tools.extend(tools)
+        log.info("MCP azure-mcp: loaded %d tools", len(tools))
     except Exception as exc:
-        log.warning("MCP init failed (app continues without MCP tools): %s", exc)
-        _tools_cache = []
+        log.warning("MCP azure-mcp init failed: %s", exc)
+
+    # --- azure-pricing-mcp ---
+    try:
+        params = StdioServerParameters(
+            command="python",
+            args=["/opt/azure-pricing-mcp/azure_pricing_server.py"],
+        )
+        session, tools = await _start_server(stack, params)
+        for t in tools:
+            raw = t["function"]["name"][4:]
+            new_map[raw] = session
+        merged_tools.extend(tools)
+        log.info("MCP azure-pricing-mcp: loaded %d tools", len(tools))
+    except Exception as exc:
+        log.warning("MCP azure-pricing-mcp init failed: %s", exc)
+
+    _session_map = new_map
+    _tools_cache = merged_tools
+    log.info("MCP total tools available: %d", len(merged_tools))
 
 
 def get_mcp_tools() -> list[dict]:
@@ -91,12 +125,12 @@ def is_mcp_tool(name: str) -> bool:
 
 
 async def call_mcp_tool(name: str, args: dict) -> str:
-    """Call an MCP tool by its OpenAI-prefixed name. Returns plain text or JSON string."""
-    if _session is None:
+    raw_name = name[4:]  # strip "mcp_"
+    session = _session_map.get(raw_name)
+    if session is None:
         return json.dumps({"error": "MCP session not available"})
-    raw_name = name[4:]  # strip "mcp_" prefix
     try:
-        result = await _session.call_tool(raw_name, args)
+        result = await session.call_tool(raw_name, args)
         parts: list[str] = []
         for item in result.content:
             if hasattr(item, "text"):

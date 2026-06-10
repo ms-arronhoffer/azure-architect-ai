@@ -4,12 +4,16 @@
 
 FROM python:3.11-slim AS deps
 
-RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates && \
+RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates git && \
     curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
     apt-get install -y --no-install-recommends nodejs && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
 RUN npm install -g @azure/mcp@latest && npm cache clean --force
+
+# Azure Pricing MCP (Python-based, no PyPI package)
+RUN git clone --depth 1 https://github.com/charris-msft/azure-pricing-mcp.git /opt/azure-pricing-mcp && \
+    pip install --no-cache-dir aiohttp>=3.9.0 requests>=2.31.0
 
 WORKDIR /app
 COPY backend/requirements.txt .
