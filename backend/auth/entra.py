@@ -70,13 +70,18 @@ async def validate_token(token: str) -> dict[str, Any]:
     tenant, audience = _require_config()
     oidc = await _get_oidc_config(tenant)
     jwks = _jwks_client(oidc["jwks_uri"])
+    # Accept both "api://GUID" and bare "GUID" forms — Entra issues either
+    # depending on accessTokenAcceptedVersion in the app manifest.
+    audiences = [audience]
+    if audience.startswith("api://"):
+        audiences.append(audience[len("api://"):])
     try:
         signing_key = jwks.get_signing_key_from_jwt(token).key
         claims = jwt.decode(
             token,
             signing_key,
             algorithms=["RS256"],
-            audience=audience,
+            audience=audiences,
             issuer=oidc["issuer"],
             options={"require": ["exp", "iss", "aud"]},
         )
