@@ -59,7 +59,7 @@ az acr build \
   --registry aarchdevacr \
   --image aa-backend:latest \
   --file backend/Dockerfile.prod \
-  ./backend
+  .
 ```
 
 ### Step 2 — Build frontend image via ACR Tasks (with MSAL build args)

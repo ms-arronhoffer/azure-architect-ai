@@ -34,6 +34,10 @@ class Settings(BaseSettings):
     session_cookie_name: str = "aa_session"
     session_cookie_secure: bool = False  # set true behind HTTPS
 
+    # CORS. Comma-separated list of allowed origins added to the localhost defaults.
+    # Example: CORS_ORIGINS=https://blueprint.techtools.host,https://app.example.com
+    cors_origins: str = ""
+
     # Azure Monitor / Application Insights. When set, OTel exports traces, logs,
     # and metrics to App Insights via azure-monitor-opentelemetry.
     applicationinsights_connection_string: str | None = None

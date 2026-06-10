@@ -23,7 +23,15 @@ export function useSSE() {
           signal: controller.signal,
         });
 
-        if (!resp.ok || !resp.body) throw new Error(`HTTP ${resp.status}`);
+        if (!resp.ok) {
+          let message = `HTTP ${resp.status}`;
+          try {
+            const err = await resp.clone().json() as { detail?: string };
+            if (err.detail) message = err.detail;
+          } catch { /* non-JSON error body */ }
+          throw new Error(message);
+        }
+        if (!resp.body) throw new Error(`HTTP ${resp.status} (no body)`);
 
         const reader = resp.body.getReader();
         const decoder = new TextDecoder();

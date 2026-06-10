@@ -20,9 +20,22 @@ export function setAuthTokenProvider(provider: TokenProvider | null): void {
 
 export async function apiFetch(path: string, init: RequestInit = {}): Promise<Response> {
   const headers = new Headers(init.headers);
-  if (_tokenProvider && !headers.has("Authorization")) {
+  const callerSetAuth = headers.has("Authorization");
+  if (_tokenProvider && !callerSetAuth) {
     const token = await _tokenProvider();
     if (token) headers.set("Authorization", `Bearer ${token}`);
   }
-  return fetch(apiPath(path), { ...init, headers });
+  const resp = await fetch(apiPath(path), { ...init, headers });
+  // On 401, force a fresh token acquisition (handles stale cached tokens) and retry once.
+  if (resp.status === 401 && _tokenProvider && !callerSetAuth) {
+    try {
+      const freshToken = await _tokenProvider();
+      if (freshToken) {
+        const retryHeaders = new Headers(init.headers);
+        retryHeaders.set("Authorization", `Bearer ${freshToken}`);
+        return fetch(apiPath(path), { ...init, headers: retryHeaders });
+      }
+    } catch { /* retry failed, return original 401 */ }
+  }
+  return resp;
 }

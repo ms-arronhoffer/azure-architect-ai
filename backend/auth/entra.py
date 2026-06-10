@@ -20,6 +20,9 @@ from fastapi import Depends, HTTPException, Request, status
 from jwt import PyJWKClient
 
 from config import settings
+from middleware.logging import get_logger
+
+_log = get_logger("entra")
 
 _JWKS_CACHE: dict[str, tuple[float, PyJWKClient]] = {}
 _OIDC_CACHE: dict[str, tuple[float, dict[str, Any]]] = {}
@@ -86,12 +89,16 @@ async def validate_token(token: str) -> dict[str, Any]:
             options={"require": ["exp", "iss", "aud"]},
         )
     except jwt.ExpiredSignatureError as e:
+        _log.warning("jwt.expired")
         raise AuthError("Token expired") from e
     except jwt.InvalidAudienceError as e:
+        _log.warning("jwt.invalid_audience", expected_audiences=audiences)
         raise AuthError("Invalid audience") from e
     except jwt.InvalidIssuerError as e:
+        _log.warning("jwt.invalid_issuer", expected_issuer=oidc.get("issuer"))
         raise AuthError("Invalid issuer") from e
     except jwt.PyJWTError as e:
+        _log.warning("jwt.validation_error", error=str(e))
         raise AuthError(f"Invalid token: {e}") from e
     return claims
 
