@@ -71,7 +71,7 @@ az acr build \
   --build-arg VITE_AUTH_ENABLED=true \
   --build-arg VITE_ENTRA_TENANT_ID=16b3c013-d300-468d-ac64-7eda0820b6d3 \
   --build-arg VITE_ENTRA_CLIENT_ID=e9616e6b-3c8b-4153-b814-b01817c9ade2 \
-  --build-arg "VITE_ENTRA_API_SCOPE=api://e9616e6b-3c8b-4153-b814-b01817c9ade2/access_as_admin" \
+  --build-arg "VITE_ENTRA_API_SCOPE=api://5e5c9491-d850-4f1b-9d67-939824a4c819/access_as_user" \
   ./frontend
 ```
 
