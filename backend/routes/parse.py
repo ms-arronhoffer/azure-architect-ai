@@ -23,8 +23,10 @@ async def parse_document(request: Request) -> JSONResponse:
         text = _extract_docx(data, filename)
     elif lower.endswith(".pptx"):
         text = _extract_pptx(data)
+    elif lower.endswith(".xlsx"):
+        text = _extract_xlsx(data)
     else:
-        raise HTTPException(status_code=415, detail="Only .pdf, .docx, and .pptx files are supported.")
+        raise HTTPException(status_code=415, detail="Only .pdf, .docx, .pptx, and .xlsx files are supported.")
 
     return JSONResponse({"text": text, "filename": filename})
 
@@ -83,3 +85,25 @@ def _extract_pptx(data: bytes) -> str:
         return "\n\n".join(parts)
     except Exception as exc:
         raise HTTPException(status_code=422, detail=f"Could not read PPTX: {exc}")
+
+
+def _extract_xlsx(data: bytes) -> str:
+    try:
+        import openpyxl
+    except ImportError:
+        raise HTTPException(status_code=500, detail="openpyxl not installed — run: python -m pip install openpyxl")
+    try:
+        wb = openpyxl.load_workbook(io.BytesIO(data), read_only=True, data_only=True)
+        parts = []
+        for sheet in wb.worksheets:
+            rows = []
+            for row in sheet.iter_rows(values_only=True):
+                cells = [str(c) if c is not None else "" for c in row]
+                if any(c for c in cells):
+                    rows.append("\t".join(cells))
+            if rows:
+                parts.append(f"[Sheet: {sheet.title}]\n" + "\n".join(rows))
+        wb.close()
+        return "\n\n".join(parts)
+    except Exception as exc:
+        raise HTTPException(status_code=422, detail=f"Could not read XLSX: {exc}")

@@ -39,7 +39,7 @@ import type { ChatMessage as ChatMessageType, Mode, ModelConfig, WorkloadContext
 
 // All file types the model supports natively (images, PDF) plus server-parsed docs
 const ACCEPTED_FILE_TYPES =
-  "image/png,image/jpeg,image/gif,image/webp,.pdf,.docx,.pptx,.txt,.md,.json,.yaml,.yml,.bicep,.tf,.ps1,.sh,.csv";
+  "image/png,image/jpeg,image/gif,image/webp,.pdf,.docx,.pptx,.txt,.md,.json,.yaml,.yml,.bicep,.tf,.ps1,.sh,.csv,.xlsx";
 
 interface Attachment {
   name: string;
@@ -543,7 +543,7 @@ export default function ChatPanel({ mode, conversationId: savedId, initialMessag
       return;
     }
 
-    if (lower.endsWith(".docx") || lower.endsWith(".pptx")) {
+    if (lower.endsWith(".docx") || lower.endsWith(".pptx") || lower.endsWith(".xlsx")) {
       try {
         const body = await file.arrayBuffer();
         const resp = await apiFetch("/api/parse", {
