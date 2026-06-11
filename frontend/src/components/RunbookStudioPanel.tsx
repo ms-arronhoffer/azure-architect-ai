@@ -110,7 +110,7 @@ export default function RunbookStudioPanel({ onRefine, sessionId, onSave }: Runb
       "Include: numbered step-by-step remediation steps with az CLI / kubectl commands, decision trees for branching scenarios, rollback steps, and post-incident checklist.",
     ].filter(Boolean).join("\n");
 
-    await stream("/api/chat", { mode: "runbookstudio", message: prompt }, (event) => {
+    await stream("/api/chat", { mode: "runbookstudio", messages: [{ role: "user", content: prompt }] }, (event) => {
       if (event.type === "token") {
         outputRef.current += event.content;
         setOutput(outputRef.current);

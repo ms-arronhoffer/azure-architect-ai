@@ -23,6 +23,7 @@ from services.openai_service import get_client, get_deployment, resolve_client_a
 from services.pricing_service import estimate_architecture, get_regional_pricing_context
 from services.runbook_service import build_runbook
 from services.settings_service import load_settings
+from services.token_service import schedule_record_usage
 from limiter import limiter
 from tools.tool_definitions import get_tools_for_mode
 
@@ -43,7 +44,7 @@ class ArchRequest(BaseModel):
     llm_config: ModelConfig | None = None
 
 
-async def _stream_architecture(req: ArchRequest, provider: str = "azure", model: str = "", github_token: str = "") -> AsyncGenerator[str, None]:
+async def _stream_architecture(req: ArchRequest, provider: str = "azure", model: str = "", github_token: str = "", user_id: str = "default") -> AsyncGenerator[str, None]:
     try:
         client, deployment = resolve_client_and_model("architecture", provider, model, github_token)
     except ValueError as e:
@@ -52,11 +53,13 @@ async def _stream_architecture(req: ArchRequest, provider: str = "azure", model:
     mode = req.mode if req.mode in ARCHITECTURE_MODES else "architecture"
     system = MODE_TEMPLATES.get(mode, MODE_TEMPLATES["architecture"])
     tools = get_tools_for_mode(mode)
+    usage_acc: dict[str, int] = {"prompt": 0, "completion": 0}
 
     if mode == "waf":
         yield f"data: {json.dumps({'type': 'status', 'message': 'Running WAF assessment...'})}\n\n"
-        async for chunk in _stream_waf_assessment(req, client, deployment, system):
+        async for chunk in _stream_waf_assessment(req, client, deployment, system, usage_acc):
             yield chunk
+        schedule_record_usage(user_id, deployment, mode, usage_acc["prompt"], usage_acc["completion"])
         return
 
     user_prompt = _build_prompt(req, mode)
@@ -103,6 +106,7 @@ async def _stream_architecture(req: ArchRequest, provider: str = "azure", model:
                 tools=tools,
                 tool_choice="auto",
                 stream=True,
+                stream_options={"include_usage": True},
                 max_completion_tokens=8000,
             )
         except (BadRequestError, AuthenticationError, APIError) as e:
@@ -115,6 +119,9 @@ async def _stream_architecture(req: ArchRequest, provider: str = "azure", model:
         finish_reason = None
 
         for chunk in stream:
+            if chunk.usage is not None:
+                usage_acc["prompt"] += chunk.usage.prompt_tokens or 0
+                usage_acc["completion"] += chunk.usage.completion_tokens or 0
             if not chunk.choices:
                 continue
             delta = chunk.choices[0].delta
@@ -361,8 +368,10 @@ async def _stream_architecture(req: ArchRequest, provider: str = "azure", model:
 
     yield "data: [DONE]\n\n"
 
+    schedule_record_usage(user_id, deployment, mode, usage_acc["prompt"], usage_acc["completion"])
 
-async def _stream_waf_assessment(req: ArchRequest, client, deployment: str, system: str):
+
+async def _stream_waf_assessment(req: ArchRequest, client, deployment: str, system: str, usage_acc: dict[str, int] | None = None):
     desc = req.existing_description or req.requirements
     pillars = ["reliability", "security", "cost", "operational-excellence", "performance"]
     tools = get_tools_for_mode("waf")
@@ -389,6 +398,7 @@ async def _stream_waf_assessment(req: ArchRequest, client, deployment: str, syst
                 tools=tools,
                 tool_choice="auto",
                 stream=True,
+                stream_options={"include_usage": True},
                 max_completion_tokens=1500,
             )
 
@@ -397,6 +407,9 @@ async def _stream_waf_assessment(req: ArchRequest, client, deployment: str, syst
             collected = ""
 
             for chunk in stream:
+                if chunk.usage is not None and usage_acc is not None:
+                    usage_acc["prompt"] += chunk.usage.prompt_tokens or 0
+                    usage_acc["completion"] += chunk.usage.completion_tokens or 0
                 if not chunk.choices:
                     continue
                 delta = chunk.choices[0].delta
@@ -555,15 +568,15 @@ async def architecture(request: Request, req: ArchRequest, claims=Depends(requir
     mc = req.llm_config or app_settings.mode_models.get(req.mode)
     provider = mc.provider if mc else "azure"
     model = mc.model if mc else ""
+    user_id = user_id_from_claims(claims)
     github_token = ""
     if provider in {"github-models", "github-copilot"}:
         from db import session_scope
         from services.secret_store import get_secret
-        user_id = user_id_from_claims(claims)
         async with session_scope() as session:
             github_token = await get_secret(session, user_id, "github_pat") or ""
     return StreamingResponse(
-        _stream_architecture(req, provider, model, github_token),
+        _stream_architecture(req, provider, model, github_token, user_id),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )

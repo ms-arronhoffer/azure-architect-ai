@@ -113,7 +113,7 @@ export default function PipelineForgePanel({ onRefine, sessionId, onSave, initia
       "Include: build, test, SAST scan (Trivy or CodeQL), and deploy stages with workload identity (no secrets in YAML).",
     ].filter(Boolean).join("\n");
 
-    await stream("/api/chat", { mode: "pipelineforge", message: prompt }, (event) => {
+    await stream("/api/chat", { mode: "pipelineforge", messages: [{ role: "user", content: prompt }] }, (event) => {
       if (event.type === "token") {
         outputRef.current += event.content;
         setOutput(outputRef.current);

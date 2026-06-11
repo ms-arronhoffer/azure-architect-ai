@@ -13,6 +13,7 @@ from pydantic import BaseModel
 
 from auth import require_user, user_id_from_claims
 from models import ModelConfig
+from services.token_service import schedule_record_usage
 from observability import tool_calls_counter
 from prompts.system_prompt import get_system_prompt
 from services.docs_service import search_azure_docs
@@ -64,7 +65,7 @@ async def _prefetch_docs(mode: str, user_message: str) -> list[dict]:
     return await cached_learn_search(query=query, top=5)
 
 
-async def _stream_chat(mode: str, messages: list[dict], provider: str = "azure", model: str = "", github_token: str = "", attachments: list[str] | None = None) -> AsyncGenerator[str, None]:
+async def _stream_chat(mode: str, messages: list[dict], provider: str = "azure", model: str = "", github_token: str = "", attachments: list[str] | None = None, user_id: str = "default") -> AsyncGenerator[str, None]:
     try:
         client, deployment = resolve_client_and_model(mode, provider, model, github_token)
     except ValueError as e:
@@ -93,6 +94,8 @@ async def _stream_chat(mode: str, messages: list[dict], provider: str = "azure",
     # so every response is anchored to real Learn articles, not just training knowledge.
     user_content = messages[-1].get("content", "") if messages else ""
     prefetched = await _prefetch_docs(mode, user_content)
+    prompt_tokens = 0
+    completion_tokens = 0
     if prefetched:
         citations.extend(prefetched)
         doc_block = "\n".join(
@@ -108,6 +111,7 @@ async def _stream_chat(mode: str, messages: list[dict], provider: str = "azure",
             "model": deployment,
             "messages": full_messages,
             "stream": True,
+            "stream_options": {"include_usage": True},
             "max_completion_tokens": 8000,
         }
         if tools:
@@ -121,6 +125,9 @@ async def _stream_chat(mode: str, messages: list[dict], provider: str = "azure",
         try:
             stream = client.chat.completions.create(**kwargs)
             for chunk in stream:
+                if chunk.usage is not None:
+                    prompt_tokens += chunk.usage.prompt_tokens or 0
+                    completion_tokens += chunk.usage.completion_tokens or 0
                 if not chunk.choices:
                     continue
                 delta = chunk.choices[0].delta
@@ -189,6 +196,8 @@ async def _stream_chat(mode: str, messages: list[dict], provider: str = "azure",
         yield f"data: {json.dumps({'type': 'citations', 'citations': citations})}\n\n"
 
     yield "data: [DONE]\n\n"
+
+    schedule_record_usage(user_id, deployment, mode, prompt_tokens, completion_tokens)
 
 
 async def _dispatch_tool(name: str, args: dict) -> tuple[object, dict | None]:
@@ -425,16 +434,16 @@ async def chat(request: Request, req: ChatRequest, claims=Depends(require_user))
     mc = req.llm_config or app_settings.mode_models.get(req.mode)
     provider = mc.provider if mc else "azure"
     model = mc.model if mc else ""
+    user_id = user_id_from_claims(claims)
     messages = [m.model_dump() for m in req.messages]
     github_token = ""
     if provider in {"github-models", "github-copilot"}:
         from db import session_scope
         from services.secret_store import get_secret
-        user_id = user_id_from_claims(claims)
         async with session_scope() as session:
             github_token = await get_secret(session, user_id, "github_pat") or ""
     return StreamingResponse(
-        _stream_chat(req.mode, messages, provider, model, github_token, req.attachments or []),
+        _stream_chat(req.mode, messages, provider, model, github_token, req.attachments or [], user_id),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )

@@ -35,13 +35,31 @@ interface TopUser {
   count: number;
 }
 
+interface TokenByModel {
+  model: string;
+  prompt_tokens: number;
+  completion_tokens: number;
+}
+
+interface TokenByUser {
+  user_id: string;
+  prompt_tokens: number;
+  completion_tokens: number;
+}
+
 interface MetricsResponse {
   total_conversations: number;
   unique_users: number;
   active_today: number;
+  weekly_active: number;
+  avg_duration_min: number;
+  output_rate_pct: number;
+  wow_pct: number;
   mode_breakdown: ModeCount[];
   dau_30d: DauRow[];
   top_users: TopUser[];
+  token_by_model: TokenByModel[];
+  token_by_user: TokenByUser[];
 }
 
 const useStyles = makeStyles({
@@ -59,14 +77,26 @@ const useStyles = makeStyles({
     flexWrap: "wrap",
   },
   heroCard: {
-    flex: "1 1 160px",
-    minWidth: "140px",
+    flex: "1 1 140px",
+    minWidth: "120px",
     padding: "16px 20px",
   },
   heroValue: {
-    fontSize: "32px",
+    fontSize: "28px",
     fontWeight: 700,
     color: tokens.colorBrandForeground1,
+    lineHeight: 1.1,
+  },
+  heroValuePositive: {
+    fontSize: "28px",
+    fontWeight: 700,
+    color: tokens.colorPaletteGreenForeground1,
+    lineHeight: 1.1,
+  },
+  heroValueNegative: {
+    fontSize: "28px",
+    fontWeight: 700,
+    color: tokens.colorStatusDangerForeground1,
     lineHeight: 1.1,
   },
   heroLabel: {
@@ -100,6 +130,11 @@ const useStyles = makeStyles({
 
 function dayLabel(ms: number): string {
   return new Date(ms).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+
+function wowLabel(pct: number): string {
+  if (pct === 0) return "—";
+  return `${pct > 0 ? "+" : ""}${pct}%`;
 }
 
 export default function MetricsDashboard() {
@@ -148,6 +183,8 @@ export default function MetricsDashboard() {
   if (!data) return null;
 
   const total = data.total_conversations || 1;
+  const wowPositive = data.wow_pct > 0;
+  const wowNegative = data.wow_pct < 0;
 
   return (
     <div className={styles.root}>
@@ -177,6 +214,24 @@ export default function MetricsDashboard() {
         <Card className={styles.heroCard}>
           <div className={styles.heroValue}>{data.active_today.toLocaleString()}</div>
           <div className={styles.heroLabel}>Active Today</div>
+        </Card>
+        <Card className={styles.heroCard}>
+          <div className={styles.heroValue}>{data.weekly_active.toLocaleString()}</div>
+          <div className={styles.heroLabel}>Weekly Active Users</div>
+        </Card>
+        <Card className={styles.heroCard}>
+          <div className={styles.heroValue}>{data.avg_duration_min > 0 ? `${data.avg_duration_min}m` : "—"}</div>
+          <div className={styles.heroLabel}>Avg Session Duration</div>
+        </Card>
+        <Card className={styles.heroCard}>
+          <div className={styles.heroValue}>{data.output_rate_pct}%</div>
+          <div className={styles.heroLabel}>Output Generated Rate</div>
+        </Card>
+        <Card className={styles.heroCard}>
+          <div className={wowPositive ? styles.heroValuePositive : wowNegative ? styles.heroValueNegative : styles.heroValue}>
+            {wowLabel(data.wow_pct)}
+          </div>
+          <div className={styles.heroLabel}>Week-over-Week Growth</div>
         </Card>
       </div>
 
@@ -250,6 +305,64 @@ export default function MetricsDashboard() {
                     <TableCell>{dayLabel(row.day)}</TableCell>
                     <TableCell>{row.users}</TableCell>
                     <TableCell>{row.conversations}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </Card>
+
+        <Card className={styles.tableCard}>
+          <CardHeader header={<Text className={styles.tableTitle}>Token Usage by Model (30 days)</Text>} />
+          <div className={styles.tableWrap}>
+            <Table size="small">
+              <TableHeader>
+                <TableRow>
+                  <TableHeaderCell>Model</TableHeaderCell>
+                  <TableHeaderCell>Input</TableHeaderCell>
+                  <TableHeaderCell>Output</TableHeaderCell>
+                  <TableHeaderCell>Total</TableHeaderCell>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {data.token_by_model.map((row) => (
+                  <TableRow key={row.model}>
+                    <TableCell>
+                      <Text style={{ fontSize: "11px", fontFamily: "monospace" }}>
+                        {row.model.length > 24 ? `${row.model.slice(0, 24)}…` : row.model}
+                      </Text>
+                    </TableCell>
+                    <TableCell>{row.prompt_tokens.toLocaleString()}</TableCell>
+                    <TableCell>{row.completion_tokens.toLocaleString()}</TableCell>
+                    <TableCell>{(row.prompt_tokens + row.completion_tokens).toLocaleString()}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </Card>
+
+        <Card className={styles.tableCard}>
+          <CardHeader header={<Text className={styles.tableTitle}>Token Usage by User (30 days)</Text>} />
+          <div className={styles.tableWrap}>
+            <Table size="small">
+              <TableHeader>
+                <TableRow>
+                  <TableHeaderCell>User ID</TableHeaderCell>
+                  <TableHeaderCell>Input</TableHeaderCell>
+                  <TableHeaderCell>Output</TableHeaderCell>
+                  <TableHeaderCell>Total</TableHeaderCell>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {data.token_by_user.map((row) => (
+                  <TableRow key={row.user_id}>
+                    <TableCell>
+                      <Text style={{ fontSize: "11px", fontFamily: "monospace" }}>{row.user_id}</Text>
+                    </TableCell>
+                    <TableCell>{row.prompt_tokens.toLocaleString()}</TableCell>
+                    <TableCell>{row.completion_tokens.toLocaleString()}</TableCell>
+                    <TableCell>{(row.prompt_tokens + row.completion_tokens).toLocaleString()}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>

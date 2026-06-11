@@ -65,6 +65,20 @@ class UserSecret(Base):
     )
 
 
+class TokenUsage(Base):
+    """Per-request token counts keyed by user, model, and mode."""
+
+    __tablename__ = "token_usage"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    user_id: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    model: Mapped[str] = mapped_column(String(128), nullable=False)
+    mode: Mapped[str] = mapped_column(String(64), nullable=False)
+    prompt_tokens: Mapped[int] = mapped_column(nullable=False, default=0)
+    completion_tokens: Mapped[int] = mapped_column(nullable=False, default=0)
+    created_at: Mapped[int] = mapped_column(BigInteger, nullable=False, index=True)
+
+
 _engine = create_async_engine(settings.database_url, future=True, pool_pre_ping=True)
 _Session = async_sessionmaker(_engine, expire_on_commit=False)
 
@@ -95,6 +109,7 @@ __all__ = [
     "Conversation",
     "RagDocument",
     "UserSecret",
+    "TokenUsage",
     "init_db",
     "get_session",
     "session_scope",

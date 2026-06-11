@@ -101,7 +101,7 @@ export default function NamingStandardsPanel({ onRefine, sessionId, onSave }: Na
       "Output: (1) a full naming spec table with resource type, pattern, and example; (2) a ready-to-use Bicep naming.bicep module; (3) a Terraform locals.tf equivalent.",
     ].filter(Boolean).join("\n");
 
-    await stream("/api/chat", { mode: "namingstandards", message: prompt }, (event) => {
+    await stream("/api/chat", { mode: "namingstandards", messages: [{ role: "user", content: prompt }] }, (event) => {
       if (event.type === "token") {
         outputRef.current += event.content;
         setOutput(outputRef.current);
