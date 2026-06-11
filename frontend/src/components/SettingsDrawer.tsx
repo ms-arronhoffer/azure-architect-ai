@@ -15,6 +15,12 @@ import { DismissRegular, EyeRegular, EyeOffRegular, SaveRegular, SignOutRegular 
 import type { Mode, ModelConfig, UserSettings } from "../types";
 import { useAuth } from "../auth/AuthProvider";
 
+const AZURE_MODELS_BY_MODE: Partial<Record<Mode, string[]>> = {
+  codegen: ["gpt-5.3-codex"],
+  architecture: ["gpt-5.3-codex", "gpt-5.4"],
+  review: ["gpt-5.3-codex", "gpt-5.4"],
+};
+
 const MODELS_BY_PROVIDER: Record<string, string[]> = {
   azure: ["", "gpt-4o-mini", "gpt-4.1"],
   "github-models": [
@@ -51,6 +57,8 @@ const CHAT_MODES: Array<{ mode: Mode; label: string }> = [
   { mode: "cost", label: "Cost Optimization" },
   { mode: "monitoring", label: "Monitoring Config" },
   { mode: "compare", label: "Service Comparison" },
+  { mode: "architecture", label: "Architecture Design" },
+  { mode: "review", label: "Architecture Review" },
   { mode: "codegen", label: "Code Generator" },
 ];
 
@@ -286,8 +294,13 @@ export default function SettingsDrawer({
               Leave as Azure OpenAI to use the default deployment.
             </Text>
             {CHAT_MODES.map(({ mode, label }) => {
-              const mc = draft.mode_models[mode] ?? { provider: "azure", model: "" };
-              const models = MODELS_BY_PROVIDER[mc.provider] ?? [];
+              const raw = draft.mode_models[mode] ?? { provider: "azure", model: "" };
+              const azureModels = AZURE_MODELS_BY_MODE[mode] ?? null;
+              // Apply default for modes with a forced Azure model list
+              const mc = (raw.provider === "azure" && azureModels && !azureModels.includes(raw.model))
+                ? { ...raw, model: azureModels[0] }
+                : raw;
+              const models = mc.provider === "azure" ? (azureModels ?? MODELS_BY_PROVIDER["azure"]) : (MODELS_BY_PROVIDER[mc.provider] ?? []);
               const isIncompatible = TOOL_INCOMPATIBLE.has(mc.model);
               return (
                 <div key={mode}>
@@ -302,7 +315,7 @@ export default function SettingsDrawer({
                         <option key={val} value={val}>{lbl}</option>
                       ))}
                     </Select>
-                    {mc.provider !== "azure" && (
+                    {(mc.provider !== "azure" || azureModels) && (
                       <Select
                         size="small"
                         value={mc.model}
