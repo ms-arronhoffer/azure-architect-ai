@@ -1,11 +1,20 @@
+from typing import Any
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from auth.entra import get_current_user
 from db import Conversation, get_session, select
 
 router = APIRouter()
+
+
+def _uid(claims: dict[str, Any] | None) -> str | None:
+    if not claims:
+        return None
+    return claims.get("oid") or claims.get("sub") or None
 
 
 class ConversationRecord(BaseModel):
@@ -19,12 +28,15 @@ class ConversationRecord(BaseModel):
 
 
 @router.get("/conversations")
-async def list_conversations(session: AsyncSession = Depends(get_session)):
-    rows = (
-        await session.execute(
-            select(Conversation).order_by(Conversation.updated_at.desc())
-        )
-    ).scalars().all()
+async def list_conversations(
+    session: AsyncSession = Depends(get_session),
+    claims: dict[str, Any] | None = Depends(get_current_user),
+):
+    user_id = _uid(claims)
+    query = select(Conversation).order_by(Conversation.updated_at.desc())
+    if user_id:
+        query = query.where(Conversation.user_id == user_id)
+    rows = (await session.execute(query)).scalars().all()
     return [
         {
             "id": r.id,
@@ -51,10 +63,14 @@ def _apply_update(row: Conversation, record: "ConversationRecord") -> None:
 async def upsert_conversation(
     record: ConversationRecord,
     session: AsyncSession = Depends(get_session),
+    claims: dict[str, Any] | None = Depends(get_current_user),
 ):
+    user_id = _uid(claims)
     existing = await session.get(Conversation, record.id)
     if existing is not None:
         _apply_update(existing, record)
+        if user_id and existing.user_id is None:
+            existing.user_id = user_id
         await session.commit()
         return {"ok": True}
 
@@ -67,6 +83,7 @@ async def upsert_conversation(
             updated_at=record.updatedAt,
             messages=record.messages,
             structured_result=record.structuredResult,
+            user_id=user_id,
         )
     )
     try:

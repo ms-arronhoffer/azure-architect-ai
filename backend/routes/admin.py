@@ -24,16 +24,16 @@ async def get_metrics(
     )).all()
     mode_counts = [{"mode": r.mode, "count": r.count} for r in mode_rows]
 
-    # DAU — last 30 days, bucketed by day (unix day = created_at // 86400)
-    thirty_days_ago = int(time.time()) - 30 * 86400
-    day_bucket = (Conversation.created_at // 86400 * 86400).label("day")
+    # DAU — last 30 days, bucketed by day (created_at is stored in milliseconds)
+    thirty_days_ago_ms = (int(time.time()) - 30 * 86400) * 1000
+    day_bucket = (Conversation.created_at // 86400000 * 86400000).label("day")
     dau_rows = (await db.execute(
         select(
             day_bucket,
             func.count(func.distinct(Conversation.user_id)).label("users"),
             func.count().label("conversations"),
         )
-        .where(Conversation.created_at >= thirty_days_ago)
+        .where(Conversation.created_at >= thirty_days_ago_ms)
         .group_by(day_bucket)
         .order_by(day_bucket)
     )).all()
@@ -54,11 +54,11 @@ async def get_metrics(
         select(func.count(func.distinct(Conversation.user_id))).select_from(Conversation)
     ) or 0
 
-    # Active today
-    today_start = (int(time.time()) // 86400) * 86400
+    # Active today (created_at is milliseconds)
+    today_start_ms = (int(time.time()) // 86400) * 86400 * 1000
     active_today = await db.scalar(
         select(func.count(func.distinct(Conversation.user_id)))
-        .where(Conversation.created_at >= today_start)
+        .where(Conversation.created_at >= today_start_ms)
     ) or 0
 
     return {

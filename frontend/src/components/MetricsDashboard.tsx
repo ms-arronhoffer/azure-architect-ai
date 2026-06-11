@@ -96,8 +96,8 @@ const useStyles = makeStyles({
   },
 });
 
-function dayLabel(unixSec: number): string {
-  return new Date(unixSec * 1000).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+function dayLabel(ms: number): string {
+  return new Date(ms).toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
 export default function MetricsDashboard() {
