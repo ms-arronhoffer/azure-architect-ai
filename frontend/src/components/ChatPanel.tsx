@@ -39,7 +39,7 @@ import type { ChatMessage as ChatMessageType, Mode, ModelConfig, WorkloadContext
 
 // All file types the model supports natively (images, PDF) plus server-parsed docs
 const ACCEPTED_FILE_TYPES =
-  "image/png,image/jpeg,image/gif,image/webp,.pdf,.docx,.pptx,.txt,.md,.json,.yaml,.yml,.bicep,.tf,.ps1,.sh,.csv,.xlsx";
+  "image/png,image/jpeg,image/gif,image/webp,.pdf,.docx,.pptx,.txt,.md,.json,.yaml,.yml,.bicep,.tf,.ps1,.sh,.csv,.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
 interface Attachment {
   name: string;
@@ -485,6 +485,7 @@ export default function ChatPanel({ mode, conversationId: savedId, initialMessag
   const config = MODE_CONFIG[effectiveMode] ?? MODE_CONFIG[mode];
   const isFirstTopicMount = useRef(true);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [uploadError, setUploadError] = useState<string | null>(null);
 
   useEffect(() => {
     if (isFirstTopicMount.current) { isFirstTopicMount.current = false; return; }
@@ -554,8 +555,14 @@ export default function ChatPanel({ mode, conversationId: savedId, initialMessag
         if (resp.ok) {
           const { text } = await resp.json() as { text: string };
           setAttachments((prev) => [...prev, { name: file.name, data: text, kind: "doc" }]);
+          setUploadError(null);
+        } else {
+          const err = await resp.json().catch(() => ({ detail: resp.statusText }));
+          setUploadError(`Could not parse ${file.name}: ${err.detail ?? resp.statusText}`);
         }
-      } catch { /* ignore */ }
+      } catch (e) {
+        setUploadError(`Could not upload ${file.name}: ${e instanceof Error ? e.message : "network error"}`);
+      }
       return;
     }
 
@@ -672,6 +679,9 @@ export default function ChatPanel({ mode, conversationId: savedId, initialMessag
           style={{ display: "none" }}
           onChange={handleFileUpload}
         />
+        {uploadError && (
+          <Text size={100} style={{ color: "var(--colorPaletteRedForeground1)", padding: "2px 0 4px" }}>{uploadError}</Text>
+        )}
         {attachments.length > 0 && (
           <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", padding: "4px 0 6px" }}>
             {attachments.map((att, i) => (
