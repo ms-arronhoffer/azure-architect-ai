@@ -11,8 +11,10 @@ import {
   AppsRegular,
   SettingsRegular,
   GlobeRegular,
+  SignOutRegular,
 } from "@fluentui/react-icons";
 import type { Mode } from "../types";
+import { useAuth } from "../auth/AuthProvider";
 
 const MODE_LABELS: Record<Mode, string> = {
   qa: "Expert Q&A",
@@ -178,6 +180,12 @@ const useStyles = makeStyles({
     alignItems: "center",
     flexShrink: 0,
   },
+  userName: {
+    fontSize: "12px",
+    color: tokens.colorNeutralForeground2,
+    paddingRight: "4px",
+    whiteSpace: "nowrap",
+  },
 });
 
 interface HeaderProps {
@@ -192,6 +200,8 @@ interface HeaderProps {
 export default function Header({ mode, darkMode, onToggleDark, onOpenHistory, onOpenSettings, onOpenContext }: HeaderProps) {
   const styles = useStyles();
   const section = MODE_SECTION[mode];
+  const { account, logout, enabled: authEnabled } = useAuth();
+  const firstName = account?.name?.split(" ")[0] ?? account?.username?.split("@")[0] ?? null;
 
   return (
     <header className={styles.header}>
@@ -205,6 +215,18 @@ export default function Header({ mode, darkMode, onToggleDark, onOpenHistory, on
         <Text className={styles.modeLabel}>{MODE_LABELS[mode]}</Text>
       </div>
       <div className={styles.actions}>
+        {authEnabled && firstName && (
+          <>
+            <Text className={styles.userName}>{firstName}</Text>
+            <Button
+              appearance="subtle"
+              size="small"
+              icon={<SignOutRegular />}
+              onClick={logout}
+              title="Sign out"
+            />
+          </>
+        )}
         <Button
           appearance="subtle"
           size="small"
