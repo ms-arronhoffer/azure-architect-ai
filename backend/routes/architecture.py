@@ -6,7 +6,7 @@ Streams typed SSE events including diagram, runbook, Bicep, and cost estimate.
 import json
 from typing import AsyncGenerator
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
 from openai import BadRequestError, AuthenticationError, APIError
 from pydantic import BaseModel
@@ -17,11 +17,13 @@ from prompts.system_prompt import MODE_TEMPLATES
 from services.bicep_service import build_and_preview as build_bicep_preview
 from services.diagram_service import generate_diagram
 from services.docs_service import search_azure_docs
+from services.error_sanitizer import sanitize_openai_error
 from services.mcp_service import call_mcp_tool, is_mcp_tool
 from services.openai_service import get_client, get_deployment, resolve_client_and_model
 from services.pricing_service import estimate_architecture, get_regional_pricing_context
 from services.runbook_service import build_runbook
 from services.settings_service import load_settings
+from limiter import limiter
 from tools.tool_definitions import get_tools_for_mode
 
 router = APIRouter()
@@ -104,7 +106,7 @@ async def _stream_architecture(req: ArchRequest, provider: str = "azure", model:
                 max_completion_tokens=8000,
             )
         except (BadRequestError, AuthenticationError, APIError) as e:
-            msg = getattr(e, "message", str(e))
+            msg = sanitize_openai_error(e)
             yield f"data: {json.dumps({'type': 'error', 'message': msg})}\n\n"
             return
 
@@ -547,7 +549,8 @@ def _safe_json(s: str) -> dict:
 
 
 @router.post("/architecture")
-async def architecture(req: ArchRequest, claims=Depends(require_user)):
+@limiter.limit("10/minute")
+async def architecture(request: Request, req: ArchRequest, claims=Depends(require_user)):
     app_settings = await load_settings()
     mc = req.llm_config or app_settings.mode_models.get(req.mode)
     provider = mc.provider if mc else "azure"

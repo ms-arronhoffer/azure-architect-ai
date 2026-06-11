@@ -3,11 +3,12 @@ import json
 from datetime import datetime, timezone
 from typing import Any, AsyncGenerator
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from routes.architecture import ArchRequest, _stream_architecture
+from limiter import limiter
 
 router = APIRouter()
 
@@ -127,7 +128,8 @@ async def _stream_analyze(req: AnalyzeRequest) -> AsyncGenerator[str, None]:
 
 
 @router.post("/analyze")
-async def analyze(req: AnalyzeRequest):
+@limiter.limit("10/minute")
+async def analyze(request: Request, req: AnalyzeRequest):
     return StreamingResponse(
         _stream_analyze(req),
         media_type="text/event-stream",

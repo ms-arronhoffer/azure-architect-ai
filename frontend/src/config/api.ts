@@ -18,6 +18,14 @@ export function setAuthTokenProvider(provider: TokenProvider | null): void {
   _tokenProvider = provider;
 }
 
+// Error notification callback — registered by App via useEffect so toast system
+// can be triggered from anywhere that calls apiFetch.
+type ErrorNotifier = (message: string) => void;
+let _errorNotifier: ErrorNotifier | null = null;
+export function setErrorNotifier(notifier: ErrorNotifier | null): void {
+  _errorNotifier = notifier;
+}
+
 export async function apiFetch(path: string, init: RequestInit = {}): Promise<Response> {
   const headers = new Headers(init.headers);
   const callerSetAuth = headers.has("Authorization");
@@ -25,7 +33,13 @@ export async function apiFetch(path: string, init: RequestInit = {}): Promise<Re
     const token = await _tokenProvider();
     if (token) headers.set("Authorization", `Bearer ${token}`);
   }
-  const resp = await fetch(apiPath(path), { ...init, headers });
+  let resp: Response;
+  try {
+    resp = await fetch(apiPath(path), { ...init, headers });
+  } catch {
+    _errorNotifier?.("Network error — could not reach the server.");
+    throw new Error("Network error");
+  }
   // On 401, force a fresh token acquisition (handles stale cached tokens) and retry once.
   if (resp.status === 401 && _tokenProvider && !callerSetAuth) {
     try {
@@ -33,9 +47,12 @@ export async function apiFetch(path: string, init: RequestInit = {}): Promise<Re
       if (freshToken) {
         const retryHeaders = new Headers(init.headers);
         retryHeaders.set("Authorization", `Bearer ${freshToken}`);
-        return fetch(apiPath(path), { ...init, headers: retryHeaders });
+        resp = await fetch(apiPath(path), { ...init, headers: retryHeaders });
       }
     } catch { /* retry failed, return original 401 */ }
+  }
+  if (!resp.ok && resp.status >= 500) {
+    _errorNotifier?.(`Server error (${resp.status}) — please try again.`);
   }
   return resp;
 }

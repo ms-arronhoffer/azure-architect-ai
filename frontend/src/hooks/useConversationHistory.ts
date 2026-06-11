@@ -1,8 +1,10 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { ConversationRecord, ChatMessage, Mode } from "../types";
 import { apiPath } from "../config/api";
 
 const MAX_CONVERSATIONS = 50;
+
+export type SaveStatus = "idle" | "saving" | "saved";
 
 async function fetchAll(): Promise<ConversationRecord[]> {
   try {
@@ -20,6 +22,8 @@ async function fetchAll(): Promise<ConversationRecord[]> {
 
 export function useConversationHistory() {
   const [conversations, setConversations] = useState<ConversationRecord[]>([]);
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
+  const savedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     fetchAll().then(setConversations);
@@ -39,6 +43,7 @@ export function useConversationHistory() {
       return [record, ...filtered].slice(0, MAX_CONVERSATIONS);
     });
 
+    setSaveStatus("saving");
     try {
       await fetch(apiPath("/api/conversations"), {
         method: "POST",
@@ -50,9 +55,12 @@ export function useConversationHistory() {
             : null,
         }),
       });
+      setSaveStatus("saved");
     } catch {
-      // best-effort
+      setSaveStatus("idle");
     }
+    if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
+    savedTimerRef.current = setTimeout(() => setSaveStatus("idle"), 2500);
   }, [conversations]);
 
   const remove = useCallback(async (id: string) => {
@@ -103,5 +111,5 @@ export function useConversationHistory() {
     return record;
   }, []);
 
-  return { conversations, upsert, remove, clear, fork };
+  return { conversations, saveStatus, upsert, remove, clear, fork };
 }

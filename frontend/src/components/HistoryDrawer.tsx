@@ -8,8 +8,10 @@ import {
   DrawerHeaderTitle,
   DrawerBody,
   Badge,
+  Input,
 } from "@fluentui/react-components";
-import { DismissRegular, DeleteRegular } from "@fluentui/react-icons";
+import { DismissRegular, DeleteRegular, SearchRegular } from "@fluentui/react-icons";
+import { useState } from "react";
 import type { ConversationRecord, Mode } from "../types";
 
 const MODE_LABELS: Partial<Record<Mode, string>> = {
@@ -99,6 +101,9 @@ const useStyles = makeStyles({
     padding: "32px 16px",
     color: tokens.colorNeutralForeground3,
   },
+  searchRow: {
+    padding: "0 0 8px",
+  },
 });
 
 interface HistoryDrawerProps {
@@ -119,6 +124,14 @@ export default function HistoryDrawer({
   onClear,
 }: HistoryDrawerProps) {
   const styles = useStyles();
+  const [query, setQuery] = useState("");
+
+  const filtered = query.trim()
+    ? conversations.filter((c) =>
+        c.title.toLowerCase().includes(query.toLowerCase()) ||
+        (MODE_LABELS[c.mode] ?? c.mode).toLowerCase().includes(query.toLowerCase())
+      )
+    : conversations;
 
   return (
     <Drawer
@@ -144,6 +157,16 @@ export default function HistoryDrawer({
           </div>
         ) : (
           <>
+            <div className={styles.searchRow}>
+              <Input
+                contentBefore={<SearchRegular />}
+                placeholder="Search history..."
+                value={query}
+                onChange={(_, d) => setQuery(d.value)}
+                size="small"
+                style={{ width: "100%" }}
+              />
+            </div>
             <div className={styles.clearRow}>
               <Button
                 appearance="subtle"
@@ -155,7 +178,12 @@ export default function HistoryDrawer({
               </Button>
             </div>
             <div className={styles.list}>
-              {conversations.map((conv) => {
+              {filtered.length === 0 && (
+                <div className={styles.empty}>
+                  <Text size={200}>No matches for "{query}"</Text>
+                </div>
+              )}
+              {filtered.map((conv) => {
                 const isPanel = PANEL_MODES.has(conv.mode);
                 const hasSaved = !!conv.structuredResult;
                 return (

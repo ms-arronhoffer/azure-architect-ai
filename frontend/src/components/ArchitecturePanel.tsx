@@ -215,6 +215,7 @@ interface Attachment {
   name: string;
   content: string;
   isImage: boolean;
+  preview?: string;
 }
 
 const DESIGN_TYPES: { mode: Mode; label: string; subtitle: string; generateLabel: string }[] = [
@@ -246,6 +247,7 @@ export default function ArchitecturePanel({ mode = "architecture", onRefine, onM
   const [pattern, setPattern] = useState("custom");
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [parseError, setParseError] = useState<string | null>(null);
+  const [previewExpandedIdx, setPreviewExpandedIdx] = useState<number | null>(null);
   const [isImproving, setIsImproving] = useState(false);
 
   const [activeTab, setActiveTab] = useState<ResultTab>("explanation");
@@ -263,6 +265,8 @@ export default function ArchitecturePanel({ mode = "architecture", onRefine, onM
   const [networkTopology, setNetworkTopology] = useState<NetworkTopology | null>(null);
   const [statusMsg, setStatusMsg] = useState("");
   const [showEditor, setShowEditor] = useState(false);
+  const [diagramHistory, setDiagramHistory] = useState<string[]>([]);
+  const [diagramHistoryIndex, setDiagramHistoryIndex] = useState(-1);
   const [isExporting, setIsExporting] = useState(false);
   const [generatingTab, setGeneratingTab] = useState<string | null>(null);
   const [selectedIac, setSelectedIac] = useState<Set<IacKind>>(new Set());
@@ -432,6 +436,8 @@ window.mxBasePath = 'https://viewer.diagrams.net/';
   function reset() {
     setExplanation("");
     setDiagramXml(null);
+    setDiagramHistory([]);
+    setDiagramHistoryIndex(-1);
     setRunbook(null);
     setBicepResult(null);
     setBicepPreview(null);
@@ -464,7 +470,8 @@ window.mxBasePath = 'https://viewer.diagrams.net/';
           const res = await apiFetch("/api/parse", { method: "POST", headers: { "Content-Type": "application/octet-stream", "X-Filename": file.name }, body: await file.arrayBuffer() });
           if (res.ok) {
             const { text } = await res.json() as { text: string };
-            setAttachments((prev) => [...prev, { name: file.name, content: text, isImage: false }]);
+            const preview = text.trim().slice(0, 280);
+            setAttachments((prev) => [...prev, { name: file.name, content: text, isImage: false, preview }]);
           } else {
             const err = await res.json().catch(() => ({ detail: "Unknown error" })) as { detail?: string };
             setParseError(`Could not parse ${file.name}: ${err.detail ?? res.statusText}`);
@@ -521,7 +528,14 @@ window.mxBasePath = 'https://viewer.diagrams.net/';
   function applyEvent(event: SseEvent) {
     if (event.type === "token") setExplanation((e) => e + event.content);
     if (event.type === "status") setStatusMsg(event.message);
-    if (event.type === "diagram") { setDiagramXml(event.xml); }
+    if (event.type === "diagram") {
+      setDiagramXml(event.xml);
+      setDiagramHistory((h) => {
+        const next = [...h, event.xml].slice(-3);
+        setDiagramHistoryIndex(next.length - 1);
+        return next;
+      });
+    }
     if (event.type === "runbook") setRunbook(event.markdown);
     if (event.type === "bicep") setBicepResult({ bicep_code: event.code, param_file: event.param_file, deploy_commands: event.deploy_commands ?? [], notes: event.notes ?? [] });
     if (event.type === "bicep_preview") setBicepPreview(event.preview);
@@ -785,10 +799,26 @@ window.mxBasePath = 'https://viewer.diagrams.net/';
               {attachments.length > 0 && (
                 <div className={styles.attachChips}>
                   {attachments.map((a, i) => (
-                    <div key={i} className={styles.attachChip}>
-                      {a.isImage ? <ImageRegular style={{ flexShrink: 0, fontSize: "12px" }} /> : <DocumentRegular style={{ flexShrink: 0, fontSize: "12px" }} />}
-                      <span className={styles.attachChipName}>{a.name}</span>
-                      <DismissRegular className={styles.attachChipRemove} onClick={() => removeAttachment(i)} />
+                    <div key={i}>
+                      <div className={styles.attachChip}>
+                        {a.isImage ? <ImageRegular style={{ flexShrink: 0, fontSize: "12px" }} /> : <DocumentRegular style={{ flexShrink: 0, fontSize: "12px" }} />}
+                        <span className={styles.attachChipName}>{a.name}</span>
+                        {a.preview && (
+                          <button
+                            style={{ background: "none", border: "none", cursor: "pointer", fontSize: "10px", color: tokens.colorBrandForeground1, padding: "0 2px", flexShrink: 0 }}
+                            onClick={() => setPreviewExpandedIdx(previewExpandedIdx === i ? null : i)}
+                            title={previewExpandedIdx === i ? "Hide preview" : "Show extracted text"}
+                          >
+                            {previewExpandedIdx === i ? "hide" : "preview"}
+                          </button>
+                        )}
+                        <DismissRegular className={styles.attachChipRemove} onClick={() => removeAttachment(i)} />
+                      </div>
+                      {previewExpandedIdx === i && a.preview && (
+                        <div style={{ marginTop: "4px", padding: "6px 8px", background: tokens.colorNeutralBackground3, borderRadius: "4px", fontSize: "11px", color: tokens.colorNeutralForeground2, whiteSpace: "pre-wrap", maxHeight: "120px", overflowY: "auto" }}>
+                          {a.preview}{a.content.length > 280 ? "…" : ""}
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -905,6 +935,12 @@ window.mxBasePath = 'https://viewer.diagrams.net/';
               downloadDiagram={downloadDiagram}
               openInDrawio={openInDrawio}
               setShowEditor={setShowEditor}
+              diagramHistory={diagramHistory}
+              diagramHistoryIndex={diagramHistoryIndex}
+              onDiagramHistoryNav={(idx) => {
+                setDiagramHistoryIndex(idx);
+                setDiagramXml(diagramHistory[idx]);
+              }}
               setPopoverServiceLabel={setPopoverServiceLabel}
               cancelService={cancelService}
               downloadGantt={downloadGantt}

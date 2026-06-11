@@ -2,12 +2,16 @@
 
 import json
 import re
+import time
 from datetime import datetime, timezone
 
 import httpx
 
 PRICING_API = "https://prices.azure.com/api/retail/prices"
 PRICING_DATA_SOURCE = "Azure Retail Pricing API (prices.azure.com)"
+
+_price_cache: dict[tuple, tuple[list[dict], float]] = {}
+_PRICE_CACHE_TTL = 6 * 3600  # 6 hours
 
 # Maps common service labels to Azure Retail Pricing API service names
 SERVICE_NAME_MAP = {
@@ -96,13 +100,18 @@ async def get_price(
     region: str = "eastus",
     currency: str = "USD",
 ) -> list[dict]:
-    """Query Azure Retail Pricing API. Retries without SKU filter if no results."""
+    """Query Azure Retail Pricing API. Retries without SKU filter if no results.
+    Results are cached for 6 hours keyed by (service, sku_name, region, currency)."""
     service_normalized = SERVICE_NAME_MAP.get(service.lower().strip(), service)
     region = region or "eastus"
-
     effective_sku = _normalize_sku(sku_name)
 
     async def _query(include_sku: bool) -> list[dict]:
+        cache_key = (service_normalized, effective_sku if include_sku else "", region, currency)
+        cached = _price_cache.get(cache_key)
+        if cached and (time.monotonic() - cached[1]) < _PRICE_CACHE_TTL:
+            return cached[0]
+
         filters = [
             f"serviceName eq '{service_normalized}'",
             f"armRegionName eq '{region}'",
@@ -115,7 +124,9 @@ async def get_price(
             async with httpx.AsyncClient(timeout=10.0) as client:
                 resp = await client.get(PRICING_API, params=params)
                 resp.raise_for_status()
-                return resp.json().get("Items", [])
+                items = resp.json().get("Items", [])
+                _price_cache[cache_key] = (items, time.monotonic())
+                return items
         except Exception:
             return []
 

@@ -6,7 +6,7 @@ Tool calls are dispatched and their structured results emitted as typed SSE even
 import json
 from typing import AsyncGenerator
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
 from openai import BadRequestError, AuthenticationError, APIError
 from pydantic import BaseModel
@@ -16,11 +16,13 @@ from models import ModelConfig
 from observability import tool_calls_counter
 from prompts.system_prompt import get_system_prompt
 from services.docs_service import search_azure_docs
+from services.error_sanitizer import sanitize_openai_error
 from services.rag_service import cached_learn_search
 from services.mcp_service import call_mcp_tool, is_mcp_tool
 from services.openai_service import TOOL_INCOMPATIBLE_MODELS, get_client, get_deployment, resolve_client_and_model
 from services.pricing_service import estimate_architecture, validate_sku
 from services.settings_service import load_settings
+from limiter import limiter
 from tools.tool_definitions import get_tools_for_mode
 
 router = APIRouter()
@@ -141,7 +143,7 @@ async def _stream_chat(mode: str, messages: list[dict], provider: str = "azure",
                             if tc.function.arguments:
                                 tool_calls_raw[idx]["arguments"] += tc.function.arguments
         except (BadRequestError, AuthenticationError, APIError) as e:
-            msg = getattr(e, "message", str(e))
+            msg = sanitize_openai_error(e)
             yield f"data: {json.dumps({'type': 'error', 'message': msg})}\n\n"
             return
 
@@ -417,7 +419,8 @@ def _safe_json(s: str) -> dict:
 
 
 @router.post("/chat")
-async def chat(req: ChatRequest, claims=Depends(require_user)):
+@limiter.limit("60/minute")
+async def chat(request: Request, req: ChatRequest, claims=Depends(require_user)):
     app_settings = await load_settings()
     mc = req.llm_config or app_settings.mode_models.get(req.mode)
     provider = mc.provider if mc else "azure"

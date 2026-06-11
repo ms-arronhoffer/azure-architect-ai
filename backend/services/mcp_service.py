@@ -120,6 +120,10 @@ def get_mcp_tools() -> list[dict]:
     return _tools_cache or []
 
 
+def is_mcp_available() -> bool:
+    return _tools_cache is not None and len(_tools_cache) > 0
+
+
 def is_mcp_tool(name: str) -> bool:
     return name.startswith("mcp_")
 

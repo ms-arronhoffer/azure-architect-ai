@@ -1,9 +1,12 @@
 from contextlib import asynccontextmanager, AsyncExitStack
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
 
 from db import init_db
 from config import settings
+from limiter import limiter
 from middleware.logging import RequestContextMiddleware, configure_logging
 from services.mcp_service import init_mcp
 
@@ -57,6 +60,8 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Azure Architect AI", version="2.0.0", lifespan=lifespan)
 
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)  # type: ignore[arg-type]
 app.add_middleware(RequestContextMiddleware)
 _CORS_DEFAULTS = ["http://localhost:5173", "http://localhost:3000"]
 _extra = [o.strip() for o in settings.cors_origins.split(",") if o.strip()]
@@ -65,8 +70,8 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=_CORS_DEFAULTS + _extra,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type"],
 )
 
 app.include_router(health_router, prefix="/api")

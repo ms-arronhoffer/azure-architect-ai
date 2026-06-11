@@ -3,6 +3,7 @@ import {
   tokens,
   Button,
   Text,
+  Badge,
 } from "@fluentui/react-components";
 import {
   WeatherMoonRegular,
@@ -14,6 +15,9 @@ import {
   SignOutRegular,
 } from "@fluentui/react-icons";
 import type { Mode } from "../types";
+import type { WorkloadContext } from "../types";
+import type { SaveStatus } from "../hooks/useConversationHistory";
+import { hasContext } from "../hooks/useWorkloadContext";
 import { useAuth } from "../auth/AuthProvider";
 
 const MODE_LABELS: Record<Mode, string> = {
@@ -178,6 +182,14 @@ const useStyles = makeStyles({
     textOverflow: "ellipsis",
     whiteSpace: "nowrap",
   },
+  contextBadge: {
+    fontSize: "11px",
+    cursor: "pointer",
+    maxWidth: "200px",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+  },
   actions: {
     display: "flex",
     gap: "2px",
@@ -190,6 +202,12 @@ const useStyles = makeStyles({
     paddingRight: "4px",
     whiteSpace: "nowrap",
   },
+  saveIndicator: {
+    fontSize: "11px",
+    whiteSpace: "nowrap",
+    paddingRight: "6px",
+    transition: "opacity 0.3s",
+  },
 });
 
 interface HeaderProps {
@@ -199,13 +217,20 @@ interface HeaderProps {
   onOpenHistory: () => void;
   onOpenSettings: () => void;
   onOpenContext: () => void;
+  workloadContext?: WorkloadContext;
+  saveStatus?: SaveStatus;
 }
 
-export default function Header({ mode, darkMode, onToggleDark, onOpenHistory, onOpenSettings, onOpenContext }: HeaderProps) {
+export default function Header({ mode, darkMode, onToggleDark, onOpenHistory, onOpenSettings, onOpenContext, workloadContext, saveStatus }: HeaderProps) {
   const styles = useStyles();
   const section = MODE_SECTION[mode];
   const { account, logout, enabled: authEnabled } = useAuth();
   const firstName = account?.name?.split(" ")[0] ?? account?.username?.split("@")[0] ?? null;
+  const contextActive = workloadContext ? hasContext(workloadContext) : false;
+  const contextLabel = contextActive && workloadContext
+    ? [workloadContext.region, workloadContext.complianceFramework, workloadContext.budgetRange]
+        .filter(Boolean).join(" · ")
+    : null;
 
   return (
     <header className={styles.header}>
@@ -219,6 +244,23 @@ export default function Header({ mode, darkMode, onToggleDark, onOpenHistory, on
         <Text className={styles.modeLabel}>{MODE_LABELS[mode]}</Text>
       </div>
       <div className={styles.actions}>
+        {saveStatus === "saving" && (
+          <Text className={styles.saveIndicator} style={{ color: tokens.colorNeutralForeground3 }}>Saving…</Text>
+        )}
+        {saveStatus === "saved" && (
+          <Text className={styles.saveIndicator} style={{ color: tokens.colorStatusSuccessForeground1 }}>Saved ✓</Text>
+        )}
+        {contextActive && contextLabel && (
+          <Badge
+            appearance="tint"
+            color="brand"
+            className={styles.contextBadge}
+            onClick={onOpenContext}
+            title="Active workload context — click to edit"
+          >
+            {contextLabel}
+          </Badge>
+        )}
         {authEnabled && firstName && (
           <>
             <Text className={styles.userName}>{firstName}</Text>

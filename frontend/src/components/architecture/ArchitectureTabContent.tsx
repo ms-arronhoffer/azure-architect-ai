@@ -29,6 +29,8 @@ import {
   OpenRegular,
   EditRegular,
   ArrowSyncRegular,
+  ChevronLeftRegular,
+  ChevronRightRegular,
 } from "@fluentui/react-icons";
 import { lookupService } from "../../utils/serviceMetadata";
 import type { BicepResult, BicepPreview, CostEstimate, AdrRecord, NetworkTopology, WafPillarResult, ProjectTimeline } from "../../types";
@@ -144,6 +146,9 @@ export interface ArchitectureTabContentProps {
   downloadDiagram: () => void;
   openInDrawio: () => void;
   setShowEditor: (v: boolean) => void;
+  diagramHistory: string[];
+  diagramHistoryIndex: number;
+  onDiagramHistoryNav: (idx: number) => void;
   setPopoverServiceLabel: (v: string | null) => void;
   cancelService: () => void;
   downloadGantt: () => void;
@@ -162,6 +167,7 @@ export default function ArchitectureTabContent(props: ArchitectureTabContentProp
     projectTimeline, ganttHtml, popoverServiceLabel, popoverStreamText, popoverLoading,
     generatingTab, isAnyStreaming, deliverableStreaming, requirements,
     generateDeliverable, downloadDiagram, openInDrawio, setShowEditor,
+    diagramHistory, diagramHistoryIndex, onDiagramHistoryNav,
     setPopoverServiceLabel, cancelService, downloadGantt, downloadNetworkDiagram,
     openNetworkInDrawio, downloadBicep, downloadParamFile,
     downloadIacFiles, generateIac, selectedIac, toggleIac,
@@ -206,6 +212,29 @@ export default function ArchitectureTabContent(props: ArchitectureTabContentProp
               <Button size="small" icon={<ArrowDownloadRegular />} onClick={downloadDiagram}>Download .drawio</Button>
               <Button size="small" icon={<OpenRegular />} onClick={openInDrawio}>Open in draw.io</Button>
               <Button size="small" icon={<EditRegular />} onClick={() => setShowEditor(true)}>Edit in draw.io</Button>
+              {diagramHistory.length > 1 && (
+                <span style={{ display: "flex", alignItems: "center", gap: "4px", marginLeft: "auto" }}>
+                  <Button
+                    size="small"
+                    appearance="subtle"
+                    icon={<ChevronLeftRegular />}
+                    disabled={diagramHistoryIndex <= 0}
+                    onClick={() => onDiagramHistoryNav(diagramHistoryIndex - 1)}
+                    title="Previous diagram version"
+                  />
+                  <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
+                    {diagramHistoryIndex + 1}/{diagramHistory.length}
+                  </Text>
+                  <Button
+                    size="small"
+                    appearance="subtle"
+                    icon={<ChevronRightRegular />}
+                    disabled={diagramHistoryIndex >= diagramHistory.length - 1}
+                    onClick={() => onDiagramHistoryNav(diagramHistoryIndex + 1)}
+                    title="Next diagram version"
+                  />
+                </span>
+              )}
             </div>
             <iframe className={styles.diagramFrame} srcDoc={diagramHtml ?? undefined} title="Architecture Diagram" />
             {diagramNodes.length > 0 && (

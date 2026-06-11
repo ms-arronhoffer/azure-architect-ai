@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { FluentProvider, makeStyles, tokens } from "@fluentui/react-components";
+import { FluentProvider, makeStyles, tokens, Toaster, useToastController, Toast, ToastTitle, ToastBody } from "@fluentui/react-components";
 import { azureDarkTheme, azureLightTheme } from "./theme";
 import SideNav from "./components/SideNav";
 import Header from "./components/Header";
@@ -36,6 +36,7 @@ import { useWorkloadContext } from "./hooks/useWorkloadContext";
 import { useSettings } from "./hooks/useSettings";
 import { useServiceHealth } from "./hooks/useServiceHealth";
 import { track } from "./utils/telemetry";
+import { setErrorNotifier } from "./config/api";
 import type { Mode, ConversationRecord, ChatMessage } from "./types";
 
 const useStyles = makeStyles({
@@ -75,10 +76,25 @@ export default function App() {
   const [selectedConversation, setSelectedConversation] = useState<ConversationRecord | null>(null);
   const [refinementSeed, setRefinementSeed] = useState<{ id: string; messages: ChatMessage[]; suggestedReplies?: string[] } | null>(null);
   const [selectedPanelSession, setSelectedPanelSession] = useState<ConversationRecord | null>(null);
-  const { conversations, upsert, remove, clear, fork } = useConversationHistory();
+  const { conversations, saveStatus, upsert, remove, clear, fork } = useConversationHistory();
   const { context: workloadContext, setContext: setWorkloadContext, clearContext } = useWorkloadContext();
   const { settings, saveSettings, githubTokenConfigured, setGithubToken, clearGithubToken } = useSettings();
   const { incidents: healthIncidents, incidentCount, loading: healthLoading, error: healthError, lastChecked: healthLastChecked, refresh: refreshHealth } = useServiceHealth();
+
+  const TOASTER_ID = "app-toaster";
+  const { dispatchToast } = useToastController(TOASTER_ID);
+  useEffect(() => {
+    setErrorNotifier((message) => {
+      dispatchToast(
+        <Toast>
+          <ToastTitle>Error</ToastTitle>
+          <ToastBody>{message}</ToastBody>
+        </Toast>,
+        { intent: "error", timeout: 5000 }
+      );
+    });
+    return () => setErrorNotifier(null);
+  }, [dispatchToast]);
 
   const wafSessionId = useRef(crypto.randomUUID()).current;
   const reviewSessionId = useRef(crypto.randomUUID()).current;
@@ -262,6 +278,8 @@ export default function App() {
             onOpenHistory={() => setHistoryOpen(true)}
             onOpenSettings={() => setSettingsOpen(true)}
             onOpenContext={() => setContextOpen(true)}
+            workloadContext={workloadContext}
+            saveStatus={saveStatus}
           />
           <div className={styles.content}>{renderMode()}</div>
         </div>
@@ -291,6 +309,7 @@ export default function App() {
         onClear={() => { clearContext(); setContextOpen(false); }}
       />
       <TelemetryDebugDrawer open={telemetryOpen} onClose={() => setTelemetryOpen(false)} />
+      <Toaster toasterId={TOASTER_ID} position="top-end" />
     </FluentProvider>
   );
 }

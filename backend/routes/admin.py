@@ -1,3 +1,4 @@
+import hashlib
 import time
 from typing import Any
 
@@ -47,7 +48,10 @@ async def get_metrics(
         .order_by(func.count().desc())
         .limit(20)
     )).all()
-    top_users = [{"user_id": r.user_id, "count": r.count} for r in user_rows]
+    top_users = [
+        {"user_id": hashlib.sha256(r.user_id.encode()).hexdigest()[:16], "count": r.count}
+        for r in user_rows
+    ]
 
     total = await db.scalar(select(func.count()).select_from(Conversation)) or 0
     unique_users = await db.scalar(
