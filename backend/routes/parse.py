@@ -23,10 +23,10 @@ async def parse_document(request: Request) -> JSONResponse:
         text = _extract_docx(data, filename)
     elif lower.endswith(".pptx"):
         text = _extract_pptx(data)
-    elif lower.endswith(".xlsx"):
+    elif lower.endswith(".xlsx") or lower.endswith(".xls"):
         text = _extract_xlsx(data)
     else:
-        raise HTTPException(status_code=415, detail="Only .pdf, .docx, .pptx, and .xlsx files are supported.")
+        raise HTTPException(status_code=415, detail="Only .pdf, .docx, .pptx, and .xlsx/.xls files are supported.")
 
     return JSONResponse({"text": text, "filename": filename})
 
@@ -88,6 +88,10 @@ def _extract_pptx(data: bytes) -> str:
 
 
 def _extract_xlsx(data: bytes) -> str:
+    # XLS magic bytes: D0 CF 11 E0 (old BIFF binary format)
+    if data[:4] == b"\xd0\xcf\x11\xe0":
+        return _extract_xls(data)
+
     try:
         import openpyxl
     except ImportError:
@@ -107,3 +111,27 @@ def _extract_xlsx(data: bytes) -> str:
         return "\n\n".join(parts)
     except Exception as exc:
         raise HTTPException(status_code=422, detail=f"Could not read XLSX: {exc}")
+
+
+def _extract_xls(data: bytes) -> str:
+    try:
+        import xlrd
+    except ImportError:
+        raise HTTPException(
+            status_code=422,
+            detail="File is in old Excel 97-2003 (.xls) format. Open it in Excel and save as .xlsx, or contact your admin to enable .xls support.",
+        )
+    try:
+        wb = xlrd.open_workbook(file_contents=data)
+        parts = []
+        for sheet in wb.sheets():
+            rows = []
+            for rx in range(sheet.nrows):
+                cells = [str(sheet.cell_value(rx, cx)) for cx in range(sheet.ncols)]
+                if any(c for c in cells):
+                    rows.append("\t".join(cells))
+            if rows:
+                parts.append(f"[Sheet: {sheet.name}]\n" + "\n".join(rows))
+        return "\n\n".join(parts)
+    except Exception as exc:
+        raise HTTPException(status_code=422, detail=f"Could not read XLS: {exc}")
