@@ -19,12 +19,11 @@ from tools.domains.presentation import TOOLS as _presentation_tools
 from tools.domains.project import TOOLS as _project_tools
 from tools.domains.qa import TOOLS as _qa_tools
 from tools.domains.security import TOOLS as _security_tools
-from tools.domains.sizing import TOOLS as _sizing_tools
 from tools.domains.stakeholder import TOOLS as _stakeholder_tools
 from tools.domains.troubleshoot import TOOLS as _troubleshoot_tools
 from tools.domains.waf import TOOLS as _waf_tools
 
-TOOLS = _architecture_tools + _bicep_tools + _codegen_tools + _comparison_tools + _compliance_tools + _cost_tools + _devsecops_tools + _drbc_tools + _governance_tools + _iac_tools + _learning_tools + _migration_tools + _monitoring_tools + _network_tools + _operations_tools + _presentation_tools + _project_tools + _qa_tools + _security_tools + _sizing_tools + _stakeholder_tools + _troubleshoot_tools + _waf_tools
+TOOLS = _architecture_tools + _bicep_tools + _codegen_tools + _comparison_tools + _compliance_tools + _cost_tools + _devsecops_tools + _drbc_tools + _governance_tools + _iac_tools + _learning_tools + _migration_tools + _monitoring_tools + _network_tools + _operations_tools + _presentation_tools + _project_tools + _qa_tools + _security_tools + _stakeholder_tools + _troubleshoot_tools + _waf_tools
 
 _BY_NAME = {t["function"]["name"]: t for t in TOOLS}
 
@@ -53,7 +52,10 @@ TOOLS_BY_MODE: dict[str, list] = {
     "certprep":     get_tools("search_azure_docs", "generate_practice_exam"),
     "learningplan": get_tools("generate_learning_plan"),
     "codegen":      get_tools("generate_code_files"),
-    "tco":          get_tools("search_azure_docs", "estimate_costs", "generate_tco_report"),
+    "pipelineforge":   get_tools("search_azure_docs"),
+    "runbookstudio":   get_tools("search_azure_docs"),
+    "namingstandards": get_tools("search_azure_docs"),
+    "rfpproposal":     get_tools("search_azure_docs", "estimate_costs"),
     "bootstrap":      get_tools("search_azure_docs", "design_architecture", "generate_bicep",
                                 "generate_terraform", "generate_arm", "estimate_costs"),
     "aiarchitecture": get_tools("search_azure_docs", "design_architecture", "estimate_costs",
@@ -77,7 +79,6 @@ TOOLS_BY_MODE: dict[str, list] = {
                                 "generate_terraform", "generate_arm"),
     "reliability":    get_tools("search_azure_docs", "define_slo_framework", "assess_waf_pillar",
                                 "generate_monitoring_config"),
-    "sizing":         get_tools("search_azure_docs", "recommend_sku", "estimate_costs"),
     "troubleshoot":   get_tools("search_azure_docs", "diagnose_issue", "generate_kql_queries",
                                 "generate_remediation_runbook"),
     "devops":         get_tools("search_azure_docs", "generate_cicd_pipeline", "design_pipeline"),
@@ -101,9 +102,10 @@ _MCP_ENABLED_MODES = {
     "qa", "architecture", "waf", "review", "compliance", "migration",
     "regional", "cost", "drbc", "monitoring", "compare", "certprep", "reference",
     "aiarchitecture", "dataplatform", "apim", "network", "landingzone", "identity",
-    "threatmodel", "devsecops", "reliability", "sizing", "troubleshoot",
+    "threatmodel", "devsecops", "reliability", "troubleshoot",
     "devops", "finops", "securityposture", "multicloud",
     "governance", "security", "ops",
+    "pipelineforge", "runbookstudio", "namingstandards", "rfpproposal",
 }
 
 

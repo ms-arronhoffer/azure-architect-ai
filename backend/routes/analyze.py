@@ -101,12 +101,6 @@ async def _stream_analyze(req: AnalyzeRequest) -> AsyncGenerator[str, None]:
         region=req.region,
         existing_description=req.requirements,
     )
-    sizing_req = ArchRequest(
-        requirements=req.requirements,
-        constraints=req.constraints,
-        mode="sizing",
-        region=req.region,
-    )
     security_req = ArchRequest(
         requirements=req.requirements,
         constraints=req.constraints,
@@ -116,17 +110,15 @@ async def _stream_analyze(req: AnalyzeRequest) -> AsyncGenerator[str, None]:
 
     yield f"data: {json.dumps({'type': 'analyze_status', 'job': 'architecture', 'status': 'running'})}\n\n"
     yield f"data: {json.dumps({'type': 'analyze_status', 'job': 'waf', 'status': 'running'})}\n\n"
-    yield f"data: {json.dumps({'type': 'analyze_status', 'job': 'sizing', 'status': 'running'})}\n\n"
     yield f"data: {json.dumps({'type': 'analyze_status', 'job': 'security', 'status': 'running'})}\n\n"
 
     arch_task = asyncio.create_task(_collect_tagged(_stream_architecture(arch_req), "architecture"))
     waf_task = asyncio.create_task(_collect_tagged(_stream_architecture(waf_req), "waf"))
-    sizing_task = asyncio.create_task(_collect_tagged(_stream_architecture(sizing_req), "sizing"))
     security_task = asyncio.create_task(_collect_tagged(_stream_architecture(security_req), "security"))
 
-    results = await asyncio.gather(arch_task, waf_task, sizing_task, security_task)
+    results = await asyncio.gather(arch_task, waf_task, security_task)
 
-    for job, events in zip(["architecture", "waf", "sizing", "security"], results):
+    for job, events in zip(["architecture", "waf", "security"], results):
         for event in events:
             yield event
         yield f"data: {json.dumps({'type': 'analyze_status', 'job': job, 'status': 'done'})}\n\n"
@@ -153,7 +145,6 @@ async def _stream_pipeline(req: AnalyzeRequest) -> AsyncGenerator[str, None]:
         workload_name = first_line.split(":", 1)[1].strip().split("(")[0].strip()
 
     arch_state: dict[str, Any] = {}
-    sizing_state: dict[str, Any] = {}
     security_state: dict[str, Any] = {}
     waf_state: dict[str, Any] = {}
 
@@ -172,27 +163,9 @@ async def _stream_pipeline(req: AnalyzeRequest) -> AsyncGenerator[str, None]:
 
     arch_text = arch_state.get("text", "")
 
-    # 2. Sizing — fed by architecture
-    yield f"data: {json.dumps({'type': 'analyze_status', 'job': 'sizing', 'status': 'running', '_phase': 'pipeline'})}\n\n"
-    sizing_req = ArchRequest(
-        requirements=req.requirements + "\n\n## Prior Step — Architecture\n" + arch_text,
-        constraints=req.constraints,
-        mode="sizing",
-        region=req.region,
-        existing_description=arch_text,
-    )
-    async for chunk in _relay_sse(_stream_architecture(sizing_req), "sizing", phase="pipeline", container=sizing_state):
-        yield chunk
-    yield f"data: {json.dumps({'type': 'analyze_status', 'job': 'sizing', 'status': 'done', '_phase': 'pipeline'})}\n\n"
-
-    sizing_text = sizing_state.get("text", "")
-
-    # 3. Security — fed by architecture + sizing
+    # 2. Security — fed by architecture
     yield f"data: {json.dumps({'type': 'analyze_status', 'job': 'security', 'status': 'running', '_phase': 'pipeline'})}\n\n"
-    sec_priors = (
-        "\n\n## Prior Step — Architecture\n" + arch_text +
-        "\n\n## Prior Step — Sizing\n" + sizing_text
-    )
+    sec_priors = "\n\n## Prior Step — Architecture\n" + arch_text
     security_req = ArchRequest(
         requirements=req.requirements + sec_priors,
         constraints=req.constraints,
@@ -206,7 +179,7 @@ async def _stream_pipeline(req: AnalyzeRequest) -> AsyncGenerator[str, None]:
 
     security_text = security_state.get("text", "")
 
-    # 4. WAF — fed by all priors
+    # 3. WAF — fed by all priors
     yield f"data: {json.dumps({'type': 'analyze_status', 'job': 'waf', 'status': 'running', '_phase': 'pipeline'})}\n\n"
     waf_priors = sec_priors + "\n\n## Prior Step — Security\n" + security_text
     waf_req = ArchRequest(
@@ -214,13 +187,13 @@ async def _stream_pipeline(req: AnalyzeRequest) -> AsyncGenerator[str, None]:
         constraints=req.constraints,
         mode="waf",
         region=req.region,
-        existing_description=arch_text + "\n\n" + sizing_text + "\n\n" + security_text,
+        existing_description=arch_text + "\n\n" + security_text,
     )
     async for chunk in _relay_sse(_stream_architecture(waf_req), "waf", phase="pipeline", container=waf_state):
         yield chunk
     yield f"data: {json.dumps({'type': 'analyze_status', 'job': 'waf', 'status': 'done', '_phase': 'pipeline'})}\n\n"
 
-    # 5. Final bundled_design event
+    # 4. Final bundled_design event
     bundled = {
         "type": "bundled_design",
         "workload_name": workload_name or "Workload",
@@ -231,7 +204,7 @@ async def _stream_pipeline(req: AnalyzeRequest) -> AsyncGenerator[str, None]:
             "bicep": arch_state.get("artifacts", {}).get("bicep", ""),
             "bicep_preview": arch_state.get("artifacts", {}).get("bicep_preview"),
         },
-        "sizing": {"text": sizing_text},
+        "sizing": {"text": ""},
         "security": {"text": security_text},
         "waf": {"pillars": waf_state.get("waf_pillars", [])},
     }

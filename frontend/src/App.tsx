@@ -15,9 +15,11 @@ import PresentationPanel from "./components/PresentationPanel";
 import SettingsDrawer from "./components/SettingsDrawer";
 import CodegenPanel from "./components/CodegenPanel";
 import LearningPlanPanel from "./components/LearningPlanPanel";
-import TCOPanel from "./components/TCOPanel";
+import PipelineForgePanel from "./components/PipelineForgePanel";
+import RunbookStudioPanel from "./components/RunbookStudioPanel";
+import NamingStandardsPanel from "./components/NamingStandardsPanel";
+import RfpProposalPanel from "./components/RfpProposalPanel";
 import BootstrapPanel from "./components/BootstrapPanel";
-import SizingPanel from "./components/SizingPanel";
 import WorkloadContextPanel from "./components/WorkloadContextPanel";
 import IntakePanel from "./components/IntakePanel";
 import AnalysisPanel from "./components/AnalysisPanel";
@@ -59,7 +61,7 @@ const useStyles = makeStyles({
 });
 
 const ARCH_MODES: Mode[] = ["architecture", "network", "aiarchitecture", "dataplatform", "apim"];
-const PANEL_MODES: Mode[] = [...ARCH_MODES, "waf", "review", "drbc", "sizing", "tco", "threatmodel", "reliability", "landingzone", "troubleshoot", "strategy"];
+const PANEL_MODES: Mode[] = [...ARCH_MODES, "waf", "review", "drbc", "threatmodel", "reliability", "landingzone", "troubleshoot", "strategy", "pipelineforge", "runbookstudio", "namingstandards", "rfpproposal"];
 
 export default function App() {
   const styles = useStyles();
@@ -81,8 +83,10 @@ export default function App() {
   const wafSessionId = useRef(crypto.randomUUID()).current;
   const reviewSessionId = useRef(crypto.randomUUID()).current;
   const drbcSessionId = useRef(crypto.randomUUID()).current;
-  const sizingSessionId = useRef(crypto.randomUUID()).current;
-  const tcoSessionId = useRef(crypto.randomUUID()).current;
+  const pipelineForgeSessionId = useRef(crypto.randomUUID()).current;
+  const runbookStudioSessionId = useRef(crypto.randomUUID()).current;
+  const namingStandardsSessionId = useRef(crypto.randomUUID()).current;
+  const rfpProposalSessionId = useRef(crypto.randomUUID()).current;
   const threatModelSessionId = useRef(crypto.randomUUID()).current;
   const reliabilitySessionId = useRef(crypto.randomUUID()).current;
   const landingZoneSessionId = useRef(crypto.randomUUID()).current;
@@ -215,8 +219,10 @@ export default function App() {
     if (mode === "codegen") return <CodegenPanel key="codegen" onRefine={handleRefine} />;
     if (mode === "learningplan") return <LearningPlanPanel key="learningplan" />;
     if (mode === "bootstrap") return <BootstrapPanel key="bootstrap" onRefine={handleRefine} />;
-    if (mode === "sizing") return <SizingPanel key="sizing" onRefine={handleRefine} sessionId={sizingSessionId} onSave={handlePanelSave} initialSession={panelSession("sizing")} />;
-    if (mode === "tco") return <TCOPanel key="tco" onRefine={handleRefine} sessionId={tcoSessionId} onSave={handlePanelSave} initialSession={panelSession("tco")} />;
+    if (mode === "pipelineforge") return <PipelineForgePanel key="pipelineforge" onRefine={handleRefine} sessionId={pipelineForgeSessionId} onSave={handlePanelSave} initialSession={panelSession("pipelineforge")} />;
+    if (mode === "runbookstudio") return <RunbookStudioPanel key="runbookstudio" onRefine={handleRefine} sessionId={runbookStudioSessionId} onSave={handlePanelSave} initialSession={panelSession("runbookstudio")} />;
+    if (mode === "namingstandards") return <NamingStandardsPanel key="namingstandards" onRefine={handleRefine} sessionId={namingStandardsSessionId} onSave={handlePanelSave} initialSession={panelSession("namingstandards")} />;
+    if (mode === "rfpproposal") return <RfpProposalPanel key="rfpproposal" onRefine={handleRefine} sessionId={rfpProposalSessionId} onSave={handlePanelSave} initialSession={panelSession("rfpproposal")} />;
     if (ADVISOR_MODES.includes(mode)) {
       return (
         <AdvisorPanel

@@ -25,7 +25,7 @@ import { useState } from "react";
 import { copyComparisonAsMarkdown, exportComparisonSvg, exportComparisonPng } from "../../utils/comparisonExport";
 import { downloadTextFile, downloadFilesAsZip, languageFromFilename } from "../../utils/fileBundleExport";
 import type {
-  StructuredResult, ServiceComparison, TcoReport, RegionComparison, PracticeExamPack,
+  StructuredResult, ServiceComparison, RegionComparison, PracticeExamPack,
   StakeholderPlan, DecisionCard, Mode,
   TerraformFilesResult, ArmFilesResult, CicdFilesResult,
   CostAlertsResult, SecurityPostureResult, MulticloudComparisonResult,
@@ -118,11 +118,6 @@ export default function StructuredResultCard({ result, onContinueIn }: { result:
           </div>
         )}
         <Text className={styles.tip}>{data.disclaimer}</Text>
-        {onContinueIn && (
-          <div style={{ marginTop: "10px", paddingTop: "8px", borderTop: `1px solid ${tokens.colorNeutralStroke3}`, display: "flex", gap: "6px" }}>
-            <Button size="small" appearance="subtle" icon={<ArrowForwardRegular />} onClick={() => onContinueIn("tco", `Current monthly Azure estimate: $${data.total_monthly_estimate.toLocaleString()}/mo. Services: ${data.line_items.map(l => l.service).join(", ")}`)}>Run TCO Comparison</Button>
-          </div>
-        )}
       </div>
     );
   }
@@ -198,10 +193,6 @@ export default function StructuredResultCard({ result, onContinueIn }: { result:
 
   if (result.kind === "service_comparison") {
     return <ServiceComparisonCard data={result.data} />;
-  }
-
-  if (result.kind === "tco_report") {
-    return <TcoReportCard data={result.data} />;
   }
 
   if (result.kind === "monitoring_config") {
@@ -723,78 +714,6 @@ function ServiceComparisonCard({ data }: { data: ServiceComparison }) {
         <Text size={200} weight="semibold">Recommendation</Text>
         <Text size={200} block style={{ marginTop: "4px" }}>{data.recommendation}</Text>
       </div>
-    </div>
-  );
-}
-
-function TcoReportCard({ data }: { data: TcoReport }) {
-  const styles = useCardStyles();
-  const fmt = (n: number) => `$${Math.round(n).toLocaleString()}`;
-
-  return (
-    <div className={styles.card}>
-      <div className={styles.cardTitle}>
-        <div className={styles.cardTitleBadges}>
-          <Badge appearance="tint" color="success">TCO Analysis</Badge>
-          {data.savings_percentage != null && (
-            <Badge appearance="tint" color="success">{Math.round(data.savings_percentage)}% savings</Badge>
-          )}
-          {data.break_even_months != null && (
-            <Badge appearance="tint" color="informative">Break-even: {Math.round(data.break_even_months)} mo</Badge>
-          )}
-        </div>
-      </div>
-
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "12px" }}>
-        <div>
-          <Text size={200} weight="semibold" block style={{ marginBottom: "6px", color: tokens.colorNeutralForeground3 }}>ON-PREMISES (Annual)</Text>
-          <Table size="small" className={styles.cardTable}>
-            <TableBody>
-              {data.on_prem_items.map((item, i) => (
-                <TableRow key={i}>
-                  <TableCell><Text size={200}>{item.description}</Text></TableCell>
-                  <TableCell><Text size={200}>{fmt(item.annual_cost)}/yr</Text></TableCell>
-                </TableRow>
-              ))}
-              <TableRow className={styles.totalRow}>
-                <TableCell>3-Year Total</TableCell>
-                <TableCell>{fmt(data.three_year_on_prem_total)}</TableCell>
-              </TableRow>
-            </TableBody>
-          </Table>
-        </div>
-        <div>
-          <Text size={200} weight="semibold" block style={{ marginBottom: "6px", color: "#0078D4" }}>AZURE (Monthly)</Text>
-          <Table size="small" className={styles.cardTable}>
-            <TableBody>
-              {data.azure_items.map((item, i) => (
-                <TableRow key={i}>
-                  <TableCell><Text size={200}>{item.service} <span style={{ color: tokens.colorNeutralForeground3 }}>({item.sku})</span></Text></TableCell>
-                  <TableCell><Text size={200}>{fmt(item.monthly_cost)}/mo</Text></TableCell>
-                </TableRow>
-              ))}
-              <TableRow className={styles.totalRow}>
-                <TableCell>3-Year Total</TableCell>
-                <TableCell>{fmt(data.three_year_azure_total)}</TableCell>
-              </TableRow>
-            </TableBody>
-          </Table>
-          {data.migration_cost_estimate != null && (
-            <Text size={200} block style={{ marginTop: "4px", color: tokens.colorNeutralForeground3 }}>
-              + {fmt(data.migration_cost_estimate)} one-time migration
-            </Text>
-          )}
-        </div>
-      </div>
-
-      {data.recommendations.length > 0 && (
-        <div>
-          <Text size={200} weight="semibold">Recommendations</Text>
-          <ol style={{ margin: "4px 0", paddingLeft: "18px" }}>
-            {data.recommendations.map((r, i) => <li key={i}><Text size={200}>{r}</Text></li>)}
-          </ol>
-        </div>
-      )}
     </div>
   );
 }

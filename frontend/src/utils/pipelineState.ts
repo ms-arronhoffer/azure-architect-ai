@@ -2,7 +2,7 @@ import type { WafPillarResult, BicepPreview } from "../types";
 
 const STORAGE_KEY = "azure_pipeline_state";
 
-export type PipelinePhase = "architecture" | "sizing" | "security" | "waf";
+export type PipelinePhase = "architecture" | "security" | "waf";
 
 export interface PipelineRequestShape {
   requirements: string;

@@ -47,7 +47,6 @@ PREFETCH_MODES: dict[str, str] = {
     "landingzone":  "Azure Cloud Adoption Framework landing zone management groups hub-spoke networking governance",
     "threatmodel":  "Azure threat modeling STRIDE security controls zero trust defender",
     "reliability":  "Azure reliability SLO SLA error budget site reliability engineering chaos engineering",
-    "sizing":       "Azure compute VM SKU sizing recommendations capacity planning performance tiers",
     "drbc":         "Azure disaster recovery business continuity failover RTO RPO geo-replication",
     "waf":          "Azure Well-Architected Framework reliability security cost operational excellence performance",
 }

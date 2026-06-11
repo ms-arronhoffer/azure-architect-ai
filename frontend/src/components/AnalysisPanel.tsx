@@ -32,7 +32,6 @@ import {
 import {
   BuildingRegular,
   ShieldCheckmarkRegular,
-  ResizeRegular,
   LockShieldRegular,
   CheckmarkCircleRegular,
   ArrowClockwiseRegular,
@@ -72,15 +71,14 @@ interface JobStatus {
   events: unknown[];
 }
 
-type JobKey = "architecture" | "waf" | "sizing" | "security";
+type JobKey = "architecture" | "waf" | "security";
 type TabKey = JobKey | "bundled" | "drift";
 
-const PIPELINE_ORDER: JobKey[] = ["architecture", "sizing", "security", "waf"];
+const PIPELINE_ORDER: JobKey[] = ["architecture", "security", "waf"];
 
 const JOB_META: Record<JobKey, { label: string; icon: JSX.Element }> = {
   architecture: { label: "Architecture Design", icon: <BuildingRegular /> },
   waf: { label: "WAF Assessment", icon: <ShieldCheckmarkRegular /> },
-  sizing: { label: "Capacity Sizing", icon: <ResizeRegular /> },
   security: { label: "Security & Identity", icon: <LockShieldRegular /> },
 };
 
@@ -263,14 +261,12 @@ export default function AnalysisPanel({
   const [jobs, setJobs] = useState<Record<JobKey, JobStatus>>({
     architecture: { status: "idle", events: [] },
     waf: { status: "idle", events: [] },
-    sizing: { status: "idle", events: [] },
     security: { status: "idle", events: [] },
   });
   const [isRunning, setIsRunning] = useState(false);
   const [activeTab, setActiveTab] = useState<TabKey>("architecture");
   const [architectureText, setArchitectureText] = useState("");
   const [wafPillars, setWafPillars] = useState<WafPillarResult[]>([]);
-  const [sizingText, setSizingText] = useState("");
   const [securityText, setSecurityText] = useState("");
   const [allDone, setAllDone] = useState(false);
   const [pipelineMode, setPipelineMode] = useState(false);
@@ -344,14 +340,12 @@ export default function AnalysisPanel({
     if (!resumable) return;
     // Replay accumulated text into UI; do not POST to backend.
     setArchitectureText(resumable.phase_texts.architecture || "");
-    setSizingText(resumable.phase_texts.sizing || "");
     setSecurityText(resumable.phase_texts.security || "");
     const wafArt = resumable.phase_artifacts.waf;
     setWafPillars(wafArt?.waf_pillars || []);
     const next: Record<JobKey, JobStatus> = {
       architecture: { status: "idle", events: [] },
       waf: { status: "idle", events: [] },
-      sizing: { status: "idle", events: [] },
       security: { status: "idle", events: [] },
     };
     for (const p of resumable.completed_phases) {
@@ -371,7 +365,7 @@ export default function AnalysisPanel({
           bicep: resumable.phase_artifacts.architecture?.bicep,
           bicep_preview: resumable.phase_artifacts.architecture?.bicep_preview,
         },
-        sizing: { text: resumable.phase_texts.sizing || "" },
+        sizing: { text: "" },
         security: { text: resumable.phase_texts.security || "" },
         waf: { pillars: resumable.phase_artifacts.waf?.waf_pillars || [] },
       };
@@ -393,12 +387,10 @@ export default function AnalysisPanel({
     setAllDone(false);
     setArchitectureText("");
     setWafPillars([]);
-    setSizingText("");
     setSecurityText("");
     setJobs({
       architecture: { status: "running", events: [] },
       waf: { status: "running", events: [] },
-      sizing: { status: "running", events: [] },
       security: { status: "running", events: [] },
     });
 
@@ -509,11 +501,6 @@ export default function AnalysisPanel({
                 const cur = phaseArtifactsRef.current.waf?.waf_pillars || [];
                 phaseArtifactsRef.current.waf = { waf_pillars: [...cur, obj.pillar] };
               }
-            } else if (job === "sizing") {
-              if (obj.type === "token") {
-                setSizingText((p) => p + obj.content);
-                if (pipelineMode) phaseTextsRef.current.sizing = (phaseTextsRef.current.sizing || "") + obj.content;
-              }
             } else if (job === "security") {
               if (obj.type === "token") {
                 setSecurityText((p) => p + obj.content);
@@ -577,7 +564,6 @@ export default function AnalysisPanel({
       const wafSummary = wafPillars.map((p) => `- **${p.pillar}**: ${p.score}/5 — ${p.recommendations.slice(0, 2).join(", ")}`).join("\n");
       parts.push(`## WAF Assessment\n\n${wafSummary}`);
     }
-    if (sizingText) parts.push(`## Capacity Sizing\n\n${sizingText}`);
     if (securityText) parts.push(`## Security & Identity\n\n${securityText}`);
     onRefine([{ id: crypto.randomUUID(), role: "assistant", content: parts.join("\n\n") }]);
   }
@@ -590,9 +576,6 @@ export default function AnalysisPanel({
       "",
       "## Architecture",
       trunc(bundledDesign.architecture.text || "", 2000),
-      "",
-      "## Sizing",
-      trunc(bundledDesign.sizing.text || "", 1500),
       "",
       "## Security",
       trunc(bundledDesign.security.text || "", 1500),
@@ -620,7 +603,6 @@ export default function AnalysisPanel({
         },
         architecture_text: architectureText,
         waf_pillars: wafPillars,
-        sizing_text: sizingText,
         security_text: securityText,
       }),
     });
@@ -777,7 +759,7 @@ export default function AnalysisPanel({
         </div>
         <Text className={styles.subtitle}>
           {spec.name
-            ? `Analyzing: ${spec.name} — ${pipelineMode ? "sequential pipeline (Architecture → Sizing → Security → WAF)" : "runs Architecture, WAF, Sizing, and Security in parallel"}.`
+            ? `Analyzing: ${spec.name} — ${pipelineMode ? "sequential pipeline (Architecture → Security → WAF)" : "runs Architecture, WAF, and Security in parallel"}.`
             : "Fill out Requirements Studio first to get the most precise analysis."}
         </Text>
       </div>
@@ -878,7 +860,6 @@ export default function AnalysisPanel({
             <TabList selectedValue={activeTab} onTabSelect={(_, d) => setActiveTab(d.value as TabKey)} style={{ padding: "8px 8px 0" }}>
               <Tab value="architecture">Architecture{jobs.architecture.status === "done" && <span className={styles.tabDot} />}</Tab>
               <Tab value="waf">WAF Assessment{jobs.waf.status === "done" && <span className={styles.tabDot} />}</Tab>
-              <Tab value="sizing">Sizing{jobs.sizing.status === "done" && <span className={styles.tabDot} />}</Tab>
               <Tab value="security">Security{jobs.security.status === "done" && <span className={styles.tabDot} />}</Tab>
               {bundledDesign && <Tab value="bundled">Bundled Design<span className={styles.tabDot} /></Tab>}
               {bundledDesign?.architecture.bicep && <Tab value="drift">Drift</Tab>}
@@ -923,20 +904,6 @@ export default function AnalysisPanel({
                     {jobs.waf.status === "running" && <Spinner size="small" />}
                     <Text size={300} style={{ color: tokens.colorNeutralForeground3 }}>
                       {jobs.waf.status === "running" ? "Running WAF assessment…" : "WAF assessment not started."}
-                    </Text>
-                  </div>
-                )
-              )}
-              {activeTab === "sizing" && (
-                sizingText ? (
-                  <div className={styles.mdContent}>
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{sizingText}</ReactMarkdown>
-                  </div>
-                ) : (
-                  <div style={{ display: "flex", alignItems: "center", gap: "8px", padding: "12px" }}>
-                    {jobs.sizing.status === "running" && <Spinner size="small" />}
-                    <Text size={300} style={{ color: tokens.colorNeutralForeground3 }}>
-                      {jobs.sizing.status === "running" ? "Generating capacity sizing…" : "Sizing analysis not started."}
                     </Text>
                   </div>
                 )
@@ -995,14 +962,6 @@ export default function AnalysisPanel({
                               <BicepPreviewCard preview={bundledDesign.architecture.bicep_preview} />
                             </>
                           )}
-                        </div>
-                      </AccordionPanel>
-                    </AccordionItem>
-                    <AccordionItem value="sizing">
-                      <AccordionHeader>Sizing</AccordionHeader>
-                      <AccordionPanel>
-                        <div className={styles.mdContent}>
-                          <ReactMarkdown remarkPlugins={[remarkGfm]}>{bundledDesign.sizing.text || "_empty_"}</ReactMarkdown>
                         </div>
                       </AccordionPanel>
                     </AccordionItem>
@@ -1232,7 +1191,7 @@ export default function AnalysisPanel({
           <div className={styles.emptyState}>
             <BuildingRegular style={{ fontSize: "48px", opacity: 0.3 }} />
             <Text size={400} weight="semibold">Ready to analyze your workload</Text>
-            <Text size={300}>Click "Run Analysis" to generate architecture design, WAF assessment, capacity sizing, and security posture simultaneously.</Text>
+            <Text size={300}>Click "Run Analysis" to generate architecture design, WAF assessment, and security posture simultaneously.</Text>
           </div>
         )}
       </div>

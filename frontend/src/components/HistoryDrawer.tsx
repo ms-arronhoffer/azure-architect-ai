@@ -35,8 +35,6 @@ const MODE_LABELS: Partial<Record<Mode, string>> = {
   waf: "WAF",
   review: "Review",
   drbc: "DR/BC",
-  sizing: "Sizing",
-  tco: "TCO",
   threatmodel: "Threat Model",
   reliability: "Reliability",
   landingzone: "Landing Zone",
@@ -49,7 +47,7 @@ const MODE_LABELS: Partial<Record<Mode, string>> = {
 
 const PANEL_MODES = new Set<Mode>([
   "architecture", "network", "aiarchitecture", "dataplatform", "apim",
-  "waf", "review", "drbc", "sizing", "tco", "threatmodel", "reliability", "landingzone",
+  "waf", "review", "drbc", "threatmodel", "reliability", "landingzone",
 ]);
 
 const useStyles = makeStyles({

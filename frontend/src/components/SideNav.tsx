@@ -18,8 +18,6 @@ import {
   ChevronLeftRegular,
   ChevronRightRegular,
   RocketRegular,
-  CalculatorRegular,
-  ResizeRegular,
   FormRegular,
   ChartMultipleRegular,
   LayerRegular,
@@ -29,6 +27,10 @@ import {
   MegaphoneLoudRegular,
   TargetRegular,
   DataUsageRegular,
+  BranchForkRegular,
+  DocumentBulletListRegular,
+  TagRegular,
+  DocumentRegular,
 } from "@fluentui/react-icons";
 import type { Mode } from "../types";
 import { useAuth } from "../auth/AuthProvider";
@@ -67,10 +69,11 @@ const NAV_SECTIONS: NavSectionDef[] = [
     label: "Advisory",
     items: [
       { mode: "intake", label: "Requirements Studio", icon: <FormRegular />, description: "Capture workload requirements — injected everywhere" },
-      { mode: "analyze", label: "Workload Analysis", icon: <ChartMultipleRegular />, description: "Architecture + WAF + Sizing + Security in one click" },
+      { mode: "analyze", label: "Workload Analysis", icon: <ChartMultipleRegular />, description: "Architecture + WAF + Security in one click" },
       { mode: "qa", label: "Expert Advisor", icon: <ChatRegular />, description: "17 specialist advisor personas", activeWhen: ADVISOR_MODES },
       { mode: "presentation", label: "Presentation Coach", icon: <SlideTextRegular />, description: "Structure Azure topics for any audience" },
       { mode: "learningplan", label: "Learning Plan", icon: <BoardRegular />, description: "Build structured training plans with outcomes" },
+      { mode: "rfpproposal", label: "RFP / Proposal Writer", icon: <DocumentRegular />, description: "Azure technical proposals and statements of work" },
     ],
   },
   {
@@ -80,6 +83,8 @@ const NAV_SECTIONS: NavSectionDef[] = [
       { mode: "strategy", label: "Strategy Builder", icon: <TargetRegular />, description: "AI-generated Azure strategy document" },
       { mode: "bootstrap", label: "Bootstrapper", icon: <RocketRegular />, description: "4-step guided wizard with ZIP download" },
       { mode: "landingzone", label: "Landing Zone", icon: <LayerRegular />, description: "Azure CAF landing zone design with management groups" },
+      { mode: "pipelineforge", label: "Pipeline Forge", icon: <BranchForkRegular />, description: "Generate GitHub Actions & Azure DevOps CI/CD pipelines" },
+      { mode: "namingstandards", label: "Naming Standards", icon: <TagRegular />, description: "CAF naming conventions + Bicep/Terraform enforcement module" },
     ],
   },
   {
@@ -93,12 +98,11 @@ const NAV_SECTIONS: NavSectionDef[] = [
   {
     label: "Operations",
     items: [
-      { mode: "tco", label: "TCO Analysis", icon: <CalculatorRegular />, description: "On-premises vs Azure 3-year cost comparison" },
       { mode: "drbc", label: "DR/BC Design", icon: <ArrowSyncRegular />, description: "Recovery strategies and failover runbooks" },
       { mode: "reliability", label: "Reliability & SLO", icon: <HeartPulseRegular />, description: "SLO design, FMEA, chaos experiments & toil inventory" },
       { mode: "troubleshoot", label: "Troubleshoot", icon: <WrenchScrewdriverRegular />, description: "Diagnose and resolve Azure issues" },
       { mode: "codegen", label: "Code Generator", icon: <CodeRegular />, description: "Generate code with Copilot and push to GitHub" },
-      { mode: "sizing", label: "Capacity Sizing", icon: <ResizeRegular />, description: "Workload profile to SKU recommendations" },
+      { mode: "runbookstudio", label: "Runbook Studio", icon: <DocumentBulletListRegular />, description: "Generate SRE runbooks for Azure failure scenarios" },
     ],
   },
 ];

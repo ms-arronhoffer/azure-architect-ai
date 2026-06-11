@@ -16,7 +16,10 @@ export type Mode =
   | "certprep"
   | "learningplan"
   | "codegen"
-  | "tco"
+  | "pipelineforge"
+  | "runbookstudio"
+  | "namingstandards"
+  | "rfpproposal"
   | "bootstrap"
   | "aiarchitecture"
   | "dataplatform"
@@ -27,7 +30,6 @@ export type Mode =
   | "threatmodel"
   | "devsecops"
   | "reliability"
-  | "sizing"
   | "security"
   | "governance"
   | "ops"
@@ -360,31 +362,6 @@ export interface LearningPlan {
   prerequisites: string[];
   learning_outcomes: string[];
   modules: LearningModule[];
-}
-
-// ── TCO types ─────────────────────────────────────────────────────────────────
-
-export interface TcoOnPremItem {
-  category: string;
-  description: string;
-  annual_cost: number;
-}
-
-export interface TcoAzureItem {
-  service: string;
-  sku: string;
-  monthly_cost: number;
-}
-
-export interface TcoReport {
-  on_prem_items: TcoOnPremItem[];
-  azure_items: TcoAzureItem[];
-  three_year_on_prem_total: number;
-  three_year_azure_total: number;
-  migration_cost_estimate?: number;
-  break_even_months?: number;
-  savings_percentage?: number;
-  recommendations: string[];
 }
 
 // ── Network topology types ────────────────────────────────────────────────────
@@ -794,7 +771,6 @@ export type StructuredResult =
   | { kind: "monitoring_config"; data: MonitoringConfig }
   | { kind: "cost_estimate"; data: CostEstimate }
   | { kind: "learning_plan"; data: LearningPlan }
-  | { kind: "tco_report"; data: TcoReport }
   | { kind: "network_topology"; data: NetworkTopology }
   | { kind: "landing_zone_design"; data: LandingZoneDesign }
   | { kind: "rbac_model"; data: RbacModel }
@@ -988,7 +964,6 @@ export type SseEvent =
   | { type: "file"; name: string; content: string; language: string; description?: string }
   | { type: "summary"; summary: string; repo_name: string }
   | { type: "learning_plan"; plan: LearningPlan }
-  | { type: "tco_report"; report: TcoReport }
   | { type: "network_topology"; topology: NetworkTopology }
   | { type: "landing_zone_design"; design: LandingZoneDesign }
   | { type: "rbac_model"; model: RbacModel }
