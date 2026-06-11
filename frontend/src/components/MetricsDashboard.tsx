@@ -1,9 +1,10 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   makeStyles,
   tokens,
   Text,
   Spinner,
+  Button,
   MessageBar,
   MessageBarBody,
   Card,
@@ -15,6 +16,7 @@ import {
   TableRow,
   TableCell,
 } from "@fluentui/react-components";
+import { ArrowSyncRegular } from "@fluentui/react-icons";
 import { apiFetch } from "../config/api";
 
 interface ModeCount {
@@ -106,7 +108,9 @@ export default function MetricsDashboard() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
+  const load = useCallback(() => {
+    setLoading(true);
+    setError(null);
     apiFetch("/api/admin/metrics")
       .then(async (r) => {
         if (!r.ok) {
@@ -119,6 +123,8 @@ export default function MetricsDashboard() {
       .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)))
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => { load(); }, [load]);
 
   if (loading) {
     return (
@@ -134,6 +140,7 @@ export default function MetricsDashboard() {
         <MessageBar intent="error">
           <MessageBarBody>Failed to load metrics: {error}</MessageBarBody>
         </MessageBar>
+        <Button appearance="outline" icon={<ArrowSyncRegular />} onClick={load} style={{ alignSelf: "flex-start" }}>Retry</Button>
       </div>
     );
   }
@@ -144,7 +151,19 @@ export default function MetricsDashboard() {
 
   return (
     <div className={styles.root}>
-      <Text size={500} weight="semibold">Usage Metrics</Text>
+      <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+        <Text size={500} weight="semibold">Usage Metrics</Text>
+        <Button
+          appearance="subtle"
+          size="small"
+          icon={loading ? <Spinner size="tiny" /> : <ArrowSyncRegular />}
+          onClick={load}
+          disabled={loading}
+          title="Refresh metrics"
+        >
+          Refresh
+        </Button>
+      </div>
 
       <div className={styles.heroRow}>
         <Card className={styles.heroCard}>
