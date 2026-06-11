@@ -11,10 +11,10 @@ from db import Conversation, get_session, select
 router = APIRouter()
 
 
-def _uid(claims: dict[str, Any] | None) -> str | None:
+def _uid(claims: dict[str, Any] | None) -> str:
     if not claims:
-        return None
-    return claims.get("oid") or claims.get("sub") or None
+        return "default"
+    return claims.get("oid") or claims.get("sub") or "default"
 
 
 class ConversationRecord(BaseModel):
@@ -33,9 +33,7 @@ async def list_conversations(
     claims: dict[str, Any] | None = Depends(get_current_user),
 ):
     user_id = _uid(claims)
-    query = select(Conversation).order_by(Conversation.updated_at.desc())
-    if user_id:
-        query = query.where(Conversation.user_id == user_id)
+    query = select(Conversation).where(Conversation.user_id == user_id).order_by(Conversation.updated_at.desc())
     rows = (await session.execute(query)).scalars().all()
     return [
         {
