@@ -8,7 +8,7 @@ from __future__ import annotations
 import datetime as dt
 from collections.abc import AsyncIterator
 
-from sqlalchemy import JSON, BigInteger, String, Text, select
+from sqlalchemy import JSON, BigInteger, String, Text, select, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -87,6 +87,9 @@ async def init_db() -> None:
     """Create tables if they do not exist. Idempotent."""
     async with _engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        await conn.execute(
+            text("UPDATE conversations SET user_id = 'default' WHERE user_id IS NULL")
+        )
 
 
 async def get_session() -> AsyncIterator[AsyncSession]:
