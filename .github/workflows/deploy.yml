@@ -64,6 +64,7 @@ jobs:
       rg: ${{ steps.outputs.outputs.rg }}
       backendApp: ${{ steps.outputs.outputs.backendApp }}
       frontendApp: ${{ steps.outputs.outputs.frontendApp }}
+      frontendUrl: ${{ steps.outputs.outputs.frontendUrl }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -85,10 +86,20 @@ jobs:
         run: |
           ACR_LOGIN=$(az deployment sub show -n ${{ env.DEPLOYMENT_NAME }} --query properties.outputs.acrLoginServer.value -o tsv)
           RG=$(az deployment sub show -n ${{ env.DEPLOYMENT_NAME }} --query properties.outputs.resourceGroupName.value -o tsv)
+          FRONTEND_APP=$(az containerapp list -g $RG --query "[?contains(name, 'frontend')].name | [0]" -o tsv | tr -d '\r\n')
+          BACKEND_APP=$(az containerapp list -g $RG --query "[?contains(name, 'backend')].name | [0]" -o tsv | tr -d '\r\n')
+          CUSTOM_DOMAIN=$(az containerapp show -g $RG -n $FRONTEND_APP --query "properties.configuration.ingress.customDomains[0].name" -o tsv 2>/dev/null | tr -d '\r\n')
+          if [ -n "$CUSTOM_DOMAIN" ]; then
+            FRONTEND_URL="https://${CUSTOM_DOMAIN}"
+          else
+            FQDN=$(az containerapp show -g $RG -n $FRONTEND_APP --query properties.configuration.ingress.fqdn -o tsv | tr -d '\r\n')
+            FRONTEND_URL="https://${FQDN}"
+          fi
           echo "acr=${ACR_LOGIN%%.*}" >> $GITHUB_OUTPUT
           echo "rg=$RG" >> $GITHUB_OUTPUT
-          echo "backendApp=$(az containerapp list -g $RG --query "[?contains(name, 'backend')].name | [0]" -o tsv)" >> $GITHUB_OUTPUT
-          echo "frontendApp=$(az containerapp list -g $RG --query "[?contains(name, 'frontend')].name | [0]" -o tsv)" >> $GITHUB_OUTPUT
+          echo "backendApp=$BACKEND_APP" >> $GITHUB_OUTPUT
+          echo "frontendApp=$FRONTEND_APP" >> $GITHUB_OUTPUT
+          echo "frontendUrl=$FRONTEND_URL" >> $GITHUB_OUTPUT
 
   backend:
     needs: [detect, infra]
@@ -166,9 +177,10 @@ jobs:
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
       - name: Frontend health check
         run: |
-          URL=$(az deployment sub show -n ${{ env.DEPLOYMENT_NAME }} --query properties.outputs.frontendUrl.value -o tsv)
+          URL=${{ needs.detect.outputs.frontendUrl }}
+          echo "Smoke testing: $URL"
           for i in 1 2 3 4 5; do
-            code=$(curl -s -o /dev/null -w "%{http_code}" "$URL" || echo "000")
+            code=$(curl -s -o /dev/null -w "%{http_code}" "$URL" 2>/dev/null) || code="000"
             echo "Attempt $i: $code"
             [ "$code" = "200" ] && exit 0
             sleep 10
