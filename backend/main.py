@@ -35,7 +35,11 @@ from routes.admin import router as admin_router
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     async with AsyncExitStack() as stack:
-        await init_db()
+        try:
+            await init_db()
+        except Exception as exc:
+            from middleware.logging import get_logger
+            get_logger("startup").warning("db.init_skipped", error=str(exc))
         # Wire OpenTelemetry + Azure Monitor after middleware is registered (see below).
         from observability import configure_telemetry
         configure_telemetry(app)
