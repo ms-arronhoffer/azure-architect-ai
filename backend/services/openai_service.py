@@ -120,7 +120,8 @@ def resolve_client_and_model(
 ) -> tuple[AzureOpenAI | OpenAI, str]:
     """Return (client, model_string) for the given provider/model combo."""
     if provider == "azure" or not provider:
-        return get_client(), get_deployment(mode)
+        deployment = model or get_deployment(mode)
+        return get_client(), deployment
 
     if not github_token:
         raise ValueError("GitHub token not configured. Add your token in Settings.")
