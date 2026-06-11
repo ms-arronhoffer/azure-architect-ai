@@ -131,6 +131,15 @@ async def require_user(claims: dict[str, Any] | None = Depends(get_current_user)
     return claims
 
 
+async def require_metrics_role(claims: dict[str, Any] | None = Depends(get_current_user)) -> dict[str, Any]:
+    if claims is None:
+        # auth disabled — allow in dev/local
+        return {"sub": "default"}
+    if "Metrics.Read" not in (claims.get("roles") or []):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Metrics.Read role required")
+    return claims
+
+
 def user_id_from_claims(claims: dict[str, Any] | None) -> str:
     if not claims:
         return "default"

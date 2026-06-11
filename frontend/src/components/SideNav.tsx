@@ -28,8 +28,10 @@ import {
   WrenchScrewdriverRegular,
   MegaphoneLoudRegular,
   TargetRegular,
+  DataUsageRegular,
 } from "@fluentui/react-icons";
 import type { Mode } from "../types";
+import { useAuth } from "../auth/AuthProvider";
 
 interface NavItemDef {
   mode: Mode;
@@ -234,6 +236,8 @@ interface SideNavProps {
 
 export default function SideNav({ mode, onModeChange, collapsed, onToggleCollapsed, badgeCounts = {} }: SideNavProps) {
   const styles = useStyles();
+  const { roles } = useAuth();
+  const isMetricsAdmin = roles.includes("Metrics.Read");
 
   return (
     <nav className={styles.nav} style={{ width: collapsed ? 48 : 224 }}>
@@ -288,6 +292,42 @@ export default function SideNav({ mode, onModeChange, collapsed, onToggleCollaps
             })}
           </div>
         ))}
+
+        {isMetricsAdmin && (
+          <div>
+            <div className={styles.sectionDivider} />
+            {!collapsed && <div className={styles.sectionLabel}>Admin</div>}
+            {(() => {
+              const isActive = mode === "admin";
+              const itemEl = (
+                <div
+                  className={
+                    collapsed
+                      ? `${styles.navItem} ${styles.navItemCollapsed} ${isActive ? styles.navItemCollapsedActive : ""}`
+                      : `${styles.navItem} ${isActive ? styles.navItemActive : ""}`
+                  }
+                  onClick={() => onModeChange("admin")}
+                >
+                  <span className={styles.navItemIconWrap}>
+                    <span className={`${styles.navItemIcon} ${isActive ? styles.navItemIconActive : ""}`}>
+                      <DataUsageRegular />
+                    </span>
+                  </span>
+                  {!collapsed && (
+                    <Text className={`${styles.navItemLabel} ${isActive ? styles.navItemLabelActive : ""}`}>
+                      Usage Metrics
+                    </Text>
+                  )}
+                </div>
+              );
+              return collapsed ? (
+                <Tooltip content="Usage Metrics — View KPIs and user activity" relationship="label" positioning="after">
+                  {itemEl}
+                </Tooltip>
+              ) : itemEl;
+            })()}
+          </div>
+        )}
       </div>
     </nav>
   );

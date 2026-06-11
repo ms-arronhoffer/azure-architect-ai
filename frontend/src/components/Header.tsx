@@ -53,6 +53,7 @@ const MODE_LABELS: Record<Mode, string> = {
   whatsnew: "What's New",
   servicehealth: "Service Health",
   strategy: "Strategy Builder",
+  admin: "Usage Metrics",
 };
 
 const MODE_SECTION: Partial<Record<Mode, string>> = {

@@ -36,7 +36,8 @@ export type Mode =
   | "troubleshoot"
   | "whatsnew"
   | "servicehealth"
-  | "strategy";
+  | "strategy"
+  | "admin";
 
 // ── Strategy Builder ─────────────────────────────────────────────────────────
 

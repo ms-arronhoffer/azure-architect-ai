@@ -61,6 +61,9 @@ export function useAuth() {
     enabled: AUTH_ENABLED,
     isAuthenticated: AUTH_ENABLED ? isAuthenticated : true,
     account: AUTH_ENABLED ? msal.accounts[0] ?? null : null,
+    roles: AUTH_ENABLED
+      ? ((msal.accounts[0]?.idTokenClaims as Record<string, unknown>)?.roles as string[] ?? [])
+      : [],
     login,
     logout,
     getAccessToken,

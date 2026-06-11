@@ -100,13 +100,27 @@ curl -sIL https://aarch-dev-frontend.bluefield-debdcece.centralus.azurecontainer
 
 ## 6. Entra Auth Configuration
 
-- `VITE_AUTH_ENABLED=true` baked into frontend image at build time
-- `VITE_ENTRA_TENANT_ID=16b3c013-d300-468d-ac64-7eda0820b6d3`
-- `VITE_ENTRA_CLIENT_ID=e9616e6b-3c8b-4153-b814-b01817c9ade2`
-- `VITE_ENTRA_API_SCOPE=api://e9616e6b-3c8b-4153-b814-b01817c9ade2/access_as_admin`
-- Backend `ENTRA_TENANT_ID` and `ENTRA_AUDIENCE` already set via Bicep deployment
+Two separate app registrations:
+| App | Client ID | Purpose |
+|-----|-----------|---------|
+| `azure-architect-ai-spa` | `e9616e6b-3c8b-4153-b814-b01817c9ade2` | Frontend SPA (client only — exposes NO scopes) |
+| `azure-architect-ai-api` | `5e5c9491-d850-4f1b-9d67-939824a4c819` | Backend API (exposes `access_as_user` scope) |
 
-> **Note:** Admin consent for `azure-architect-ai-spa` must be granted before auth will work end-to-end (see Entra issue addressed separately).
+Frontend build args:
+- `VITE_AUTH_ENABLED=true`
+- `VITE_ENTRA_TENANT_ID=16b3c013-d300-468d-ac64-7eda0820b6d3`
+- `VITE_ENTRA_CLIENT_ID=e9616e6b-3c8b-4153-b814-b01817c9ade2` ← SPA client ID
+- `VITE_ENTRA_API_SCOPE=api://5e5c9491-d850-4f1b-9d67-939824a4c819/access_as_user` ← API app scope
+
+Backend env vars (set via Bicep / ACA env):
+- `ENTRA_AUDIENCE=api://5e5c9491-d850-4f1b-9d67-939824a4c819`
+- `ENTRA_TENANT_ID=16b3c013-d300-468d-ac64-7eda0820b6d3`
+
+**Rule:** `VITE_ENTRA_CLIENT_ID` ≠ audience. The SPA client ID is never used as the token audience.
+The API scope must always point to `azure-architect-ai-api` (`5e5c9491...`), not the SPA app.
+
+SPA redirect URI: `https://blueprint.techtools.host/`
+SPA pre-authorized on API app: ✅ (no per-user consent prompt)
 
 ---
 

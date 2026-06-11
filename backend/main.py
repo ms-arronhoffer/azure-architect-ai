@@ -29,6 +29,7 @@ from routes.cost import router as cost_router
 from routes.security import router as security_router
 from routes.whats_new import router as whats_new_router
 from routes.strategy import router as strategy_router
+from routes.admin import router as admin_router
 
 
 @asynccontextmanager
@@ -85,3 +86,4 @@ app.include_router(cost_router, prefix="/api")
 app.include_router(security_router, prefix="/api")
 app.include_router(whats_new_router, prefix="/api")
 app.include_router(strategy_router, prefix="/api")
+app.include_router(admin_router, prefix="/api")
