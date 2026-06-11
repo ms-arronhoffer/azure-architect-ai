@@ -11,8 +11,9 @@ import {
   Select,
   Divider,
 } from "@fluentui/react-components";
-import { DismissRegular, EyeRegular, EyeOffRegular, SaveRegular } from "@fluentui/react-icons";
+import { DismissRegular, EyeRegular, EyeOffRegular, SaveRegular, SignOutRegular } from "@fluentui/react-icons";
 import type { Mode, ModelConfig, UserSettings } from "../types";
+import { useAuth } from "../auth/AuthProvider";
 
 const MODELS_BY_PROVIDER: Record<string, string[]> = {
   azure: ["", "gpt-4o-mini", "gpt-4.1"],
@@ -134,6 +135,7 @@ export default function SettingsDrawer({
   onClearGithubToken,
 }: SettingsDrawerProps) {
   const styles = useStyles();
+  const { account, logout, enabled: authEnabled } = useAuth();
   const [draft, setDraft] = useState<UserSettings>(settings);
   const [tokenInput, setTokenInput] = useState("");
   const [showToken, setShowToken] = useState(false);
@@ -209,6 +211,29 @@ export default function SettingsDrawer({
       </DrawerHeader>
       <DrawerBody>
         <div className={styles.body}>
+          {/* Account */}
+          {authEnabled && account && (
+            <>
+              <div className={styles.section}>
+                <Text className={styles.sectionTitle}>Account</Text>
+                <Text size={200} style={{ color: tokens.colorNeutralForeground2 }}>
+                  {account.username}
+                </Text>
+                <div>
+                  <Button
+                    size="small"
+                    appearance="subtle"
+                    icon={<SignOutRegular />}
+                    onClick={logout}
+                  >
+                    Sign out
+                  </Button>
+                </div>
+              </div>
+              <Divider />
+            </>
+          )}
+
           {/* GitHub PAT */}
           <div className={styles.section}>
             <Text className={styles.sectionTitle}>GitHub Personal Access Token</Text>
