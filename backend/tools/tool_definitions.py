@@ -8,6 +8,9 @@ from tools.domains.compliance import TOOLS as _compliance_tools
 from tools.domains.cost import TOOLS as _cost_tools
 from tools.domains.devsecops import TOOLS as _devsecops_tools
 from tools.domains.drbc import TOOLS as _drbc_tools
+from tools.domains.fabric import TOOLS as _fabric_tools
+from tools.domains.adf import TOOLS as _adf_tools
+from tools.domains.medallion import TOOLS as _medallion_tools
 from tools.domains.governance import TOOLS as _governance_tools
 from tools.domains.iac import TOOLS as _iac_tools
 from tools.domains.learning import TOOLS as _learning_tools
@@ -23,7 +26,7 @@ from tools.domains.stakeholder import TOOLS as _stakeholder_tools
 from tools.domains.troubleshoot import TOOLS as _troubleshoot_tools
 from tools.domains.waf import TOOLS as _waf_tools
 
-TOOLS = _architecture_tools + _bicep_tools + _codegen_tools + _comparison_tools + _compliance_tools + _cost_tools + _devsecops_tools + _drbc_tools + _governance_tools + _iac_tools + _learning_tools + _migration_tools + _monitoring_tools + _network_tools + _operations_tools + _presentation_tools + _project_tools + _qa_tools + _security_tools + _stakeholder_tools + _troubleshoot_tools + _waf_tools
+TOOLS = _architecture_tools + _bicep_tools + _codegen_tools + _comparison_tools + _compliance_tools + _cost_tools + _devsecops_tools + _drbc_tools + _fabric_tools + _adf_tools + _medallion_tools + _governance_tools + _iac_tools + _learning_tools + _migration_tools + _monitoring_tools + _network_tools + _operations_tools + _presentation_tools + _project_tools + _qa_tools + _security_tools + _stakeholder_tools + _troubleshoot_tools + _waf_tools
 
 _BY_NAME = {t["function"]["name"]: t for t in TOOLS}
 
@@ -95,6 +98,10 @@ TOOLS_BY_MODE: dict[str, list] = {
     "ops":            get_tools("search_azure_docs", "generate_monitoring_config",
                                 "define_slo_framework", "assess_waf_pillar",
                                 "generate_kql_queries", "generate_remediation_runbook"),
+    "datapipelineadvisor": get_tools("search_azure_docs", "generate_kql_queries", "diagnose_issue"),
+    "fabricplanner":        get_tools("plan_fabric_capacity", "search_azure_docs"),
+    "adfpipeline":          get_tools("generate_adf_pipeline", "search_azure_docs"),
+    "medalliondesigner":    get_tools("design_medallion_schema", "search_azure_docs"),
 }
 
 # Modes that benefit from MCP tools (informational/guidance, not subscription-bound actions)
@@ -106,6 +113,7 @@ _MCP_ENABLED_MODES = {
     "devops", "finops", "securityposture", "multicloud",
     "governance", "security", "ops",
     "pipelineforge", "runbookstudio", "namingstandards", "rfpproposal",
+    "datapipelineadvisor", "fabricplanner", "adfpipeline", "medalliondesigner",
 }
 
 

@@ -417,6 +417,18 @@ async def _dispatch_tool(name: str, args: dict) -> tuple[object, dict | None]:
         }
         return {"status": "runbook_received"}, event
 
+    if name == "plan_fabric_capacity":
+        event = {"type": "fabric_capacity_plan", "plan": {**args}}
+        return {"status": "capacity_planned"}, event
+
+    if name == "generate_adf_pipeline":
+        event = {"type": "adf_pipeline", "pipeline": {**args}}
+        return {"status": "pipeline_generated"}, event
+
+    if name == "design_medallion_schema":
+        event = {"type": "medallion_schema", "design": {**args}}
+        return {"status": "schema_designed"}, event
+
     return {}, None
 
 

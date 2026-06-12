@@ -32,6 +32,10 @@ import {
   DocumentBulletListRegular,
   TagRegular,
   DocumentRegular,
+  DatabaseRegular,
+  ScalesRegular,
+  PlugConnectedRegular,
+  TableRegular,
 } from "@fluentui/react-icons";
 import type { Mode } from "../types";
 import { useAuth } from "../auth/AuthProvider";
@@ -105,6 +109,15 @@ const NAV_SECTIONS: NavSectionDef[] = [
       { mode: "troubleshoot", label: "Troubleshoot", icon: <WrenchScrewdriverRegular />, description: "Diagnose and resolve Azure issues" },
       { mode: "codegen", label: "Code Generator", icon: <CodeRegular />, description: "Generate code with Copilot and push to GitHub" },
       { mode: "runbookstudio", label: "Runbook Studio", icon: <DocumentBulletListRegular />, description: "Generate SRE runbooks for Azure failure scenarios" },
+    ],
+  },
+  {
+    label: "Data Engineering",
+    items: [
+      { mode: "datapipelineadvisor", label: "Pipeline Advisor", icon: <DatabaseRegular />, description: "Debug ADF, Fabric, Spark, and Synapse pipeline issues" },
+      { mode: "fabricplanner", label: "Fabric Capacity Planner", icon: <ScalesRegular />, description: "Right-size Microsoft Fabric F-SKU for your workload" },
+      { mode: "adfpipeline", label: "ADF Pipeline Generator", icon: <PlugConnectedRegular />, description: "Generate deployable ADF ARM templates from plain English" },
+      { mode: "medalliondesigner", label: "Medallion Designer", icon: <TableRegular />, description: "Design Bronze/Silver/Gold Delta Lake schemas from source DDL" },
     ],
   },
 ];

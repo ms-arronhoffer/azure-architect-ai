@@ -40,6 +40,10 @@ export type Mode =
   | "servicehealth"
   | "modellifecycle"
   | "strategy"
+  | "datapipelineadvisor"
+  | "fabricplanner"
+  | "adfpipeline"
+  | "medalliondesigner"
   | "admin";
 
 // ── Strategy Builder ─────────────────────────────────────────────────────────
@@ -942,6 +946,59 @@ export interface BundledDesign {
   waf: { pillars: WafPillarResult[] };
 }
 
+// ── Fabric capacity planner types ─────────────────────────────────────────────
+
+export interface FabricSkuOption {
+  sku: string;
+  cu_capacity: number;
+  monthly_cost_usd: number;
+  utilization_estimate: number;
+  status: "under" | "recommended" | "over";
+  notes?: string;
+}
+
+export interface FabricCapacityPlan {
+  recommended_sku: string;
+  workload_summary: string;
+  sizing_rationale: string;
+  monthly_cost_usd: number;
+  utilization_estimate: number;
+  sku_options: FabricSkuOption[];
+  risks: string[];
+  pay_as_you_go_comparison: string;
+}
+
+// ── ADF pipeline generator types ─────────────────────────────────────────────
+
+export interface AdfPipelineResult {
+  pipeline_name: string;
+  pattern: string;
+  arm_template: string;
+  notes: string[];
+}
+
+// ── Medallion schema designer types ──────────────────────────────────────────
+
+export interface MedallionTable {
+  name: string;
+  ddl: string;
+  delta_config?: string;
+  unity_catalog_path?: string;
+  notes?: string;
+}
+
+export interface MedallionLayer {
+  layer: "Bronze" | "Silver" | "Gold";
+  description: string;
+  tables: MedallionTable[];
+}
+
+export interface MedallionSchemaDesign {
+  source_system: string;
+  layers: MedallionLayer[];
+  governance_notes: string[];
+}
+
 // ── SSE event union ──────────────────────────────────────────────────────────
 
 export type SseEvent =
@@ -987,6 +1044,9 @@ export type SseEvent =
   | { type: "security_posture"; posture: SecurityPostureResult }
   | { type: "multicloud_comparison"; comparison: MulticloudComparisonResult }
   | { type: "strategy_result"; result: StrategyResult }
+  | { type: "fabric_capacity_plan"; plan: FabricCapacityPlan }
+  | { type: "adf_pipeline"; pipeline: AdfPipelineResult }
+  | { type: "medallion_schema"; design: MedallionSchemaDesign }
   | { type: "bundled_design"; workload_name: string; generated_at: string; architecture: BundledDesign["architecture"]; sizing: BundledDesign["sizing"]; security: BundledDesign["security"]; waf: BundledDesign["waf"] }
   | { type: "done" }
   | { type: "status"; message: string }

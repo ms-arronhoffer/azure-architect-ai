@@ -41,6 +41,12 @@ const ADVISOR_GROUPS = [
       { mode: "reliability" as Mode, label: "Reliability & SLO" },
     ],
   },
+  {
+    group: "Data Engineering",
+    items: [
+      { mode: "datapipelineadvisor" as Mode, label: "Pipeline Advisor" },
+    ],
+  },
 ];
 
 const useStyles = makeStyles({
@@ -66,6 +72,7 @@ export const ADVISOR_MODES: Mode[] = [
   "governance", "compliance", "landingzone", "identity",
   "security", "threatmodel", "devsecops",
   "migration", "cost", "monitoring", "ops", "reliability",
+  "datapipelineadvisor",
 ];
 
 interface AdvisorPanelProps {

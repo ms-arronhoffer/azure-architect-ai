@@ -63,6 +63,10 @@ const MODE_LABELS: Record<Mode, string> = {
   modellifecycle: "Model Lifecycle",
   strategy: "Strategy Builder",
   admin: "Usage Metrics",
+  datapipelineadvisor: "Pipeline Advisor",
+  fabricplanner: "Fabric Capacity Planner",
+  adfpipeline: "ADF Pipeline Generator",
+  medalliondesigner: "Medallion Schema Designer",
 };
 
 const MODE_SECTION: Partial<Record<Mode, string>> = {
@@ -103,6 +107,10 @@ const MODE_SECTION: Partial<Record<Mode, string>> = {
   servicehealth: "Communications",
   modellifecycle: "Communications",
   strategy: "Design & Build",
+  datapipelineadvisor: "Data Engineering",
+  fabricplanner: "Data Engineering",
+  adfpipeline: "Data Engineering",
+  medalliondesigner: "Data Engineering",
 };
 
 const useStyles = makeStyles({
