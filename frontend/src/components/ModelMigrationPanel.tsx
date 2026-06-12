@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   makeStyles,
   tokens,
@@ -16,8 +16,12 @@ import {
   Option,
   Input,
   Divider,
+  Accordion,
+  AccordionHeader,
+  AccordionItem,
+  AccordionPanel,
 } from "@fluentui/react-components";
-import { ArrowSwapRegular, CalculatorRegular } from "@fluentui/react-icons";
+import { ArrowSwapRegular, CalculatorRegular, DocumentTableRegular, ArrowUploadRegular } from "@fluentui/react-icons";
 import { apiFetch } from "../config/api";
 
 interface Replacement {
@@ -66,10 +70,74 @@ interface PtuResult {
   };
 }
 
+interface ReportDeployment {
+  subscription_id: string;
+  subscription_name: string;
+  model: string;
+  normalized_model: string;
+  version: string;
+  retirement_date: string;
+  days_until_retirement: number | null;
+  urgency: "critical" | "high" | "medium" | "low" | "unknown";
+  peak_usage: string;
+  peak_usage_score: number;
+  upgrade_option: string;
+  unified: string;
+  regions: string[];
+  region_count: number;
+  migration_options: Replacement[];
+  recommendation: string;
+}
+
+interface ReportCustomer {
+  tpid: string;
+  tp_name: string;
+  csam: string;
+  priority: "critical" | "high" | "medium" | "low" | "unknown";
+  deployments: ReportDeployment[];
+}
+
+interface ReportModelSummary {
+  model: string;
+  normalized_id: string;
+  retirement_date: string;
+  days_until_retirement: number | null;
+  urgency: string;
+  row_count: number;
+  customer_count: number;
+  migration_options: Replacement[];
+}
+
+interface ReportResult {
+  summary: {
+    analysis_date: string;
+    total_rows: number;
+    unique_customers: number;
+    unique_models: number;
+    unique_deployments: number;
+    critical: number;
+    high: number;
+    medium: number;
+    low: number;
+    unknown: number;
+    high_usage_urgent: number;
+  };
+  customers: ReportCustomer[];
+  model_summary: ReportModelSummary[];
+}
+
 const RISK_COLORS: Record<string, string> = {
   low: tokens.colorPaletteGreenForeground1,
   medium: tokens.colorPaletteYellowForeground1,
   high: tokens.colorStatusDangerForeground1,
+};
+
+const URGENCY_COLORS: Record<string, string> = {
+  critical: tokens.colorStatusDangerForeground1,
+  high: tokens.colorPaletteRedForeground1,
+  medium: tokens.colorPaletteYellowForeground1,
+  low: tokens.colorPaletteGreenForeground1,
+  unknown: tokens.colorNeutralForeground3,
 };
 
 const useStyles = makeStyles({
@@ -204,7 +272,47 @@ function RiskBadge({ level }: { level: "low" | "medium" | "high" }) {
 
 export default function ModelMigrationPanel() {
   const styles = useStyles();
-  const [tab, setTab] = useState<"scorer" | "ptu">("scorer");
+  const [tab, setTab] = useState<"scorer" | "ptu" | "report">("scorer");
+
+  // ── Report Analyzer ──────────────────────────────────────────────────────────
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [reportText, setReportText] = useState("");
+  const [analyzing, setAnalyzing] = useState(false);
+  const [reportError, setReportError] = useState<string | null>(null);
+  const [reportResult, setReportResult] = useState<ReportResult | null>(null);
+  const [reportFileName, setReportFileName] = useState<string | null>(null);
+
+  const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setReportFileName(file.name);
+    const reader = new FileReader();
+    reader.onload = (ev) => setReportText(ev.target?.result as string ?? "");
+    reader.readAsText(file);
+  }, []);
+
+  const runAnalysis = useCallback(async () => {
+    if (!reportText.trim()) return;
+    setAnalyzing(true);
+    setReportError(null);
+    setReportResult(null);
+    try {
+      const r = await apiFetch("/api/model-migration/analyze-report", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ report: reportText }),
+      });
+      if (!r.ok) {
+        const t = await r.text().catch(() => r.statusText);
+        throw new Error(`${r.status}: ${t}`);
+      }
+      setReportResult(await r.json() as ReportResult);
+    } catch (e) {
+      setReportError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setAnalyzing(false);
+    }
+  }, [reportText]);
 
   // ── Migration Scorer ─────────────────────────────────────────────────────────
   const [source, setSource] = useState("");
@@ -349,10 +457,11 @@ export default function ModelMigrationPanel() {
       <div className={styles.tabs}>
         <TabList
           selectedValue={tab}
-          onTabSelect={(_, d) => setTab(d.value as "scorer" | "ptu")}
+          onTabSelect={(_, d) => setTab(d.value as "scorer" | "ptu" | "report")}
         >
           <Tab value="scorer" icon={<ArrowSwapRegular />}>Migration Scorer</Tab>
           <Tab value="ptu" icon={<CalculatorRegular />}>PTU Planner</Tab>
+          <Tab value="report" icon={<DocumentTableRegular />}>Report Analyzer</Tab>
         </TabList>
       </div>
 
@@ -660,6 +769,191 @@ export default function ModelMigrationPanel() {
                     </div>
                   </>
                 )}
+              </>
+            )}
+          </>
+        )}
+
+        {tab === "report" && (
+          <>
+            <Card>
+              <div style={{ display: "flex", flexDirection: "column", gap: "12px", padding: "4px 0" }}>
+                <Text weight="semibold">Upload Retirement Report</Text>
+                <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
+                  Upload a tab-separated (.tsv / .txt) Azure OpenAI model retirement report, or paste the content below.
+                </Text>
+                <div style={{ display: "flex", gap: "12px", alignItems: "center", flexWrap: "wrap" }}>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".tsv,.txt,.csv"
+                    style={{ display: "none" }}
+                    onChange={handleFileSelect}
+                  />
+                  <Button
+                    icon={<ArrowUploadRegular />}
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    {reportFileName ?? "Choose file…"}
+                  </Button>
+                  <Button
+                    appearance="primary"
+                    icon={analyzing ? <Spinner size="tiny" /> : <DocumentTableRegular />}
+                    disabled={!reportText.trim() || analyzing}
+                    onClick={runAnalysis}
+                  >
+                    Analyze Report
+                  </Button>
+                  {reportText && !reportResult && (
+                    <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
+                      {reportText.trim().split("\n").length} lines loaded
+                    </Text>
+                  )}
+                </div>
+              </div>
+            </Card>
+
+            {reportError && (
+              <MessageBar intent="error">
+                <MessageBarBody>{reportError}</MessageBarBody>
+              </MessageBar>
+            )}
+
+            {reportResult && (
+              <>
+                {/* Summary row */}
+                <div className={styles.ptuGrid}>
+                  {[
+                    { label: "Customers", value: reportResult.summary.unique_customers },
+                    { label: "Deployments", value: reportResult.summary.unique_deployments },
+                    { label: "Models at Risk", value: reportResult.summary.unique_models },
+                    { label: "Already Retired", value: reportResult.summary.critical, color: URGENCY_COLORS.critical },
+                    { label: "Retire ≤30 Days", value: reportResult.summary.high, color: URGENCY_COLORS.high },
+                    { label: "Retire ≤90 Days", value: reportResult.summary.medium, color: URGENCY_COLORS.medium },
+                    { label: "High-Usage Urgent", value: reportResult.summary.high_usage_urgent, color: URGENCY_COLORS.critical },
+                  ].map(({ label, value, color }) => (
+                    <Card className={styles.ptuCard} key={label}>
+                      <div className={styles.ptuValue} style={color ? { color } : undefined}>{value}</div>
+                      <div className={styles.ptuLabel}>{label}</div>
+                    </Card>
+                  ))}
+                </div>
+
+                <Divider>Model Summary</Divider>
+                <Card style={{ padding: 0 }}>
+                  <div className={styles.tableWrap}>
+                    <table className={styles.table}>
+                      <thead>
+                        <tr>
+                          <th className={styles.th}>Model</th>
+                          <th className={styles.th}>Urgency</th>
+                          <th className={styles.th}>Retires</th>
+                          <th className={styles.th}>Days</th>
+                          <th className={styles.th}>Customers</th>
+                          <th className={styles.th}>Rows</th>
+                          <th className={styles.th}>Top Migration</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {reportResult.model_summary.map((m) => (
+                          <tr key={m.model}>
+                            <td className={styles.td}>
+                              <Text style={{ fontFamily: "monospace", fontSize: "12px" }}>{m.model}</Text>
+                            </td>
+                            <td className={styles.td}>
+                              <Badge
+                                color={m.urgency === "critical" || m.urgency === "high" ? "danger" : m.urgency === "medium" ? "warning" : "success"}
+                                appearance="filled"
+                              >
+                                {m.urgency.toUpperCase()}
+                              </Badge>
+                            </td>
+                            <td className={styles.td}>{m.retirement_date}</td>
+                            <td className={styles.td} style={{ color: URGENCY_COLORS[m.urgency] }}>
+                              {m.days_until_retirement !== null ? m.days_until_retirement : "—"}
+                            </td>
+                            <td className={styles.td}>{m.customer_count}</td>
+                            <td className={styles.td}>{m.row_count}</td>
+                            <td className={styles.td}>
+                              {m.migration_options[0]
+                                ? <Text style={{ fontFamily: "monospace", fontSize: "11px" }}>
+                                    {m.migration_options[0].model} ({m.migration_options[0].score})
+                                  </Text>
+                                : <Text style={{ color: tokens.colorNeutralForeground3, fontSize: "11px" }}>None found</Text>
+                              }
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </Card>
+
+                <Divider>Customer Recommendations</Divider>
+                <Accordion multiple collapsible>
+                  {reportResult.customers.map((c) => (
+                    <AccordionItem key={c.tpid} value={c.tpid}>
+                      <AccordionHeader>
+                        <div style={{ display: "flex", alignItems: "center", gap: "10px", flex: 1 }}>
+                          <Badge
+                            color={c.priority === "critical" || c.priority === "high" ? "danger" : c.priority === "medium" ? "warning" : "success"}
+                            appearance="filled"
+                          >
+                            {c.priority.toUpperCase()}
+                          </Badge>
+                          <Text weight="semibold">{c.tp_name}</Text>
+                          <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
+                            TPID {c.tpid} · {c.deployments.length} deployment{c.deployments.length !== 1 ? "s" : ""}
+                            {c.csam ? ` · CSAM: ${c.csam}` : ""}
+                          </Text>
+                        </div>
+                      </AccordionHeader>
+                      <AccordionPanel>
+                        <div style={{ display: "flex", flexDirection: "column", gap: "12px", paddingBottom: "8px" }}>
+                          {c.deployments.map((d, i) => (
+                            <Card key={`${d.subscription_id}-${d.model}-${i}`} style={{ borderLeft: `3px solid ${URGENCY_COLORS[d.urgency]}` }}>
+                              <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                                <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+                                  <Badge
+                                    color={d.urgency === "critical" || d.urgency === "high" ? "danger" : d.urgency === "medium" ? "warning" : "success"}
+                                    appearance="tint"
+                                  >
+                                    {d.urgency.toUpperCase()}
+                                  </Badge>
+                                  <Text weight="semibold" style={{ fontFamily: "monospace" }}>{d.model}</Text>
+                                  <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
+                                    {d.subscription_name} · retires {d.retirement_date}
+                                    {d.days_until_retirement !== null
+                                      ? ` (${d.days_until_retirement < 0 ? "PAST" : `${d.days_until_retirement}d`})`
+                                      : ""}
+                                  </Text>
+                                </div>
+                                <div style={{ display: "flex", gap: "16px", flexWrap: "wrap" }}>
+                                  <Text size={200}><strong>Usage:</strong> {d.peak_usage}</Text>
+                                  <Text size={200}><strong>Regions:</strong> {d.regions.join(", ")}</Text>
+                                  <Text size={200}><strong>Upgrade:</strong> {d.upgrade_option || "—"}</Text>
+                                  <Text size={200}><strong>Unified:</strong> {d.unified}</Text>
+                                </div>
+                                {d.migration_options.length > 0 && (
+                                  <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                                    {d.migration_options.map((m) => (
+                                      <Badge key={m.model} appearance="outline" color={m.risk_level === "low" ? "success" : m.risk_level === "medium" ? "warning" : "danger"}>
+                                        {m.model} · {m.score}
+                                      </Badge>
+                                    ))}
+                                  </div>
+                                )}
+                                <Text size={200} style={{ color: tokens.colorNeutralForeground2, lineHeight: "1.5" }}>
+                                  {d.recommendation}
+                                </Text>
+                              </div>
+                            </Card>
+                          ))}
+                        </div>
+                      </AccordionPanel>
+                    </AccordionItem>
+                  ))}
+                </Accordion>
               </>
             )}
           </>
