@@ -36,12 +36,18 @@ class PtuRequest(BaseModel):
 
 @router.get("/source-models")
 def source_models() -> list[str]:
-    return get_source_models()
+    try:
+        return get_source_models()
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 @router.get("/target-models/{model_id:path}")
 def target_models(model_id: str) -> list[str]:
-    return get_target_models(model_id)
+    try:
+        return get_target_models(model_id)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 @router.get("/models")

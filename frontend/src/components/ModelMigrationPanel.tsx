@@ -224,7 +224,10 @@ export default function ModelMigrationPanel() {
   useEffect(() => {
     apiFetch("/api/model-migration/source-models")
       .then(async (r) => {
-        if (!r.ok) throw new Error(`${r.status}: ${r.statusText}`);
+        if (!r.ok) {
+          const body = await r.text().catch(() => r.statusText);
+          throw new Error(`${r.status}: ${body}`);
+        }
         return r.json() as Promise<string[]>;
       })
       .then(setModels)
