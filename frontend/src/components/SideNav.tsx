@@ -19,6 +19,7 @@ import {
   ChevronRightRegular,
   RocketRegular,
   FormRegular,
+  CalendarRegular,
   ChartMultipleRegular,
   LayerRegular,
   ShieldErrorRegular,
@@ -63,6 +64,7 @@ const NAV_SECTIONS: NavSectionDef[] = [
     items: [
       { mode: "whatsnew", label: "What's New", icon: <MegaphoneLoudRegular />, description: "Microsoft announcements & draft customer emails" },
       { mode: "servicehealth", label: "Service Health", icon: <HeartPulseRegular />, description: "Azure service incidents and health advisories" },
+      { mode: "modellifecycle", label: "Model Lifecycle", icon: <CalendarRegular />, description: "Azure Foundry model retirement schedule" },
     ],
   },
   {

@@ -1,0 +1,39 @@
+name: db-keepalive
+
+on:
+  schedule:
+    # Run every day at 06:00 UTC — starts the DB if it was stopped overnight
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  start-db:
+    runs-on: ubuntu-latest
+    environment: dev
+    steps:
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Start PostgreSQL if stopped
+        run: |
+          STATE=$(az postgres flexible-server show \
+            --name aarch-dev-pg-7s6kzxncbhezw \
+            --resource-group aarch-dev-rg \
+            --query state -o tsv)
+          echo "Current state: $STATE"
+          if [ "$STATE" = "Stopped" ]; then
+            echo "Server is stopped — starting..."
+            az postgres flexible-server start \
+              --name aarch-dev-pg-7s6kzxncbhezw \
+              --resource-group aarch-dev-rg
+            echo "Start command issued."
+          else
+            echo "Server is already $STATE — nothing to do."
+          fi

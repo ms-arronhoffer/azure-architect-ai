@@ -38,6 +38,7 @@ export type Mode =
   | "troubleshoot"
   | "whatsnew"
   | "servicehealth"
+  | "modellifecycle"
   | "strategy"
   | "admin";
 

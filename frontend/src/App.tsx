@@ -29,6 +29,7 @@ import ReliabilityPanel from "./components/ReliabilityPanel";
 import TroubleshootingPanel from "./components/TroubleshootingPanel";
 import WhatsNewPanel from "./components/WhatsNewPanel";
 import ServiceHealthPanel from "./components/ServiceHealthPanel";
+import ModelLifecyclePanel from "./components/ModelLifecyclePanel";
 import MetricsDashboard from "./components/MetricsDashboard";
 import TelemetryDebugDrawer from "./components/TelemetryDebugDrawer";
 import { useConversationHistory } from "./hooks/useConversationHistory";
@@ -230,6 +231,7 @@ export default function App() {
     if (mode === "strategy") return <StrategyPanel key="strategy" onRefine={handleRefine} sessionId={strategySessionId} onSave={handlePanelSave} initialSession={panelSession("strategy")} workloadContext={workloadContext} />;
     if (mode === "whatsnew") return <WhatsNewPanel key="whatsnew" />;
     if (mode === "servicehealth") return <ServiceHealthPanel key="servicehealth" incidents={healthIncidents} loading={healthLoading} error={healthError} lastChecked={healthLastChecked} onRefresh={refreshHealth} />;
+    if (mode === "modellifecycle") return <ModelLifecyclePanel key="modellifecycle" />;
     if (mode === "admin") return <MetricsDashboard key="admin" />;
     if (mode === "presentation") return <PresentationPanel key="presentation" />;
     if (mode === "codegen") return <CodegenPanel key="codegen" onRefine={handleRefine} />;

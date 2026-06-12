@@ -60,6 +60,7 @@ const MODE_LABELS: Record<Mode, string> = {
   analyze: "Workload Analysis",
   whatsnew: "What's New",
   servicehealth: "Service Health",
+  modellifecycle: "Model Lifecycle",
   strategy: "Strategy Builder",
   admin: "Usage Metrics",
 };
@@ -100,6 +101,7 @@ const MODE_SECTION: Partial<Record<Mode, string>> = {
   dataplatform: "Operations",
   whatsnew: "Communications",
   servicehealth: "Communications",
+  modellifecycle: "Communications",
   strategy: "Design & Build",
 };
 
