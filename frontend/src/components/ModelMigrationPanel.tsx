@@ -780,13 +780,13 @@ export default function ModelMigrationPanel() {
               <div style={{ display: "flex", flexDirection: "column", gap: "12px", padding: "4px 0" }}>
                 <Text weight="semibold">Upload Retirement Report</Text>
                 <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
-                  Upload a tab-separated (.tsv / .txt) Azure OpenAI model retirement report, or paste the content below.
+                  Upload a CSV or TSV Azure OpenAI model retirement report.
                 </Text>
                 <div style={{ display: "flex", gap: "12px", alignItems: "center", flexWrap: "wrap" }}>
                   <input
                     ref={fileInputRef}
                     type="file"
-                    accept=".tsv,.txt,.csv"
+                    accept=".csv,.tsv,.txt"
                     style={{ display: "none" }}
                     onChange={handleFileSelect}
                   />

@@ -461,14 +461,21 @@ def _migration_rec(
 
 
 def analyze_retirement_report(tsv_text: str) -> dict:
-    """Parse a tab-separated Azure OpenAI retirement report and produce prioritized
-    migration recommendations using migration advisor scoring data."""
+    """Parse a tab- or comma-separated Azure OpenAI retirement report and produce
+    prioritized migration recommendations using migration advisor scoring data."""
+    import csv
+    import io
+
     today = date.today()
 
-    # ── Parse rows ─────────────────────────────────────────────────────────────
+    # ── Auto-detect delimiter and parse rows ───────────────────────────────────
+    text = tsv_text.strip()
+    first_line = text.splitlines()[0] if text else ""
+    delimiter = "\t" if "\t" in first_line else ","
+
     raw_rows: list[dict] = []
-    for line in tsv_text.strip().splitlines():
-        parts = line.split("\t")
+    reader = csv.reader(io.StringIO(text), delimiter=delimiter)
+    for parts in reader:
         if len(parts) < 3:
             continue
         padded = parts + [""] * max(0, len(_REPORT_COLS) - len(parts))
