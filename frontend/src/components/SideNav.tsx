@@ -270,7 +270,9 @@ export default function SideNav({ mode, onModeChange, collapsed, onToggleCollaps
   const styles = useStyles();
   const { roles } = useAuth();
   const isMetricsAdmin = roles.includes("Metrics.Read");
-  const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set());
+  const [collapsedSections, setCollapsedSections] = useState<Set<string>>(
+    () => new Set(NAV_SECTIONS.map((s) => s.label))
+  );
 
   function toggleSection(label: string) {
     setCollapsedSections((prev) => {

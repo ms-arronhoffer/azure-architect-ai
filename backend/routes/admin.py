@@ -3,7 +3,7 @@ import time
 from typing import Any
 
 from fastapi import APIRouter, Depends
-from sqlalchemy import func, select
+from sqlalchemy import func, select, union
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from auth.entra import require_metrics_role
@@ -64,17 +64,22 @@ async def get_metrics(
         select(func.count(func.distinct(Conversation.user_id))).select_from(Conversation)
     ) or 0
 
-    # Active today — any conversation updated today (not just created today)
-    active_today = await db.scalar(
-        select(func.count(func.distinct(Conversation.user_id)))
-        .where(Conversation.updated_at >= today_start_ms)
-    ) or 0
+    # Active users — union conversations + token usage so users with token activity but no
+    # saved conversation record are still counted.
+    async def _count_active(cutoff_ms: int) -> int:
+        conv_q = select(Conversation.user_id.label("user_id")).where(
+            Conversation.updated_at >= cutoff_ms,
+            Conversation.user_id.isnot(None),
+        )
+        token_q = select(TokenUsage.user_id.label("user_id")).where(
+            TokenUsage.created_at >= cutoff_ms,
+            TokenUsage.user_id.isnot(None),
+        )
+        combined = union(conv_q, token_q).subquery()
+        return await db.scalar(select(func.count()).select_from(combined)) or 0
 
-    # Weekly active users — any conversation updated in last 7 days
-    weekly_active = await db.scalar(
-        select(func.count(func.distinct(Conversation.user_id)))
-        .where(Conversation.updated_at >= seven_days_ago_ms)
-    ) or 0
+    active_today = await _count_active(today_start_ms)
+    weekly_active = await _count_active(seven_days_ago_ms)
 
     # Avg session duration in minutes (updated_at - created_at for conversations with >0 duration)
     avg_duration_ms = await db.scalar(
