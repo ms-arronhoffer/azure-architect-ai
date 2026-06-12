@@ -839,9 +839,13 @@ export default function ModelMigrationPanel() {
           </>
         )}
 
-        {tab === "report" && (
-          <>
-            <Card style={{ position: "sticky", top: 0, zIndex: 10 }}>
+        {tab === "report" && false /* report rendered outside body */}
+      </div>
+
+      {tab === "report" && (
+        <>
+          <div style={{ flexShrink: 0, padding: "12px 24px 0" }}>
+            <Card>
               <div style={{ display: "flex", flexDirection: "column", gap: "12px", padding: "4px 0" }}>
                 <Text weight="semibold">Upload Retirement Report</Text>
                 <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
@@ -912,7 +916,8 @@ export default function ModelMigrationPanel() {
                 <MessageBarBody>{reportError}</MessageBarBody>
               </MessageBar>
             )}
-
+          </div>
+          <div style={{ flex: 1, overflowY: "auto", padding: "12px 24px 24px", display: "flex", flexDirection: "column", gap: "20px" }}>
             {reportResult && (
               <>
                 {/* Summary row */}
@@ -1050,9 +1055,9 @@ export default function ModelMigrationPanel() {
                 </Accordion>
               </>
             )}
-          </>
-        )}
-      </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }
