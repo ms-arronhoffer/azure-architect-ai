@@ -22,6 +22,7 @@ tiktoken>=0.7
 sqlalchemy[asyncio]>=2.0
 asyncpg>=0.29
 aiosqlite>=0.20
+fpdf2>=2.7
 alembic>=1.13
 cryptography>=43
 pyjwt[crypto]>=2.9

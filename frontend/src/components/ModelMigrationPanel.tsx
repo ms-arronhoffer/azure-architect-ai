@@ -20,8 +20,9 @@ import {
   AccordionHeader,
   AccordionItem,
   AccordionPanel,
+  Select,
 } from "@fluentui/react-components";
-import { ArrowSwapRegular, CalculatorRegular, DocumentTableRegular, ArrowUploadRegular } from "@fluentui/react-icons";
+import { ArrowSwapRegular, CalculatorRegular, DocumentTableRegular, ArrowUploadRegular, ArrowDownloadRegular } from "@fluentui/react-icons";
 import { apiFetch } from "../config/api";
 
 interface Replacement {
@@ -281,6 +282,8 @@ export default function ModelMigrationPanel() {
   const [reportError, setReportError] = useState<string | null>(null);
   const [reportResult, setReportResult] = useState<ReportResult | null>(null);
   const [reportFileName, setReportFileName] = useState<string | null>(null);
+  const [exportFormat, setExportFormat] = useState<"pptx" | "docx" | "pdf">("pptx");
+  const [exporting, setExporting] = useState(false);
 
   const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -313,6 +316,68 @@ export default function ModelMigrationPanel() {
       setAnalyzing(false);
     }
   }, [reportText]);
+
+  const exportReport = useCallback(() => {
+    if (!reportResult) return;
+    const csvEscape = (v: unknown) => {
+      const s = String(v ?? "");
+      return s.includes(",") || s.includes('"') || s.includes("\n") ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+    const headers = [
+      "Priority", "Customer", "TPID", "CSAM",
+      "Subscription", "Model", "Retirement Date", "Days Until Retirement",
+      "Urgency", "Peak Usage", "Upgrade Option", "Unified",
+      "Regions", "Region Count",
+      "Top Migration Candidate", "Migration Score", "Migration Risk",
+      "Recommendation",
+    ];
+    const rows = reportResult.customers.flatMap((c) =>
+      c.deployments.map((d) => [
+        c.priority, c.tp_name, c.tpid, c.csam,
+        d.subscription_name, d.model, d.retirement_date, d.days_until_retirement ?? "",
+        d.urgency, d.peak_usage, d.upgrade_option, d.unified,
+        d.regions.join("; "), d.region_count,
+        d.migration_options[0]?.model ?? "", d.migration_options[0]?.score ?? "", d.migration_options[0]?.risk_level ?? "",
+        d.recommendation,
+      ].map(csvEscape).join(","))
+    );
+    const csv = [headers.join(","), ...rows].join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `migration-report-${reportResult.summary.analysis_date}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [reportResult]);
+
+  const exportDocument = useCallback(async () => {
+    if (!reportResult) return;
+    setExporting(true);
+    setReportError(null);
+    try {
+      const r = await apiFetch("/api/model-migration/export-document", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ data: reportResult, format: exportFormat }),
+      });
+      if (!r.ok) {
+        const t = await r.text().catch(() => r.statusText);
+        throw new Error(`${r.status}: ${t}`);
+      }
+      const blob = await r.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `migration-report-${reportResult.summary.analysis_date}.${exportFormat}`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      setReportError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setExporting(false);
+    }
+  }, [reportResult, exportFormat]);
 
   // ── Migration Scorer ─────────────────────────────────────────────────────────
   const [source, setSource] = useState("");
@@ -804,6 +869,35 @@ export default function ModelMigrationPanel() {
                   >
                     Analyze Report
                   </Button>
+                  {reportResult && (
+                    <>
+                      <Select
+                        value={exportFormat}
+                        onChange={(_, d) => setExportFormat(d.value as "pptx" | "docx" | "pdf")}
+                        style={{ minWidth: "160px" }}
+                      >
+                        <option value="pptx">PowerPoint (PPTX)</option>
+                        <option value="docx">Word Document (DOCX)</option>
+                        <option value="pdf">PDF</option>
+                      </Select>
+                      <Button
+                        appearance="primary"
+                        icon={exporting ? <Spinner size="tiny" /> : <ArrowDownloadRegular />}
+                        disabled={exporting}
+                        onClick={exportDocument}
+                      >
+                        {exporting ? "Generating…" : "Export Document"}
+                      </Button>
+                      <Button
+                        appearance="subtle"
+                        icon={<ArrowDownloadRegular />}
+                        onClick={exportReport}
+                        title="Export as CSV"
+                      >
+                        CSV
+                      </Button>
+                    </>
+                  )}
                   {reportText && !reportResult && (
                     <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
                       {reportText.trim().split("\n").length} lines loaded

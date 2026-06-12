@@ -1,6 +1,7 @@
 """Model Migration Advisor endpoints."""
 
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import Response
 from pydantic import BaseModel
 
 from services.model_iq_service import (
@@ -15,6 +16,12 @@ from services.model_iq_service import (
     get_source_models,
     get_target_models,
     rank_replacements,
+)
+from services.report_document_service import (
+    build_docx_report,
+    build_pdf_report,
+    build_pptx_report,
+    generate_report_narrative,
 )
 
 router = APIRouter(prefix="/model-migration", tags=["model-migration"])
@@ -127,3 +134,40 @@ def analyze_report(req: AnalyzeReportRequest) -> dict:
         return analyze_retirement_report(req.report)
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+class ExportDocumentRequest(BaseModel):
+    data: dict
+    format: str = "pptx"
+
+
+_MIME = {
+    "pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "pdf": "application/pdf",
+}
+
+
+@router.post("/export-document")
+def export_document(req: ExportDocumentRequest) -> Response:
+    """Generate a customer-facing PPTX, DOCX, or PDF from analyzed report data."""
+    fmt = req.format.lower()
+    if fmt not in _MIME:
+        raise HTTPException(status_code=400, detail=f"Unsupported format: {fmt}")
+    try:
+        narrative = generate_report_narrative(req.data)
+        if fmt == "docx":
+            content = build_docx_report(req.data, narrative)
+        elif fmt == "pdf":
+            content = build_pdf_report(req.data, narrative)
+        else:
+            content = build_pptx_report(req.data, narrative)
+        date_str = req.data.get("summary", {}).get("analysis_date", "report")
+        filename = f"migration-report-{date_str}.{fmt}"
+        return Response(
+            content=content,
+            media_type=_MIME[fmt],
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
