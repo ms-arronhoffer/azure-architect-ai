@@ -4,12 +4,16 @@ import {
   tokens,
   Text,
   Badge,
+  Button,
   Input,
   Tab,
   TabList,
   Link,
 } from "@fluentui/react-components";
-import { CalendarRegular, OpenRegular, SearchRegular } from "@fluentui/react-icons";
+import { CalendarRegular, OpenRegular, SearchRegular, ArrowDownloadRegular } from "@fluentui/react-icons";
+import * as XLSX from "xlsx";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 
 type Lifecycle = "GA" | "Preview" | "Deprecated" | "Retired" | "Legacy";
 type FilterTab = "soon" | "atrisk" | "retired" | "all";
@@ -371,6 +375,70 @@ const useStyles = makeStyles({
   },
 });
 
+const FILTER_LABEL: Record<FilterTab, string> = {
+  soon: "Retiring Within 90 Days",
+  atrisk: "Deprecated or Legacy",
+  retired: "Retired",
+  all: "All Models",
+};
+
+const COLUMNS = ["Provider", "Model", "Version", "Lifecycle", "Retirement Date", "Replacement", "Sold By"] as const;
+
+function modelToRow(m: ModelEntry): string[] {
+  return [m.provider, m.model, m.version, m.lifecycle, m.retirement ?? "—", m.replacement ?? "—", m.soldBy];
+}
+
+function exportToXlsx(models: ModelEntry[], filterLabel: string) {
+  const generated = new Date().toISOString().slice(0, 10);
+  const rows = [
+    ["Azure AI Model Lifecycle Report"],
+    [`Filter: ${filterLabel}`],
+    [`Generated: ${generated}  ·  Source: Microsoft Learn Azure Foundry model retirement schedule`],
+    [],
+    [...COLUMNS],
+    ...models.map(modelToRow),
+  ];
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  ws["!cols"] = [20, 34, 14, 12, 16, 30, 10].map((w) => ({ wch: w }));
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Model Lifecycle");
+  XLSX.writeFile(wb, `azure-model-lifecycle-${generated}.xlsx`);
+}
+
+function exportToPdf(models: ModelEntry[], filterLabel: string) {
+  const generated = new Date().toISOString().slice(0, 10);
+  const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
+
+  doc.setFontSize(16);
+  doc.setTextColor(0, 78, 140);
+  doc.text("Azure AI Model Lifecycle Report", 14, 16);
+
+  doc.setFontSize(9);
+  doc.setTextColor(100);
+  doc.text(`Filter: ${filterLabel}`, 14, 23);
+  doc.text(`Generated: ${generated}  ·  Source: Microsoft Learn Azure Foundry model retirement schedule`, 14, 28);
+
+  autoTable(doc, {
+    startY: 33,
+    head: [COLUMNS as unknown as string[]],
+    body: models.map(modelToRow),
+    styles: { fontSize: 8, cellPadding: 2 },
+    headStyles: { fillColor: [0, 78, 140], textColor: 255, fontStyle: "bold" },
+    alternateRowStyles: { fillColor: [245, 248, 252] },
+    columnStyles: { 1: { cellWidth: 50 }, 5: { cellWidth: 42 } },
+  });
+
+  const pageCount = (doc as unknown as { internal: { getNumberOfPages: () => number } }).internal.getNumberOfPages();
+  for (let i = 1; i <= pageCount; i++) {
+    doc.setPage(i);
+    doc.setFontSize(8);
+    doc.setTextColor(150);
+    doc.text(`Page ${i} of ${pageCount}`, doc.internal.pageSize.width - 20, doc.internal.pageSize.height - 6);
+  }
+
+  doc.save(`azure-model-lifecycle-${generated}.pdf`);
+}
+
 export default function ModelLifecyclePanel() {
   const styles = useStyles();
   const [filter, setFilter] = useState<FilterTab>("soon");
@@ -438,9 +506,27 @@ export default function ModelLifecyclePanel() {
             <Text className={styles.subtitle}>Azure Foundry model retirement schedule · {MODELS.length} models tracked</Text>
           </div>
         </div>
-        <Link href={LEARN_URL} target="_blank" rel="noopener noreferrer" style={{ fontSize: "12px", display: "flex", alignItems: "center", gap: "4px" }}>
-          Microsoft Learn <OpenRegular style={{ fontSize: "14px" }} />
-        </Link>
+        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+          <Button
+            appearance="subtle"
+            size="small"
+            icon={<ArrowDownloadRegular />}
+            onClick={() => exportToXlsx(filtered, FILTER_LABEL[filter])}
+          >
+            Export XLSX
+          </Button>
+          <Button
+            appearance="subtle"
+            size="small"
+            icon={<ArrowDownloadRegular />}
+            onClick={() => exportToPdf(filtered, FILTER_LABEL[filter])}
+          >
+            Export PDF
+          </Button>
+          <Link href={LEARN_URL} target="_blank" rel="noopener noreferrer" style={{ fontSize: "12px", display: "flex", alignItems: "center", gap: "4px" }}>
+            Microsoft Learn <OpenRegular style={{ fontSize: "14px" }} />
+          </Link>
+        </div>
       </div>
 
       <div className={styles.controls}>
