@@ -197,6 +197,7 @@ const MODELS: ModelEntry[] = [
 ];
 
 const LEARN_URL = "https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/model-retirement-schedule";
+const PROVIDERS = [...new Set(MODELS.map((m) => m.provider))].sort();
 const SOON_DAYS = 90;
 
 function daysUntil(dateStr: string): number {
@@ -243,7 +244,7 @@ const useStyles = makeStyles({
     fontWeight: 700,
     color: tokens.colorNeutralForeground1,
     lineHeight: 1.2,
-    marginBottom: "2px",
+    marginBottom: "6px",
   },
   subtitle: {
     fontSize: "12px",
@@ -252,10 +253,15 @@ const useStyles = makeStyles({
   controls: {
     padding: "12px 28px",
     display: "flex",
-    alignItems: "center",
-    gap: "16px",
+    flexDirection: "column",
+    gap: "10px",
     borderBottom: "1px solid rgba(255,255,255,0.05)",
     flexShrink: 0,
+  },
+  controlsRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: "16px",
     flexWrap: "wrap",
   },
   searchBox: {
@@ -348,12 +354,28 @@ const useStyles = makeStyles({
     padding: "48px 0",
     color: tokens.colorNeutralForeground3,
   },
+  providerChips: {
+    display: "flex",
+    gap: "6px",
+    flexWrap: "wrap",
+    alignItems: "center",
+  },
+  providerLabel: {
+    fontSize: "11px",
+    fontWeight: 600,
+    color: tokens.colorNeutralForeground3,
+    textTransform: "uppercase",
+    letterSpacing: "0.06em",
+    marginRight: "2px",
+    flexShrink: 0,
+  },
 });
 
 export default function ModelLifecyclePanel() {
   const styles = useStyles();
   const [filter, setFilter] = useState<FilterTab>("soon");
   const [search, setSearch] = useState("");
+  const [providerFilter, setProviderFilter] = useState<string | null>(null);
 
   const filtered = useMemo(() => {
     const now = Date.now();
@@ -369,6 +391,7 @@ export default function ModelLifecyclePanel() {
         (m.replacement ?? "").toLowerCase().includes(q);
 
       if (!matchesSearch) return false;
+      if (providerFilter && m.provider !== providerFilter) return false;
 
       switch (filter) {
         case "soon":
@@ -386,7 +409,7 @@ export default function ModelLifecyclePanel() {
       if (!b.retirement) return -1;
       return new Date(a.retirement).getTime() - new Date(b.retirement).getTime();
     });
-  }, [filter, search]);
+  }, [filter, search, providerFilter]);
 
   function retirementCell(retirement: string | null) {
     if (!retirement) return <span className={styles.retireNormal}>—</span>;
@@ -421,25 +444,53 @@ export default function ModelLifecyclePanel() {
       </div>
 
       <div className={styles.controls}>
-        <TabList
-          selectedValue={filter}
-          onTabSelect={(_, d) => setFilter(d.value as FilterTab)}
-          size="small"
-        >
-          <Tab value="soon">Retiring ≤90 days <Badge size="small" shape="rounded" color="warning" style={{ marginLeft: "4px" }}>{soonCount}</Badge></Tab>
-          <Tab value="atrisk">Deprecated / Legacy <Badge size="small" shape="rounded" color="subtle" style={{ marginLeft: "4px" }}>{atRiskCount}</Badge></Tab>
-          <Tab value="retired">Retired <Badge size="small" shape="rounded" color="danger" style={{ marginLeft: "4px" }}>{retiredCount}</Badge></Tab>
-          <Tab value="all">All ({MODELS.length})</Tab>
-        </TabList>
-        <Input
-          className={styles.searchBox}
-          contentBefore={<SearchRegular />}
-          placeholder="Filter by model or provider…"
-          value={search}
-          onChange={(_, d) => setSearch(d.value)}
-          size="small"
-        />
-        <Text className={styles.countBadge}>{filtered.length} result{filtered.length !== 1 ? "s" : ""}</Text>
+        <div className={styles.controlsRow}>
+          <TabList
+            selectedValue={filter}
+            onTabSelect={(_, d) => setFilter(d.value as FilterTab)}
+            size="small"
+          >
+            <Tab value="soon">Retiring ≤90 days <Badge size="small" shape="rounded" color="warning" style={{ marginLeft: "4px" }}>{soonCount}</Badge></Tab>
+            <Tab value="atrisk">Deprecated / Legacy <Badge size="small" shape="rounded" color="subtle" style={{ marginLeft: "4px" }}>{atRiskCount}</Badge></Tab>
+            <Tab value="retired">Retired <Badge size="small" shape="rounded" color="danger" style={{ marginLeft: "4px" }}>{retiredCount}</Badge></Tab>
+            <Tab value="all">All ({MODELS.length})</Tab>
+          </TabList>
+          <Input
+            className={styles.searchBox}
+            contentBefore={<SearchRegular />}
+            placeholder="Filter by model or provider…"
+            value={search}
+            onChange={(_, d) => setSearch(d.value)}
+            size="small"
+          />
+          <Text className={styles.countBadge}>{filtered.length} result{filtered.length !== 1 ? "s" : ""}</Text>
+        </div>
+        <div className={styles.providerChips}>
+          <Text className={styles.providerLabel}>Provider</Text>
+          <Badge
+            size="small"
+            shape="rounded"
+            appearance={providerFilter === null ? "filled" : "outline"}
+            color={providerFilter === null ? "brand" : "subtle"}
+            style={{ cursor: "pointer", userSelect: "none" }}
+            onClick={() => setProviderFilter(null)}
+          >
+            All
+          </Badge>
+          {PROVIDERS.map((p) => (
+            <Badge
+              key={p}
+              size="small"
+              shape="rounded"
+              appearance={providerFilter === p ? "filled" : "outline"}
+              color={providerFilter === p ? "brand" : "subtle"}
+              style={{ cursor: "pointer", userSelect: "none" }}
+              onClick={() => setProviderFilter(providerFilter === p ? null : p)}
+            >
+              {p}
+            </Badge>
+          ))}
+        </div>
       </div>
 
       <div className={styles.tableWrap}>
