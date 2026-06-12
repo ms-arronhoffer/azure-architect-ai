@@ -1,0 +1,1433 @@
+{
+  "lastRefreshed": "2026-05-01T16:33:06Z",
+  "sources": {
+    "schedule": "https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/model-retirement-schedule",
+    "retired": "https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/retired-models"
+  },
+  "models": [
+    {
+      "modelId": "gpt-4gpt-4-32k - 0314",
+      "version": null,
+      "lifecycleStage": "Retired",
+      "phase": "RETIRED",
+      "noticeDate": "",
+      "retirementDate": "2024-11-20",
+      "replacementHints": [
+        "gpt-4o version: 2024-11-20"
+      ],
+      "docLink": "https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/retired-models",
+      "source": "ms-docs-live"
+    },
+    {
+      "modelId": "gpt-4gpt-4-32k - 0613",
+      "version": null,
+      "lifecycleStage": "Retired",
+      "phase": "RETIRED",
+      "noticeDate": "",
+      "retirementDate": "2024-11-20",
+      "replacementHints": [
+        "gpt-4o version: 2024-11-20"
+      ],
+      "docLink": "https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/retired-models",
+      "source": "ms-docs-live"
+    },
+    {
+      "modelId": "gpt-4o-realtime-preview - 2024",
+      "version": null,
+      "lifecycleStage": "Retired",
+      "phase": "RETIRED",
+      "noticeDate": "",
+      "retirementDate": "2024-12-17",
+      "replacementHints": [
+        "gpt-4o-realtime-preview (version 2024-12-17) or gpt-4o-mini-realtime-preview (version 2024-12-17)"
+      ],
+      "docLink": "https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/retired-models",
+      "source": "ms-docs-live"
+    },
+    {
+      "modelId": "dall-e-2",
+      "version": null,
+      "lifecycleStage": "Retired",
+      "phase": "RETIRED",
+      "noticeDate": "",
+      "retirementDate": "2025-01-27",
+      "replacementHints": [
+        "gpt-image-1"
+      ],
+      "docLink": "https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/retired-models",
+      "source": "ms-docs-live"
+    },
+    {
+      "modelId": "gpt-35-turbo - 0301",
+      "version": null,
+      "lifecycleStage": "Retired",
+      "phase": "RETIRED",
+      "noticeDate": "",
+      "retirementDate": "2025-02-13",
+      "replacementHints": [
+        "gpt-35-turbo (0125) gpt-4o-mini"
+      ],
+      "docLink": "https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/retired-models",
+      "source": "ms-docs-live"
+    },
+    {
+      "modelId": "gpt-35-turbo - 0613",
+      "version": null,
+      "lifecycleStage": "Retired",
+      "phase": "RETIRED",
+      "noticeDate": "",
+      "retirementDate": "2025-02-13",
+      "replacementHints": [
+        "gpt-35-turbo (0125) gpt-4o-mini"
+      ],
+      "docLink": "https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/retired-models",
+      "source": "ms-docs-live"
+    },
+    {
+      "modelId": "gpt-4.5-preview",
+      "version": null,
+      "lifecycleStage": "Retired",
+      "phase": "RETIRED",
+      "noticeDate": "",
+      "retirementDate": "2025-04-14",
+      "replacementHints": [
+        "gpt-4.1 version: 2025-04-14"
+      ],
+      "docLink": "https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/retired-models",
+      "source": "ms-docs-live"
+    },
+    {
+      "modelId": "gpt-35-turbo-16k - 0613",
+      "version": null,
+      "lifecycleStage": "Retired",
+      "phase": "RETIRED",
+      "noticeDate": "",
+      "retirementDate": "2025-04-14",
+      "replacementHints": [
+        "gpt-4.1-mini version: 2025-04-14"
+      ],
+      "docLink": "https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/retired-models",
+      "source": "ms-docs-live"
+    },
+    {
+      "modelId": "o1-preview",
+      "version": null,
+      "lifecycleStage": "Retired",
+      "phase": "RETIRED",
+      "noticeDate": "",
+      "retirementDate": "2025-07-28",
+      "replacementHints": [],
+      "docLink": "https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/retired-models",
+      "source": "ms-docs-live"
+    },
+    {
+      "modelId": "grok-3",
+      "version": "1",
+      "vendor": "xAI",
+      "lifecycleStage": "Deprecated",
+      "phase": "RETIRED",
+      "noticeDate": "",
+      "retirementDate": "2026-05-01",
+      "replacementHints": [
+        "grok-4"
+      ],
+      "docLink": "https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/model-retirement-schedule",
+      "source": "ms-docs-live"
+    },
+    {
+      "modelId": "grok-3-mini",
+      "version": "1",
+      "vendor": "xAI",
+      "lifecycleStage": "Deprecated",
+      "phase": "RETIRED",
+      "noticeDate": "",
+      "retirementDate": "2026-05-01",
+      "replacementHints": [
+        "grok-4-1-fast-reasoning"
+      ],
+      "docLink": "https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/model-retirement-schedule",
+      "source": "ms-docs-live"
+    },
+    {
+      "modelId": "grok-4-fast-non-reasoning",
+      "version": "1",
+      "vendor": "xAI",
+      "lifecycleStage": "Deprecated",
+      "phase": "RETIRED",
+      "noticeDate": "",
+      "retirementDate": "2026-05-01",
+      "replacementHints": [
+        "grok-4-1-fast-non-reasoning"
+      ],
+      "docLink": "https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/model-retirement-schedule",
+      "source": "ms-docs-live"
+    },
+    {
+      "modelId": "grok-4-fast-reasoning",
+      "version": "1",
+      "vendor": "xAI",
+      "lifecycleStage": "Deprecated",
+      "phase": "RETIRED",
+      "noticeDate": "",
+      "retirementDate": "2026-05-01",
+      "replacementHints": [
+        "grok-4-1-fast-reasoning"
+      ],
+      "docLink": "https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/model-retirement-schedule",
+      "source": "ms-docs-live"
+    },
+    {
+      "modelId": "cohere-command-r-08-2024",
+      "version": "1",
+      "vendor": "Cohere",
+      "lifecycleStage": "Deprecated",
+      "phase": "DEPRECATED",
+      "noticeDate": "",
+      "retirementDate": "2026-05-12",
+      "replacementHints": [],
+      "docLink": "https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/model-retirement-schedule",
+      "source": "ms-docs-live"
+    },
+    {
+      "modelId": "cohere-command-r-plus-08-2024",
+      "version": "1",
+      "vendor": "Cohere",
+      "lifecycleStage": "Deprecated",
+      "phase": "DEPRECATED",
+      "noticeDate": "",
+      "retirementDate": "2026-05-12",
+      "replacementHints": [],
+      "docLink": "https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/model-retirement-schedule",
+      "source": "ms-docs-live"
+    },
+    {
+      "modelId": "cohere-rerank-v3.5",
+      "version": "1",
+      "vendor": "Cohere",
+      "lifecycleStage": "Deprecated",
+      "phase": "DEPRECATED",
+      "noticeDate": "",
+      "retirementDate": "2026-05-14",
+      "replacementHints": [
+        "cohere-rerank-v4.0-pro",
+        "cohere-rerank-v4.0-fast"
+      ],
+      "docLink": "https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/model-retirement-schedule",
+      "source": "ms-docs-live"
+    },
+    {
+      "modelId": "gpt-image-1",
+      "version": "2025-04-15",
+      "vendor": "Azure OpenAI",
+      "lifecycleStage": "Preview",
+      "phase": "PREVIEW",
+      "noticeDate": "",
+      "retirementDate": "2026-05-15",
+      "replacementHints": [],
+      "docLink": "https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/model-retirement-schedule",
+      "source": "ms-docs-live"
+    },
+    {
+      "modelId": "gpt-4o-mini-transcribe",
+      "version": "2025-03-20",
+      "vendor": "Azure OpenAI",
+      "lifecycleStage": "GA",
+      "phase": "RETIRING",
+      "noticeDate": "",
+      "retirementDate": "2026-06-01",
+      "replacementHints": [],
+      "docLink": "https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/model-retirement-schedule",
+      "source": "ms-docs-live"
+    },
+    {
+      "modelId": "gpt-4o-mini-tts",
+      "version": "2025-03-20",
+      "vendor": "Azure OpenAI",
+      "lifecycleStage": "Preview",
+      "phase": "PREVIEW",
+      "noticeDate": "",
+      "retirementDate": "2026-06-01",
+      "replacementHints": [],
+      "docLink": "https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/model-retirement-schedule",
+      "source": "ms-docs-live"
+    },
+    {
+      "modelId": "gpt-4o-transcribe",
+      "version": "2025-03-20",
+      "vendor": "Azure OpenAI",
+      "lifecycleStage": "GA",
+      "phase": "RETIRING",
+      "noticeDate": "",
+      "retirementDate": "2026-06-01",
+      "replacementHints": [],
+      "docLink": "https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/model-retirement-schedule",
+      "source": "ms-docs-live"
+    },
+    {
+      "modelId": "sora-2",
+      "version": "2025-10-06",
+      "vendor": "Azure OpenAI",
+      "lifecycleStage": "Preview",
+      "phase": "PREVIEW",
+      "noticeDate": "",
+      "retirementDate": "2026-06-03",
+      "replacementHints": [],
+      "docLink": "https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/model-retirement-schedule",
+      "source": "ms-docs-live"
+    },
+    {
+      "modelId": "gpt-5-chat",
+      "version": "2025-08-07",
+      "vendor": "Azure OpenAI",
+      "lifecycleStage": "Preview",
+      "phase": "PREVIEW",
+      "noticeDate": "",
+      "retirementDate": "2026-06-09",
+      "replacementHints": [
+        "gpt-5.3-chat"
+      ],
+      "docLink": "https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/model-retirement-schedule",
+      "source": "ms-docs-live"
+    },
+    {
+      "modelId": "gpt-5-chat",
+      "version": "2025-10-03",
+      "vendor": "Azure OpenAI",
+      "lifecycleStage": "Preview",
+      "phase": "PREVIEW",
+      "noticeDate": "",
+      "retirementDate": "2026-06-09",
+      "replacementHints": [
+        "gpt-5.3-chat"
+      ],
+      "docLink": "https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/model-retirement-schedule",
+      "source": "ms-docs-live"
+    },
+    {
+      "modelId": "gpt-5.1-chat",
+      "version": "2025-11-13",
+      "vendor": "Azure OpenAI",
+      "lifecycleStage": "Preview",
+      "phase": "PREVIEW",
+      "noticeDate": "",
+      "retirementDate": "2026-06-09",
+      "replacementHints": [
+        "gpt-5.3-chat"
+      ],
+      "docLink": "https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/model-retirement-schedule",
+      "source": "ms-docs-live"
+    },
+    {
+      "modelId": "gpt-5.2-chat",
+      "version": "2025-12-11",
+      "vendor": "Azure OpenAI",
+      "lifecycleStage": "Preview",
+      "phase": "PREVIEW",
+      "noticeDate": "",
+      "retirementDate": "2026-06-09",
+      "replacementHints": [
+        "gpt-5.3-chat"
+      ],
+      "docLink": "https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/model-retirement-schedule",
+      "source": "ms-docs-live"
+    },
+    {
+      "modelId": "gpt-5.2-chat",
+      "version": "2026-02-10",
+      "vendor": "Azure OpenAI",
+      "lifecycleStage": "Preview",
+      "phase": "PREVIEW",
+      "noticeDate": "",
+      "retirementDate": "2026-06-09",
+      "replacementHints": [],
+      "docLink": "https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/model-retirement-schedule",
+      "source": "ms-docs-live"
+    },
+    {
+      "modelId": "gpt-5.3-chat",
+      "version": "2026-03-03",
+      "vendor": "Azure OpenAI",
+      "lifecycleStage": "Preview",
+      "phase": "PREVIEW",
+      "noticeDate": "",
+      "retirementDate": "2026-06-09",
+      "replacementHints": [],
+      "docLink": "https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/model-retirement-schedule",
+      "source": "ms-docs-live"
+    },
+    {
+      "modelId": "llama-3.2-11b-vision-instruct",
+      "version": null,
+      "vendor": "Meta",
+      "lifecycleStage": "Deprecated",
+      "phase": "DEPRECATED",
+      "noticeDate": "",
+      "retirementDate": "2026-06-13",
+      "replacementHints": [],
+      "docLink": "https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/model-retirement-schedule",
+      "source": "ms-docs-live"
+    },
+    {
+      "modelId": "llama-3.2-90b-vision-instruct",
+      "version": null,
+      "vendor": "Meta",
+      "lifecycleStage": "Deprecated",
+      "phase": "DEPRECATED",
+      "noticeDate": "",
+      "retirementDate": "2026-06-13",
+      "replacementHints": [],
+      "docLink": "https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/model-retirement-schedule",
+      "source": "ms-docs-live"
+    },
+    {
+      "modelId": "meta-llama-3.1-405b-instruct",
+      "version": null,
+      "vendor": "Meta",
+      "lifecycleStage": "Deprecated",
+      "phase": "DEPRECATED",
+      "noticeDate": "",
+      "retirementDate": "2026-06-13",
+      "replacementHints": [],
+      "docLink": "https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/model-retirement-schedule",
+      "source": "ms-docs-live"
+    },
+    {
+      "modelId": "meta-llama-3.1-8b",
+      "version": null,
+      "vendor": "Meta",
+      "lifecycleStage": "Deprecated",
+      "phase": "DEPRECATED",
+      "noticeDate": "",
+      "retirementDate": "2026-06-13",
+      "replacementHints": [],
+      "docLink": "https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/model-retirement-schedule",
+      "source": "ms-docs-live"
+    },
+    {
+      "modelId": "meta-llama-3.1-8b-instruct",
+      "version": null,
+      "vendor": "Meta",
+      "lifecycleStage": "Deprecated",
+      "phase": "DEPRECATED",
+      "noticeDate": "",
+      "retirementDate": "2026-06-13",
+      "replacementHints": [],
+      "docLink": "https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/model-retirement-schedule",
+      "source": "ms-docs-live"
+    },
+    {
+      "modelId": "fw-deepseek-v3.1",
+      "version": "1",
+      "vendor": "Fireworks",
+      "lifecycleStage": "Preview",
+      "phase": "PREVIEW",
+      "noticeDate": "",
+      "retirementDate": "2026-07-01",
+      "replacementHints": [],
+      "docLink": "https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/model-retirement-schedule",
+      "source": "ms-docs-live"
+    },
+    {
+      "modelId": "fw-deepseek-v3.2",
+      "version": "1",
+      "vendor": "Fireworks",
+      "lifecycleStage": "Preview",
+      "phase": "PREVIEW",
+      "noticeDate": "",
+      "retirementDate": "2026-07-01",
+      "replacementHints": [],
+      "docLink": "https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/model-retirement-schedule",
+      "source": "ms-docs-live"
+    },
+    {
+      "modelId": "fw-glm-4.7",
+      "version": "1",
+      "vendor": "Fireworks",
+      "lifecycleStage": "Preview",
+      "phase": "PREVIEW",
+      "noticeDate": "",
+      "retirementDate": "2026-07-01",
+      "replacementHints": [],
+      "docLink": "https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/model-retirement-schedule",
+      "source": "ms-docs-live"
+    },
+    {
+      "modelId": "fw-glm-5",
+      "version": "1",
+      "vendor": "Fireworks",
+      "lifecycleStage": "Preview",
+      "phase": "PREVIEW",
+      "noticeDate": "",
+      "retirementDate": "2026-07-01",
+      "replacementHints": [],
+      "docLink": "https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/model-retirement-schedule",
+      "source": "ms-docs-live"
+    },
+    {
+      "modelId": "fw-gpt-oss-120b",
+      "version": "1",
+      "vendor": "Fireworks",
+      "lifecycleStage": "Preview",
+      "phase": "PREVIEW",
+      "noticeDate": "",
+      "retirementDate": "2026-07-01",
+      "replacementHints": [],
+      "docLink": "https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/model-retirement-schedule",
+      "source": "ms-docs-live"
+    },
+    {
+      "modelId": "fw-kimi-k2-instruct-0905",
+      "version": "1",
+      "vendor": "Fireworks",
+      "lifecycleStage": "Preview",
+      "phase": "PREVIEW",
+      "noticeDate": "",
+      "retirementDate": "2026-07-01",
+      "replacementHints": [],
+      "docLink": "https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/model-retirement-schedule",
+      "source": "ms-docs-live"
+    },
+    {
+      "modelId": "fw-kimi-k2-thinking",
+      "version": "1",
+      "vendor": "Fireworks",
+      "lifecycleStage": "Preview",
+      "phase": "PREVIEW",
+      "noticeDate": "",
+      "retirementDate": "2026-07-01",
+      "replacementHints": [],
+      "docLink": "https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/model-retirement-schedule",
+      "source": "ms-docs-live"
+    },
+    {
+      "modelId": "fw-kimi-k2.5",
+      "version": "1",
+      "vendor": "Fireworks",
+      "lifecycleStage": "Preview",
+      "phase": "PREVIEW",
+      "noticeDate": "",
+      "retirementDate": "2026-07-01",
+      "replacementHints": [],
+      "docLink": "https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/model-retirement-schedule",
+      "source": "ms-docs-live"
+    },
+    {
+      "modelId": "fw-minimax-m2.5",
+      "version": "1",
+      "vendor": "Fireworks",
+      "lifecycleStage": "Preview",
+      "phase": "PREVIEW",
+      "noticeDate": "",
+      "retirementDate": "2026-07-01",
+      "replacementHints": [],
+      "docLink": "https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/model-retirement-schedule",
+      "source": "ms-docs-live"
+    },
+    {
+      "modelId": "fw-qwen3-14b",
+      "version": "1",
+      "vendor": "Fireworks",
+      "lifecycleStage": "Preview",
+      "phase": "PREVIEW",
+      "noticeDate": "",
+      "retirementDate": "2026-07-01",
+      "replacementHints": [],
+      "docLink": "https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/model-retirement-schedule",
+      "source": "ms-docs-live"
+    },
+    {
+      "modelId": "o1",
+      "version": "2024-12-17",
+      "vendor": "Azure OpenAI",
+      "lifecycleStage": "Deprecated",
+      "phase": "DEPRECATED",
+      "noticeDate": "",
+      "retirementDate": "2026-07-15",
+      "replacementHints": [],
+      "docLink": "https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/model-retirement-schedule",
+      "source": "ms-docs-live"
+    },
+    {
+      "modelId": "gpt-audio-mini",
+      "version": "2025-10-06",
+      "vendor": "Azure OpenAI",
+      "lifecycleStage": "GA",
+      "phase": "RETIRING",
+      "noticeDate": "",
+      "retirementDate": "2026-07-23",
+      "replacementHints": [],
+      "docLink": "https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/model-retirement-schedule",
+      "source": "ms-docs-live"
+    },
+    {
+      "modelId": "gpt-realtime-mini",
+      "version": "2025-10-06",
+      "vendor": "Azure OpenAI",
+      "lifecycleStage": "GA",
+      "phase": "RETIRING",
+      "noticeDate": "",
+      "retirementDate": "2026-07-23",
+      "replacementHints": [],
+      "docLink": "https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/model-retirement-schedule",
+      "source": "ms-docs-live"
+    },
+    {
+      "modelId": "fw-glm-5.1",
+      "version": "1",
+      "vendor": "Fireworks",
+      "lifecycleStage": "Preview",
+      "phase": "PREVIEW",
+      "noticeDate": "",
+      "retirementDate": "2026-08-01",
+      "replacementHints": [],
+      "docLink": "https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/model-retirement-schedule",
+      "source": "ms-docs-live"
+    },
+    {
+      "modelId": "fw-qwen3.5-122b-a10b",
+      "version": "1",
+      "vendor": "Fireworks",
+      "lifecycleStage": "Preview",
+      "phase": "PREVIEW",
+      "noticeDate": "",
+      "retirementDate": "2026-08-01",
+      "replacementHints": [],
+      "docLink": "https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/model-retirement-schedule",
+      "source": "ms-docs-live"
+    },
+    {
+      "modelId": "fw-qwen3.5-397b-a17b",
+      "version": "1",
+      "vendor": "Fireworks",
+      "lifecycleStage": "Preview",
+      "phase": "PREVIEW",
+      "noticeDate": "",
+      "retirementDate": "2026-08-01",
+      "replacementHints": [],
+      "docLink": "https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/model-retirement-schedule",
+      "source": "ms-docs-live"
+    },
+    {
+      "modelId": "llama-3.3-70b",
+      "phase": "RETIRING",
+      "noticeDate": "2026-02-01",
+      "retirementDate": "2026-08-01",
+      "replacementHints": [
+        "llama-4-scout",
+        "gpt-5-mini"
+      ],
+      "docLink": "https://learn.microsoft.com/en-us/azure/ai-foundry/model-catalog"
+    },
+    {
+      "modelId": "o3-mini",
+      "version": "2025-01-31",
+      "vendor": "Azure OpenAI",
+      "lifecycleStage": "Deprecated",
+      "phase": "DEPRECATED",
+      "noticeDate": "",
+      "retirementDate": "2026-08-02",
+      "replacementHints": [
+        "o4-mini"
+      ],
+      "docLink": "https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/model-retirement-schedule",
+      "source": "ms-docs-live"
+    },
+    {
+      "modelId": "gpt-4o",
+      "version": "2024-05-13",
+      "vendor": "Azure OpenAI",
+      "lifecycleStage": "Deprecated",
+      "phase": "DEPRECATED",
+      "noticeDate": "",
+      "retirementDate": "2026-10-01",
+      "replacementHints": [
+        "gpt-5.1"
+      ],
+      "docLink": "https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/model-retirement-schedule",
+      "source": "ms-docs-live"
+    },
+    {
+      "modelId": "gpt-4o",
+      "version": "2024-08-06",
+      "vendor": "Azure OpenAI",
+      "lifecycleStage": "Deprecated",
+      "phase": "DEPRECATED",
+      "noticeDate": "",
+      "retirementDate": "2026-10-01",
+      "replacementHints": [
+        "gpt-5.1"
+      ],
+      "docLink": "https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/model-retirement-schedule",
+      "source": "ms-docs-live"
+    },
+    {
+      "modelId": "gpt-4o",
+      "version": "2024-11-20",
+      "vendor": "Azure OpenAI",
+      "lifecycleStage": "GA",
+      "phase": "RETIRING",
+      "noticeDate": "",
+      "retirementDate": "2026-10-01",
+      "replacementHints": [
+        "gpt-5.1"
+      ],
+      "docLink": "https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/model-retirement-schedule",
+      "source": "ms-docs-live"
+    },
+    {
+      "modelId": "gpt-4o-mini",
+      "version": "2024-07-18",
+      "vendor": "Azure OpenAI",
+      "lifecycleStage": "GA",
+      "phase": "RETIRING",
+      "noticeDate": "",
+      "retirementDate": "2026-10-01",
+      "replacementHints": [
+        "gpt-4.1-mini"
+      ],
+      "docLink": "https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/model-retirement-schedule",
+      "source": "ms-docs-live"
+    },
+    {
+      "modelId": "gpt-4.1",
+      "version": "2025-04-14",
+      "vendor": "Azure OpenAI",
+      "lifecycleStage": "GA",
+      "phase": "RETIRING",
+      "noticeDate": "",
+      "retirementDate": "2026-10-14",
+      "replacementHints": [],
+      "docLink": "https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/model-retirement-schedule",
+      "source": "ms-docs-live"
+    },
+    {
+      "modelId": "gpt-4.1-mini",
+      "version": "2025-04-14",
+      "vendor": "Azure OpenAI",
+      "lifecycleStage": "GA",
+      "phase": "RETIRING",
+      "noticeDate": "",
+      "retirementDate": "2026-10-14",
+      "replacementHints": [],
+      "docLink": "https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/model-retirement-schedule",
+      "source": "ms-docs-live"
+    },
+    {
+      "modelId": "gpt-4.1-nano",
+      "version": "2025-04-14",
+      "vendor": "Azure OpenAI",
+      "lifecycleStage": "GA",
+      "phase": "RETIRING",
+      "noticeDate": "",
+      "retirementDate": "2026-10-14",
+      "replacementHints": [],
+      "docLink": "https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/model-retirement-schedule",
+      "source": "ms-docs-live"
+    },
+    {
+      "modelId": "gpt-4o-transcribe-diarize",
+      "version": "2025-10-15",
+      "vendor": "Azure OpenAI",
+      "lifecycleStage": "GA",
+      "phase": "RETIRING",
+      "noticeDate": "",
+      "retirementDate": "2026-10-15",
+      "replacementHints": [],
+      "docLink": "https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/model-retirement-schedule",
+      "source": "ms-docs-live"
+    },
+    {
+      "modelId": "o3",
+      "version": "2025-04-16",
+      "vendor": "Azure OpenAI",
+      "lifecycleStage": "GA",
+      "phase": "RETIRING",
+      "noticeDate": "",
+      "retirementDate": "2026-10-16",
+      "replacementHints": [],
+      "docLink": "https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/model-retirement-schedule",
+      "source": "ms-docs-live"
+    },
+    {
+      "modelId": "o4-mini",
+      "version": "2025-04-16",
+      "vendor": "Azure OpenAI",
+      "lifecycleStage": "GA",
+      "phase": "RETIRING",
+      "noticeDate": "",
+      "retirementDate": "2026-10-16",
+      "replacementHints": [],
+      "docLink": "https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/model-retirement-schedule",
+      "source": "ms-docs-live"
+    },
+    {
+      "modelId": "claude-haiku-4-5",
+      "version": null,
+      "vendor": "Anthropic",
+      "lifecycleStage": "Preview",
+      "phase": "PREVIEW",
+      "noticeDate": "",
+      "retirementDate": "2026-10-19",
+      "replacementHints": [],
+      "docLink": "https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/model-retirement-schedule",
+      "source": "ms-docs-live"
+    },
+    {
+      "modelId": "claude-opus-4-1",
+      "version": null,
+      "vendor": "Anthropic",
+      "lifecycleStage": "Preview",
+      "phase": "PREVIEW",
+      "noticeDate": "",
+      "retirementDate": "2026-10-19",
+      "replacementHints": [],
+      "docLink": "https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/model-retirement-schedule",
+      "source": "ms-docs-live"
+    },
+    {
+      "modelId": "claude-opus-4-5",
+      "version": null,
+      "vendor": "Anthropic",
+      "lifecycleStage": "Preview",
+      "phase": "PREVIEW",
+      "noticeDate": "",
+      "retirementDate": "2026-10-19",
+      "replacementHints": [],
+      "docLink": "https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/model-retirement-schedule",
+      "source": "ms-docs-live"
+    },
+    {
+      "modelId": "claude-sonnet-4-5",
+      "version": null,
+      "vendor": "Anthropic",
+      "lifecycleStage": "Preview",
+      "phase": "PREVIEW",
+      "noticeDate": "",
+      "retirementDate": "2026-10-19",
+      "replacementHints": [],
+      "docLink": "https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/model-retirement-schedule",
+      "source": "ms-docs-live"
+    },
+    {
+      "modelId": "codex-mini",
+      "version": "2025-05-16",
+      "vendor": "Azure OpenAI",
+      "lifecycleStage": "GA",
+      "phase": "RETIRING",
+      "noticeDate": "",
+      "retirementDate": "2026-11-15",
+      "replacementHints": [],
+      "docLink": "https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/model-retirement-schedule",
+      "source": "ms-docs-live"
+    },
+    {
+      "modelId": "gpt-5.1-codex-max",
+      "version": "2025-12-04",
+      "vendor": "Azure OpenAI",
+      "lifecycleStage": "GA",
+      "phase": "RETIRING",
+      "noticeDate": "",
+      "retirementDate": "2026-12-05",
+      "replacementHints": [],
+      "docLink": "https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/model-retirement-schedule",
+      "source": "ms-docs-live"
+    },
+    {
+      "modelId": "o3-pro",
+      "version": "2025-06-10",
+      "vendor": "Azure OpenAI",
+      "lifecycleStage": "GA",
+      "phase": "RETIRING",
+      "noticeDate": "",
+      "retirementDate": "2026-12-10",
+      "replacementHints": [],
+      "docLink": "https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/model-retirement-schedule",
+      "source": "ms-docs-live"
+    },
+    {
+      "modelId": "gpt-5.2",
+      "version": "2025-12-11",
+      "vendor": "Azure OpenAI",
+      "lifecycleStage": "GA",
+      "phase": "RETIRING",
+      "noticeDate": "",
+      "retirementDate": "2026-12-12",
+      "replacementHints": [],
+      "docLink": "https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/model-retirement-schedule",
+      "source": "ms-docs-live"
+    },
+    {
+      "modelId": "gpt-4o-mini-transcribe",
+      "version": "2025-12-15",
+      "vendor": "Azure OpenAI",
+      "lifecycleStage": "GA",
+      "phase": "RETIRING",
+      "noticeDate": "",
+      "retirementDate": "2026-12-15",
+      "replacementHints": [],
+      "docLink": "https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/model-retirement-schedule",
+      "source": "ms-docs-live"
+    },
+    {
+      "modelId": "gpt-4o-mini-tts",
+      "version": "2025-12-15",
+      "vendor": "Azure OpenAI",
+      "lifecycleStage": "GA",
+      "phase": "RETIRING",
+      "noticeDate": "",
+      "retirementDate": "2026-12-15",
+      "replacementHints": [],
+      "docLink": "https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/model-retirement-schedule",
+      "source": "ms-docs-live"
+    },
+    {
+      "modelId": "gpt-audio-mini",
+      "version": "2025-12-15",
+      "vendor": "Azure OpenAI",
+      "lifecycleStage": "GA",
+      "phase": "RETIRING",
+      "noticeDate": "",
+      "retirementDate": "2026-12-15",
+      "replacementHints": [],
+      "docLink": "https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/model-retirement-schedule",
+      "source": "ms-docs-live"
+    },
+    {
+      "modelId": "gpt-realtime-mini",
+      "version": "2025-12-15",
+      "vendor": "Azure OpenAI",
+      "lifecycleStage": "GA",
+      "phase": "RETIRING",
+      "noticeDate": "",
+      "retirementDate": "2026-12-15",
+      "replacementHints": [],
+      "docLink": "https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/model-retirement-schedule",
+      "source": "ms-docs-live"
+    },
+    {
+      "modelId": "tts",
+      "version": "001",
+      "vendor": "Azure OpenAI",
+      "lifecycleStage": "Preview",
+      "phase": "PREVIEW",
+      "noticeDate": "",
+      "retirementDate": "2026-12-15",
+      "replacementHints": [],
+      "docLink": "https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/model-retirement-schedule",
+      "source": "ms-docs-live"
+    },
+    {
+      "modelId": "tts-hd",
+      "version": "001",
+      "vendor": "Azure OpenAI",
+      "lifecycleStage": "GA",
+      "phase": "RETIRING",
+      "noticeDate": "",
+      "retirementDate": "2026-12-15",
+      "replacementHints": [],
+      "docLink": "https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/model-retirement-schedule",
+      "source": "ms-docs-live"
+    },
+    {
+      "modelId": "whisper",
+      "version": "001",
+      "vendor": "Azure OpenAI",
+      "lifecycleStage": "GA",
+      "phase": "RETIRING",
+      "noticeDate": "",
+      "retirementDate": "2026-12-15",
+      "replacementHints": [],
+      "docLink": "https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/model-retirement-schedule",
+      "source": "ms-docs-live"
+    },
+    {
+      "modelId": "gpt-image-1.5",
+      "version": "2025-12-16",
+      "vendor": "Azure OpenAI",
+      "lifecycleStage": "GA",
+      "phase": "RETIRING",
+      "noticeDate": "",
+      "retirementDate": "2026-12-16",
+      "replacementHints": [],
+      "docLink": "https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/model-retirement-schedule",
+      "source": "ms-docs-live"
+    },
+    {
+      "modelId": "o3-deep-research",
+      "version": "2025-06-26",
+      "vendor": "Azure OpenAI",
+      "lifecycleStage": "GA",
+      "phase": "RETIRING",
+      "noticeDate": "",
+      "retirementDate": "2026-12-26",
+      "replacementHints": [],
+      "docLink": "https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/model-retirement-schedule",
+      "source": "ms-docs-live"
+    },
+    {
+      "modelId": "mistral-large-2",
+      "phase": "RETIRING",
+      "noticeDate": "2026-03-15",
+      "retirementDate": "2026-12-31",
+      "replacementHints": [
+        "gpt-5",
+        "gpt-5.2",
+        "llama-4-scout"
+      ],
+      "docLink": "https://learn.microsoft.com/en-us/azure/ai-foundry/model-catalog"
+    },
+    {
+      "modelId": "mistral-small",
+      "phase": "RETIRING",
+      "noticeDate": "2026-03-15",
+      "retirementDate": "2026-12-31",
+      "replacementHints": [
+        "gpt-5-mini",
+        "gpt-5.4-mini",
+        "phi-4"
+      ],
+      "docLink": "https://learn.microsoft.com/en-us/azure/ai-foundry/model-catalog"
+    },
+    {
+      "modelId": "gpt-5.2-codex",
+      "version": "2026-01-14",
+      "vendor": "Azure OpenAI",
+      "lifecycleStage": "GA",
+      "phase": "RETIRING",
+      "noticeDate": "",
+      "retirementDate": "2027-01-14",
+      "replacementHints": [],
+      "docLink": "https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/model-retirement-schedule",
+      "source": "ms-docs-live"
+    },
+    {
+      "modelId": "kimi-k2.5",
+      "version": "1",
+      "vendor": "MoonshotAI",
+      "lifecycleStage": "Preview",
+      "phase": "PREVIEW",
+      "noticeDate": "",
+      "retirementDate": "2027-01-26",
+      "replacementHints": [],
+      "docLink": "https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/model-retirement-schedule",
+      "source": "ms-docs-live"
+    },
+    {
+      "modelId": "cohere-command-r",
+      "phase": "RETIRING",
+      "noticeDate": "2026-04-01",
+      "retirementDate": "2027-01-31",
+      "replacementHints": [
+        "cohere-command-r-plus",
+        "gpt-5-mini"
+      ],
+      "docLink": "https://learn.microsoft.com/en-us/azure/ai-foundry/model-catalog"
+    },
+    {
+      "modelId": "claude-opus-4-6",
+      "version": null,
+      "vendor": "Anthropic",
+      "lifecycleStage": "Preview",
+      "phase": "PREVIEW",
+      "noticeDate": "",
+      "retirementDate": "2027-02-02",
+      "replacementHints": [],
+      "docLink": "https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/model-retirement-schedule",
+      "source": "ms-docs-live"
+    },
+    {
+      "modelId": "gpt-5",
+      "version": "2025-08-07",
+      "vendor": "Azure OpenAI",
+      "lifecycleStage": "GA",
+      "phase": "RETIRING",
+      "noticeDate": "",
+      "retirementDate": "2027-02-06",
+      "replacementHints": [],
+      "docLink": "https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/model-retirement-schedule",
+      "source": "ms-docs-live"
+    },
+    {
+      "modelId": "gpt-5-mini",
+      "version": "2025-08-07",
+      "vendor": "Azure OpenAI",
+      "lifecycleStage": "GA",
+      "phase": "RETIRING",
+      "noticeDate": "",
+      "retirementDate": "2027-02-06",
+      "replacementHints": [],
+      "docLink": "https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/model-retirement-schedule",
+      "source": "ms-docs-live"
+    },
+    {
+      "modelId": "gpt-5-nano",
+      "version": "2025-08-07",
+      "vendor": "Azure OpenAI",
+      "lifecycleStage": "GA",
+      "phase": "RETIRING",
+      "noticeDate": "",
+      "retirementDate": "2027-02-06",
+      "replacementHints": [],
+      "docLink": "https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/model-retirement-schedule",
+      "source": "ms-docs-live"
+    },
+    {
+      "modelId": "claude-sonnet-4-6",
+      "version": null,
+      "vendor": "Anthropic",
+      "lifecycleStage": "Preview",
+      "phase": "PREVIEW",
+      "noticeDate": "",
+      "retirementDate": "2027-02-10",
+      "replacementHints": [],
+      "docLink": "https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/model-retirement-schedule",
+      "source": "ms-docs-live"
+    },
+    {
+      "modelId": "gpt-audio-1.5",
+      "version": "2026-02-23",
+      "vendor": "Azure OpenAI",
+      "lifecycleStage": "GA",
+      "phase": "RETIRING",
+      "noticeDate": "",
+      "retirementDate": "2027-02-23",
+      "replacementHints": [],
+      "docLink": "https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/model-retirement-schedule",
+      "source": "ms-docs-live"
+    },
+    {
+      "modelId": "gpt-realtime-1.5",
+      "version": "2026-02-23",
+      "vendor": "Azure OpenAI",
+      "lifecycleStage": "GA",
+      "phase": "RETIRING",
+      "noticeDate": "",
+      "retirementDate": "2027-02-23",
+      "replacementHints": [],
+      "docLink": "https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/model-retirement-schedule",
+      "source": "ms-docs-live"
+    },
+    {
+      "modelId": "gpt-5.3-codex",
+      "version": "2026-02-24",
+      "vendor": "Azure OpenAI",
+      "lifecycleStage": "GA",
+      "phase": "RETIRING",
+      "noticeDate": "",
+      "retirementDate": "2027-02-25",
+      "replacementHints": [],
+      "docLink": "https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/model-retirement-schedule",
+      "source": "ms-docs-live"
+    },
+    {
+      "modelId": "gpt-audio",
+      "version": "2025-08-28",
+      "vendor": "Azure OpenAI",
+      "lifecycleStage": "GA",
+      "phase": "RETIRING",
+      "noticeDate": "",
+      "retirementDate": "2027-02-28",
+      "replacementHints": [],
+      "docLink": "https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/model-retirement-schedule",
+      "source": "ms-docs-live"
+    },
+    {
+      "modelId": "gpt-realtime",
+      "version": "2025-08-28",
+      "vendor": "Azure OpenAI",
+      "lifecycleStage": "GA",
+      "phase": "RETIRING",
+      "noticeDate": "",
+      "retirementDate": "2027-02-28",
+      "replacementHints": [],
+      "docLink": "https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/model-retirement-schedule",
+      "source": "ms-docs-live"
+    },
+    {
+      "modelId": "gpt-5.4",
+      "version": "2026-03-05",
+      "vendor": "Azure OpenAI",
+      "lifecycleStage": "GA",
+      "phase": "RETIRING",
+      "noticeDate": "",
+      "retirementDate": "2027-03-05",
+      "replacementHints": [],
+      "docLink": "https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/model-retirement-schedule",
+      "source": "ms-docs-live"
+    },
+    {
+      "modelId": "gpt-5.4-pro",
+      "version": "2026-03-05",
+      "vendor": "Azure OpenAI",
+      "lifecycleStage": "GA",
+      "phase": "RETIRING",
+      "noticeDate": "",
+      "retirementDate": "2027-03-06",
+      "replacementHints": [],
+      "docLink": "https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/model-retirement-schedule",
+      "source": "ms-docs-live"
+    },
+    {
+      "modelId": "gpt-5-codex",
+      "version": "2025-09-15",
+      "vendor": "Azure OpenAI",
+      "lifecycleStage": "GA",
+      "phase": "RETIRING",
+      "noticeDate": "",
+      "retirementDate": "2027-03-17",
+      "replacementHints": [],
+      "docLink": "https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/model-retirement-schedule",
+      "source": "ms-docs-live"
+    },
+    {
+      "modelId": "gpt-5.4-mini",
+      "version": "2026-03-17",
+      "vendor": "Azure OpenAI",
+      "lifecycleStage": "GA",
+      "phase": "RETIRING",
+      "noticeDate": "",
+      "retirementDate": "2027-03-18",
+      "replacementHints": [],
+      "docLink": "https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/model-retirement-schedule",
+      "source": "ms-docs-live"
+    },
+    {
+      "modelId": "gpt-5.4-nano",
+      "version": "2026-03-17",
+      "vendor": "Azure OpenAI",
+      "lifecycleStage": "GA",
+      "phase": "RETIRING",
+      "noticeDate": "",
+      "retirementDate": "2027-03-18",
+      "replacementHints": [],
+      "docLink": "https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/model-retirement-schedule",
+      "source": "ms-docs-live"
+    },
+    {
+      "modelId": "cohere-command-r-plus",
+      "phase": "RETIRING",
+      "noticeDate": "2026-06-01",
+      "retirementDate": "2027-03-31",
+      "replacementHints": [
+        "gpt-5.2",
+        "gpt-5.4"
+      ],
+      "docLink": "https://learn.microsoft.com/en-us/azure/ai-foundry/model-catalog"
+    },
+    {
+      "modelId": "claude-mythos-preview (gated research preview)",
+      "version": null,
+      "vendor": "Anthropic",
+      "lifecycleStage": "Preview",
+      "phase": "PREVIEW",
+      "noticeDate": "",
+      "retirementDate": "2027-04-02",
+      "replacementHints": [],
+      "docLink": "https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/model-retirement-schedule",
+      "source": "ms-docs-live"
+    },
+    {
+      "modelId": "grok-4-20-non-reasoning",
+      "version": "1",
+      "vendor": "xAI",
+      "lifecycleStage": "Preview",
+      "phase": "PREVIEW",
+      "noticeDate": "",
+      "retirementDate": "2027-04-06",
+      "replacementHints": [],
+      "docLink": "https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/model-retirement-schedule",
+      "source": "ms-docs-live"
+    },
+    {
+      "modelId": "grok-4-20-reasoning",
+      "version": "1",
+      "vendor": "xAI",
+      "lifecycleStage": "Preview",
+      "phase": "PREVIEW",
+      "noticeDate": "",
+      "retirementDate": "2027-04-06",
+      "replacementHints": [],
+      "docLink": "https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/model-retirement-schedule",
+      "source": "ms-docs-live"
+    },
+    {
+      "modelId": "claude-opus-4-7",
+      "version": null,
+      "vendor": "Anthropic",
+      "lifecycleStage": "Preview",
+      "phase": "PREVIEW",
+      "noticeDate": "",
+      "retirementDate": "2027-04-06",
+      "replacementHints": [],
+      "docLink": "https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/model-retirement-schedule",
+      "source": "ms-docs-live"
+    },
+    {
+      "modelId": "gpt-5-pro",
+      "version": "2025-10-06",
+      "vendor": "Azure OpenAI",
+      "lifecycleStage": "GA",
+      "phase": "RETIRING",
+      "noticeDate": "",
+      "retirementDate": "2027-04-07",
+      "replacementHints": [],
+      "docLink": "https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/model-retirement-schedule",
+      "source": "ms-docs-live"
+    },
+    {
+      "modelId": "gpt-image-1-mini",
+      "version": "2025-10-06",
+      "vendor": "Azure OpenAI",
+      "lifecycleStage": "GA",
+      "phase": "RETIRING",
+      "noticeDate": "",
+      "retirementDate": "2027-04-07",
+      "replacementHints": [],
+      "docLink": "https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/model-retirement-schedule",
+      "source": "ms-docs-live"
+    },
+    {
+      "modelId": "text-embedding-3-large",
+      "version": "1",
+      "vendor": "Azure OpenAI",
+      "lifecycleStage": "GA",
+      "phase": "RETIRING",
+      "noticeDate": "",
+      "retirementDate": "2027-04-15",
+      "replacementHints": [],
+      "docLink": "https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/model-retirement-schedule",
+      "source": "ms-docs-live"
+    },
+    {
+      "modelId": "text-embedding-3-small",
+      "version": "1",
+      "vendor": "Azure OpenAI",
+      "lifecycleStage": "GA",
+      "phase": "RETIRING",
+      "noticeDate": "",
+      "retirementDate": "2027-04-15",
+      "replacementHints": [],
+      "docLink": "https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/model-retirement-schedule",
+      "source": "ms-docs-live"
+    },
+    {
+      "modelId": "text-embedding-ada-002",
+      "version": "1",
+      "vendor": "Azure OpenAI",
+      "lifecycleStage": "GA",
+      "phase": "RETIRING",
+      "noticeDate": "",
+      "retirementDate": "2027-04-15",
+      "replacementHints": [],
+      "docLink": "https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/model-retirement-schedule",
+      "source": "ms-docs-live"
+    },
+    {
+      "modelId": "text-embedding-ada-002",
+      "version": "2",
+      "vendor": "Azure OpenAI",
+      "lifecycleStage": "GA",
+      "phase": "RETIRING",
+      "noticeDate": "",
+      "retirementDate": "2027-04-15",
+      "replacementHints": [],
+      "docLink": "https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/model-retirement-schedule",
+      "source": "ms-docs-live"
+    },
+    {
+      "modelId": "kimi-k2.6",
+      "version": "2026-04-20",
+      "vendor": "MoonshotAI",
+      "lifecycleStage": "Preview",
+      "phase": "PREVIEW",
+      "noticeDate": "",
+      "retirementDate": "2027-04-16",
+      "replacementHints": [],
+      "docLink": "https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/model-retirement-schedule",
+      "source": "ms-docs-live"
+    },
+    {
+      "modelId": "gpt-image-2",
+      "version": "2026-04-21",
+      "vendor": "Azure OpenAI",
+      "lifecycleStage": "GA",
+      "phase": "RETIRING",
+      "noticeDate": "",
+      "retirementDate": "2027-04-21",
+      "replacementHints": [],
+      "docLink": "https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/model-retirement-schedule",
+      "source": "ms-docs-live"
+    },
+    {
+      "modelId": "gpt-5.5",
+      "version": "2026-04-24",
+      "vendor": "Azure OpenAI",
+      "lifecycleStage": "GA",
+      "phase": "RETIRING",
+      "noticeDate": "",
+      "retirementDate": "2027-04-23",
+      "replacementHints": [],
+      "docLink": "https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/model-retirement-schedule",
+      "source": "ms-docs-live"
+    },
+    {
+      "modelId": "gpt-5.1",
+      "version": "2025-11-13",
+      "vendor": "Azure OpenAI",
+      "lifecycleStage": "GA",
+      "phase": "ACTIVE",
+      "noticeDate": "",
+      "retirementDate": "2027-05-15",
+      "replacementHints": [],
+      "docLink": "https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/model-retirement-schedule",
+      "source": "ms-docs-live"
+    },
+    {
+      "modelId": "gpt-5.1-codex",
+      "version": "2025-11-13",
+      "vendor": "Azure OpenAI",
+      "lifecycleStage": "GA",
+      "phase": "ACTIVE",
+      "noticeDate": "",
+      "retirementDate": "2027-05-15",
+      "replacementHints": [],
+      "docLink": "https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/model-retirement-schedule",
+      "source": "ms-docs-live"
+    },
+    {
+      "modelId": "gpt-5.1-codex-mini",
+      "version": "2025-11-13",
+      "vendor": "Azure OpenAI",
+      "lifecycleStage": "GA",
+      "phase": "ACTIVE",
+      "noticeDate": "",
+      "retirementDate": "2027-05-15",
+      "replacementHints": [],
+      "docLink": "https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/model-retirement-schedule",
+      "source": "ms-docs-live"
+    },
+    {
+      "modelId": "model-router",
+      "version": "2025-11-18",
+      "vendor": "Microsoft",
+      "lifecycleStage": "GA",
+      "phase": "ACTIVE",
+      "noticeDate": "",
+      "retirementDate": "2027-05-20",
+      "replacementHints": [],
+      "docLink": "https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/model-retirement-schedule",
+      "source": "ms-docs-live"
+    },
+    {
+      "modelId": "phi-4",
+      "phase": "RETIRING",
+      "noticeDate": "2026-06-01",
+      "retirementDate": "2027-06-01",
+      "replacementHints": [
+        "gpt-5-nano",
+        "gpt-5.4-mini"
+      ],
+      "docLink": "https://learn.microsoft.com/en-us/azure/ai-foundry/model-catalog"
+    }
+  ]
+}

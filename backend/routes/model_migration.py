@@ -4,9 +4,11 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from services.model_iq_service import (
+    analyze_retirement_report,
     compute_feasibility,
     estimate_ptu,
     get_benchmarks,
+    get_live_models,
     get_models,
     get_ptu_supported_models,
     get_retirements,
@@ -32,6 +34,10 @@ class PtuRequest(BaseModel):
     ptu_monthly_price: float = 0.0
     paygo_input_price: float | None = None
     paygo_output_price: float | None = None
+
+
+class AnalyzeReportRequest(BaseModel):
+    report: str
 
 
 @router.get("/source-models")
@@ -102,3 +108,22 @@ def ptu_estimate(req: PtuRequest) -> dict:
 @router.get("/ptu-models")
 def ptu_supported_models() -> list[str]:
     return get_ptu_supported_models()
+
+
+@router.get("/live-models")
+def live_models() -> list[str]:
+    """Model IDs from Microsoft Learn, refreshed every 24 h."""
+    try:
+        return get_live_models()
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@router.post("/analyze-report")
+def analyze_report(req: AnalyzeReportRequest) -> dict:
+    """Analyze a tab-separated Azure OpenAI retirement report and return
+    prioritized migration recommendations using migration advisor scoring."""
+    try:
+        return analyze_retirement_report(req.report)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc

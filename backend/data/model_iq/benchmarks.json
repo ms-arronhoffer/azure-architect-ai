@@ -1,0 +1,21 @@
+[
+  {"modelId":"gpt-4o","mmlu":88.7,"humanEval":90.2,"math":76.6,"reasoning":82.0,"multilingualMmlu":85.5,"arena_elo":1287,"notes":"Strong multimodal, broad capability"},
+  {"modelId":"gpt-4o-mini","mmlu":82.0,"humanEval":87.0,"math":70.2,"reasoning":74.5,"multilingualMmlu":77.2,"arena_elo":1272,"notes":"Optimized for cost/speed tradeoff"},
+  {"modelId":"gpt-4.1","mmlu":90.2,"humanEval":93.4,"math":83.0,"reasoning":87.5,"multilingualMmlu":88.0,"arena_elo":1305,"notes":"1M context, superior coding/instruction following"},
+  {"modelId":"gpt-4.1-mini","mmlu":85.8,"humanEval":90.8,"math":78.5,"reasoning":80.2,"multilingualMmlu":82.4,"arena_elo":1290,"notes":"Fast, 1M context, strong for cost-sensitive workloads"},
+  {"modelId":"gpt-4.1-nano","mmlu":78.0,"humanEval":82.5,"math":68.0,"reasoning":71.0,"multilingualMmlu":73.8,"arena_elo":1258,"notes":"Fastest AOAI model, best for classification/extraction"},
+  {"modelId":"gpt-5","mmlu":93.5,"humanEval":96.2,"math":90.8,"reasoning":94.0,"multilingualMmlu":92.0,"arena_elo":1340,"notes":"Major reasoning leap, excels at complex multi-step tasks"},
+  {"modelId":"gpt-5-mini","mmlu":89.2,"humanEval":93.0,"math":85.5,"reasoning":88.0,"multilingualMmlu":87.5,"arena_elo":1318,"notes":"Near-GPT-5 quality at fraction of cost, excellent value"},
+  {"modelId":"gpt-5-nano","mmlu":82.5,"humanEval":87.0,"math":75.0,"reasoning":78.5,"multilingualMmlu":80.0,"arena_elo":1280,"notes":"Ultra-fast, beats gpt-4o-mini on most benchmarks"},
+  {"modelId":"gpt-5.1","mmlu":94.8,"humanEval":97.0,"math":92.5,"reasoning":95.5,"multilingualMmlu":93.5,"arena_elo":1355,"notes":"Improved reasoning over GPT-5, better tool use"},
+  {"modelId":"gpt-5.2","mmlu":95.5,"humanEval":97.5,"math":93.8,"reasoning":96.2,"multilingualMmlu":94.5,"arena_elo":1368,"notes":"Current frontier model, best across all benchmarks"},
+  {"modelId":"gpt-5.4","mmlu":96.2,"humanEval":98.0,"math":95.0,"reasoning":97.0,"multilingualMmlu":95.5,"arena_elo":1382,"notes":"Newest model, state-of-the-art across all tasks"},
+  {"modelId":"gpt-5.4-mini","mmlu":91.0,"humanEval":94.5,"math":88.0,"reasoning":90.5,"multilingualMmlu":89.5,"arena_elo":1330,"notes":"Best small model available, matches GPT-5 quality"},
+  {"modelId":"llama-3.3-70b","mmlu":82.0,"humanEval":81.0,"math":68.0,"reasoning":74.0,"multilingualMmlu":72.5,"arena_elo":1210,"notes":"Strong open-weight model, good for private deployment"},
+  {"modelId":"llama-4-scout","mmlu":86.5,"humanEval":88.0,"math":77.0,"reasoning":82.0,"multilingualMmlu":79.5,"arena_elo":1265,"notes":"MoE architecture, efficient 17B active params"},
+  {"modelId":"mistral-large-2","mmlu":84.0,"humanEval":85.5,"math":72.0,"reasoning":78.0,"multilingualMmlu":83.0,"arena_elo":1240,"notes":"Strong multilingual, good code capabilities"},
+  {"modelId":"mistral-small","mmlu":77.5,"humanEval":78.0,"math":62.5,"reasoning":68.0,"multilingualMmlu":74.0,"arena_elo":1195,"notes":"Cost-efficient, reasonable quality for simple tasks"},
+  {"modelId":"phi-4","mmlu":80.5,"humanEval":84.0,"math":79.0,"reasoning":77.5,"multilingualMmlu":68.0,"arena_elo":1225,"notes":"Exceptional math/science for size, limited multilingual"},
+  {"modelId":"cohere-command-r-plus","mmlu":83.0,"humanEval":79.5,"math":65.0,"reasoning":76.0,"multilingualMmlu":80.0,"arena_elo":1230,"notes":"Best-in-class RAG with citations, strong retrieval"},
+  {"modelId":"cohere-command-r","mmlu":76.0,"humanEval":72.0,"math":58.0,"reasoning":68.0,"multilingualMmlu":72.5,"arena_elo":1190,"notes":"Lightweight RAG, good citations at lower cost"}
+]

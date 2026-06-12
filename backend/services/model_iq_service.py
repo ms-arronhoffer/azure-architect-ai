@@ -2,7 +2,12 @@
 
 import json
 import math
+import re
+import time
+from collections import defaultdict
+from datetime import date, datetime
 from functools import lru_cache
+from html.parser import HTMLParser
 from pathlib import Path
 
 _DATA = Path(__file__).parent.parent / "data" / "model_iq"
@@ -270,3 +275,339 @@ def get_benchmarks() -> list[dict]:
 
 def get_retirements() -> dict:
     return _load_retirements()
+
+
+# ── live model catalog (Microsoft Learn, daily refresh) ───────────────────────
+
+_LEARN_URL = (
+    "https://learn.microsoft.com/en-us/azure/foundry/foundry-models/concepts/"
+    "models-sold-directly-by-azure?tabs=global-standard&pivots=azure-openai"
+)
+_live_cache: dict = {"models": [], "fetched_at": 0.0}
+_LIVE_TTL = 86400.0
+
+
+class _ModelIdTableParser(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__()
+        self._in_table = False
+        self._col_idx = 0
+        self._model_col: int | None = None
+        self._header_done = False
+        self._buf = ""
+        self._capture = False
+        self.models: list[str] = []
+
+    def handle_starttag(self, tag: str, attrs) -> None:
+        if tag == "table":
+            self._in_table = True
+            self._model_col = None
+            self._header_done = False
+        elif tag == "tr":
+            self._col_idx = 0
+        elif tag in ("th", "td") and self._in_table:
+            self._buf = ""
+            self._capture = True
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag == "table":
+            self._in_table = False
+        elif tag == "th" and self._capture:
+            self._capture = False
+            if "model id" in self._buf.lower():
+                self._model_col = self._col_idx
+            self._col_idx += 1
+        elif tag == "tr" and self._in_table and not self._header_done and self._model_col is not None:
+            self._header_done = True
+        elif tag == "td" and self._capture:
+            self._capture = False
+            if self._header_done and self._col_idx == self._model_col:
+                mid = _clean_model_id(self._buf)
+                if mid:
+                    self.models.append(mid)
+            self._col_idx += 1
+
+    def handle_data(self, data: str) -> None:
+        if self._capture:
+            self._buf += data
+
+
+def _clean_model_id(raw: str) -> str:
+    clean = re.sub(r'\([^)]*\)', '', raw)
+    clean = re.sub(r'\bpreview\b', '', clean, flags=re.IGNORECASE).strip()
+    token = clean.split()[0] if clean.split() else ""
+    if token and re.match(r'^[a-z][a-z0-9._-]{1,40}$', token):
+        return token
+    return ""
+
+
+def _fetch_live_models() -> list[str]:
+    try:
+        import httpx
+        resp = httpx.get(_LEARN_URL, timeout=15, follow_redirects=True)
+        resp.raise_for_status()
+        parser = _ModelIdTableParser()
+        parser.feed(resp.text)
+        return sorted(set(parser.models))
+    except Exception:
+        return []
+
+
+def get_live_models() -> list[str]:
+    global _live_cache
+    now = time.time()
+    if not _live_cache["models"] or now - _live_cache["fetched_at"] > _LIVE_TTL:
+        fresh = _fetch_live_models()
+        if fresh:
+            _live_cache = {"models": fresh, "fetched_at": now}
+    return _live_cache["models"]
+
+
+# ── retirement report analyzer ────────────────────────────────────────────────
+
+_URGENCY_RANK = {"critical": 4, "high": 3, "medium": 2, "low": 1, "unknown": 0}
+_RANK_TO_URGENCY = {v: k for k, v in _URGENCY_RANK.items()}
+_TIER_LABELS = {
+    4: "4-Very High (>2.5M/wk)", 3: "3-High (500k–2.5M/wk)",
+    2: "2-Medium (75k–500k/wk)", 1: "1-Low (<75k/wk)", 0: "Unknown",
+}
+
+_REPORT_COLS = [
+    "region", "accountability_unit", "segment", "tpid", "tp_name",
+    "subscription_id", "subscription_name", "deployment_region",
+    "offering_name", "model", "version", "upgrade_option", "retirement_date",
+    "unified", "tokens_w3", "tokens_w2", "tokens_w1", "csam",
+]
+
+
+def _token_tier_score(s: str) -> int:
+    d = s.strip()[:1]
+    return int(d) if d in "1234" else 0
+
+
+def _parse_report_date(s: str) -> date | None:
+    s = s.strip()
+    for fmt in ("%m/%d/%Y", "%-m/%-d/%Y", "%Y-%m-%d"):
+        try:
+            return datetime.strptime(s, fmt).date()
+        except ValueError:
+            continue
+    return None
+
+
+def _urgency(days: int | None) -> str:
+    if days is None:
+        return "unknown"
+    if days < 0:
+        return "critical"
+    if days <= 30:
+        return "high"
+    if days <= 90:
+        return "medium"
+    return "low"
+
+
+def _migration_rec(
+    model_name: str,
+    days: int | None,
+    urgency: str,
+    peak_score: int,
+    upgrade_option: str,
+    migration_options: list[dict],
+) -> str:
+    parts: list[str] = []
+
+    if urgency == "critical":
+        parts.append(f"CRITICAL — {model_name} has passed its retirement date. Immediate action required.")
+    elif urgency == "high":
+        parts.append(f"URGENT — {model_name} retires in {days} day(s). Begin migration now.")
+    elif urgency == "medium":
+        parts.append(f"ACTION NEEDED — {model_name} retires in {days} days. Schedule migration this sprint.")
+    else:
+        parts.append(f"Plan migration for {model_name} (retires in {days or '?'} days).")
+
+    usage_desc = {
+        4: "very high (>2.5M tokens/wk)", 3: "high (500k–2.5M/wk)",
+        2: "medium (75k–500k/wk)", 1: "low (<75k/wk)", 0: "unknown",
+    }
+    parts.append(f"Usage: {usage_desc.get(peak_score, 'unknown')} — validate target capacity before cutover.")
+
+    if upgrade_option == "NoAutoUpgrade":
+        parts.append("Manual upgrade required (NoAutoUpgrade) — customer must update the deployment explicitly.")
+    elif upgrade_option == "OnceCurrentVersionExpired":
+        parts.append("Auto-upgrades at version expiry — test new default version proactively to avoid regression.")
+    elif upgrade_option == "OnceNewDefaultVersionAvailable":
+        parts.append("Auto-upgrades when new default is available — validate compatibility now.")
+
+    if migration_options:
+        best = migration_options[0]
+        parts.append(
+            f"Top migration candidate: {best['model']} "
+            f"(score {best['score']}/100, {best.get('risk_level', '?')} risk; "
+            f"quality {best.get('quality_score', 'N/A')}, "
+            f"cost delta {best.get('cost_delta_pct', 'N/A')}%, "
+            f"prompt effort {best.get('prompt_change_effort', 'N/A')})."
+        )
+        if len(migration_options) > 1:
+            parts.append(f"Alternatives: {', '.join(m['model'] for m in migration_options[1:])}.")
+    else:
+        normalized = model_name.removesuffix("-chat")
+        parts.append(
+            f"No pre-scored candidates found for '{normalized}' in advisor data — "
+            "review benchmark data and evaluate manually."
+        )
+
+    return " ".join(parts)
+
+
+def analyze_retirement_report(tsv_text: str) -> dict:
+    """Parse a tab-separated Azure OpenAI retirement report and produce prioritized
+    migration recommendations using migration advisor scoring data."""
+    today = date.today()
+
+    # ── Parse rows ─────────────────────────────────────────────────────────────
+    raw_rows: list[dict] = []
+    for line in tsv_text.strip().splitlines():
+        parts = line.split("\t")
+        if len(parts) < 3:
+            continue
+        padded = parts + [""] * max(0, len(_REPORT_COLS) - len(parts))
+        raw_rows.append(dict(zip(_REPORT_COLS, padded[: len(_REPORT_COLS)])))
+
+    # Detect and skip header row
+    if raw_rows and raw_rows[0].get("tpid", "").strip().upper() == "TPID":
+        raw_rows = raw_rows[1:]
+
+    # ── Group by (tpid, subscription_id, model, version) → collect regions ────
+    groups: dict[tuple, list[dict]] = defaultdict(list)
+    for row in raw_rows:
+        key = (
+            row["tpid"].strip(),
+            row["subscription_id"].strip(),
+            row["model"].strip(),
+            row["version"].strip(),
+        )
+        groups[key].append(row)
+
+    # ── Build per-customer deployment records ──────────────────────────────────
+    customer_map: dict[str, dict] = {}
+
+    for (tpid, sub_id, model_name, version), grp in groups.items():
+        r0 = grp[0]
+        ret_d = _parse_report_date(r0["retirement_date"])
+        days = None if ret_d is None else (ret_d - today).days
+        urg = _urgency(days)
+
+        peak_score = max(
+            (_token_tier_score(r[col]) for r in grp for col in ("tokens_w3", "tokens_w2", "tokens_w1")),
+            default=0,
+        )
+        regions = sorted({r["deployment_region"].strip() for r in grp if r["deployment_region"].strip()})
+        upgrade_opt = r0["upgrade_option"].strip()
+        normalized = model_name.removesuffix("-chat")
+        migrations = rank_replacements(normalized)[:3]
+
+        deployment = {
+            "subscription_id": sub_id,
+            "subscription_name": r0["subscription_name"].strip(),
+            "model": model_name,
+            "normalized_model": normalized,
+            "version": version,
+            "retirement_date": r0["retirement_date"].strip(),
+            "days_until_retirement": days,
+            "urgency": urg,
+            "peak_usage": _TIER_LABELS[peak_score],
+            "peak_usage_score": peak_score,
+            "upgrade_option": upgrade_opt,
+            "unified": r0["unified"].strip(),
+            "regions": regions,
+            "region_count": len(regions),
+            "migration_options": migrations,
+            "recommendation": _migration_rec(
+                model_name=model_name,
+                days=days,
+                urgency=urg,
+                peak_score=peak_score,
+                upgrade_option=upgrade_opt,
+                migration_options=migrations,
+            ),
+        }
+
+        if tpid not in customer_map:
+            customer_map[tpid] = {
+                "tpid": tpid,
+                "tp_name": r0["tp_name"].strip(),
+                "csam": r0["csam"].strip(),
+                "deployments": [],
+            }
+        customer_map[tpid]["deployments"].append(deployment)
+
+    for c in customer_map.values():
+        max_rank = max(_URGENCY_RANK.get(d["urgency"], 0) for d in c["deployments"])
+        c["priority"] = _RANK_TO_URGENCY.get(max_rank, "unknown")
+        c["deployments"].sort(key=lambda d: (-_URGENCY_RANK.get(d["urgency"], 0), -d["peak_usage_score"]))
+
+    customers = sorted(
+        customer_map.values(),
+        key=lambda c: (-_URGENCY_RANK.get(c["priority"], 0), c["tp_name"]),
+    )
+
+    # ── Model-level summary ────────────────────────────────────────────────────
+    model_seen: dict[str, dict] = {}
+    for row in raw_rows:
+        m = row["model"].strip()
+        if not m:
+            continue
+        if m not in model_seen:
+            ret_d = _parse_report_date(row["retirement_date"])
+            days = None if ret_d is None else (ret_d - today).days
+            normalized = m.removesuffix("-chat")
+            model_seen[m] = {
+                "model": m,
+                "normalized_id": normalized,
+                "retirement_date": row["retirement_date"].strip(),
+                "days_until_retirement": days,
+                "urgency": _urgency(days),
+                "row_count": 0,
+                "_tpids": set(),
+                "migration_options": rank_replacements(normalized)[:3],
+            }
+        model_seen[m]["row_count"] += 1
+        model_seen[m]["_tpids"].add(row["tpid"].strip())
+
+    model_summary = []
+    for mv in model_seen.values():
+        mv["customer_count"] = len(mv.pop("_tpids"))
+        model_summary.append(mv)
+    model_summary.sort(
+        key=lambda m: (-_URGENCY_RANK.get(m["urgency"], 0), m.get("days_until_retirement") or 9999)
+    )
+
+    # ── Executive summary ──────────────────────────────────────────────────────
+    all_deps = [d for c in customers for d in c["deployments"]]
+    urgency_counts: dict[str, int] = {"critical": 0, "high": 0, "medium": 0, "low": 0, "unknown": 0}
+    for d in all_deps:
+        urgency_counts[d["urgency"]] = urgency_counts.get(d["urgency"], 0) + 1
+
+    very_high_critical = [
+        d for d in all_deps
+        if d["urgency"] in ("critical", "high") and d["peak_usage_score"] >= 3
+    ]
+
+    return {
+        "summary": {
+            "analysis_date": today.isoformat(),
+            "total_rows": len(raw_rows),
+            "unique_customers": len(customers),
+            "unique_models": len(model_seen),
+            "unique_deployments": len(all_deps),
+            "critical": urgency_counts["critical"],
+            "high": urgency_counts["high"],
+            "medium": urgency_counts["medium"],
+            "low": urgency_counts["low"],
+            "unknown": urgency_counts["unknown"],
+            "high_usage_urgent": len(very_high_critical),
+        },
+        "customers": customers,
+        "model_summary": model_summary,
+    }

@@ -219,6 +219,7 @@ export default function ModelMigrationPanel() {
   const [models, setModels] = useState<string[]>([]);
   const [targetModels, setTargetModels] = useState<string[]>([]);
   const [ptuModels, setPtuModels] = useState<string[]>([]);
+  const [liveModels, setLiveModels] = useState<string[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -235,6 +236,10 @@ export default function ModelMigrationPanel() {
     apiFetch("/api/model-migration/ptu-models")
       .then((r) => r.json() as Promise<string[]>)
       .then(setPtuModels)
+      .catch(() => {});
+    apiFetch("/api/model-migration/live-models")
+      .then((r) => r.ok ? r.json() as Promise<string[]> : Promise.resolve([]))
+      .then(setLiveModels)
       .catch(() => {});
   }, []);
 
@@ -528,7 +533,11 @@ export default function ModelMigrationPanel() {
                         onOptionSelect={(_, d) => setPtuModel(d.optionValue ?? "")}
                         onInput={(e) => setPtuModel((e.target as HTMLInputElement).value)}
                       >
-                        {ptuModels.map((m) => <Option key={m} value={m}>{m}</Option>)}
+                        {Array.from(new Set([...ptuModels, ...liveModels])).sort().map((m) => (
+                          <Option key={m} value={m}>
+                            {m}{ptuModels.includes(m) ? "" : " (no PTU rates)"}
+                          </Option>
+                        ))}
                       </Combobox>
                     </Field>
                   </div>
