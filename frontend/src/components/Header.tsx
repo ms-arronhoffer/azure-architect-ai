@@ -67,6 +67,7 @@ const MODE_LABELS: Record<Mode, string> = {
   fabricplanner: "Fabric Capacity Planner",
   adfpipeline: "ADF Pipeline Generator",
   medalliondesigner: "Medallion Schema Designer",
+  modelmigration: "Migration Advisor",
 };
 
 const MODE_SECTION: Partial<Record<Mode, string>> = {
@@ -106,6 +107,7 @@ const MODE_SECTION: Partial<Record<Mode, string>> = {
   whatsnew: "Communications",
   servicehealth: "Communications",
   modellifecycle: "Communications",
+  modelmigration: "Communications",
   strategy: "Design & Build",
   datapipelineadvisor: "Data Engineering",
   fabricplanner: "Data Engineering",

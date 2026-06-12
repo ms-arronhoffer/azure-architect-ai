@@ -13,6 +13,7 @@ import {
   ShieldCheckmarkRegular,
   ClipboardTaskRegular,
   ArrowSyncRegular,
+  ArrowSwapRegular,
   CodeRegular,
   BoardRegular,
   ChevronLeftRegular,
@@ -70,6 +71,7 @@ const NAV_SECTIONS: NavSectionDef[] = [
       { mode: "whatsnew", label: "What's New", icon: <MegaphoneLoudRegular />, description: "Microsoft announcements & draft customer emails" },
       { mode: "servicehealth", label: "Service Health", icon: <HeartPulseRegular />, description: "Azure service incidents and health advisories" },
       { mode: "modellifecycle", label: "Model Lifecycle", icon: <CalendarRegular />, description: "Azure Foundry model retirement schedule" },
+      { mode: "modelmigration", label: "Migration Advisor", icon: <ArrowSwapRegular />, description: "Score model migrations and plan PTU capacity" },
     ],
   },
   {

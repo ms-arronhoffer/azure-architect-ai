@@ -44,6 +44,7 @@ export type Mode =
   | "fabricplanner"
   | "adfpipeline"
   | "medalliondesigner"
+  | "modelmigration"
   | "admin";
 
 // ── Strategy Builder ─────────────────────────────────────────────────────────

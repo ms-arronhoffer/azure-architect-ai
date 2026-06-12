@@ -30,6 +30,7 @@ import TroubleshootingPanel from "./components/TroubleshootingPanel";
 import WhatsNewPanel from "./components/WhatsNewPanel";
 import ServiceHealthPanel from "./components/ServiceHealthPanel";
 import ModelLifecyclePanel from "./components/ModelLifecyclePanel";
+import ModelMigrationPanel from "./components/ModelMigrationPanel";
 import MetricsDashboard from "./components/MetricsDashboard";
 import TelemetryDebugDrawer from "./components/TelemetryDebugDrawer";
 import FabricPlannerPanel from "./components/FabricPlannerPanel";
@@ -235,6 +236,7 @@ export default function App() {
     if (mode === "whatsnew") return <WhatsNewPanel key="whatsnew" />;
     if (mode === "servicehealth") return <ServiceHealthPanel key="servicehealth" incidents={healthIncidents} loading={healthLoading} error={healthError} lastChecked={healthLastChecked} onRefresh={refreshHealth} />;
     if (mode === "modellifecycle") return <ModelLifecyclePanel key="modellifecycle" />;
+    if (mode === "modelmigration") return <ModelMigrationPanel key="modelmigration" />;
     if (mode === "admin") return <MetricsDashboard key="admin" />;
     if (mode === "fabricplanner") return <FabricPlannerPanel key="fabricplanner" />;
     if (mode === "adfpipeline") return <AdfPipelinePanel key="adfpipeline" />;
