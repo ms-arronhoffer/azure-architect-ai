@@ -1,5 +1,6 @@
 """Aggregator. Tool schemas live in tools/domains/*.py."""
 
+from tools.domains.adf import TOOLS as _adf_tools
 from tools.domains.architecture import TOOLS as _architecture_tools
 from tools.domains.bicep import TOOLS as _bicep_tools
 from tools.domains.codegen import TOOLS as _codegen_tools
@@ -9,11 +10,10 @@ from tools.domains.cost import TOOLS as _cost_tools
 from tools.domains.devsecops import TOOLS as _devsecops_tools
 from tools.domains.drbc import TOOLS as _drbc_tools
 from tools.domains.fabric import TOOLS as _fabric_tools
-from tools.domains.adf import TOOLS as _adf_tools
-from tools.domains.medallion import TOOLS as _medallion_tools
 from tools.domains.governance import TOOLS as _governance_tools
 from tools.domains.iac import TOOLS as _iac_tools
 from tools.domains.learning import TOOLS as _learning_tools
+from tools.domains.medallion import TOOLS as _medallion_tools
 from tools.domains.migration import TOOLS as _migration_tools
 from tools.domains.monitoring import TOOLS as _monitoring_tools
 from tools.domains.network import TOOLS as _network_tools

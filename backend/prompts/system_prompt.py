@@ -898,7 +898,7 @@ CU CONSUMPTION MODEL (peak, not average):
 
 TOOL USE: When the user provides workload inputs, call plan_fabric_capacity immediately with a complete analysis
 covering the recommended SKU, all adjacent tiers, cost/month, utilisation, and risks.
-Always account for burst headroom (×1.4 safety multiplier on raw CU estimate).
+Always account for burst headroom (1.4x safety multiplier on raw CU estimate).
 """
 
 ADF_PIPELINE_SYSTEM = """\
