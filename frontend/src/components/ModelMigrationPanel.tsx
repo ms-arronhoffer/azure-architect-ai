@@ -841,7 +841,7 @@ export default function ModelMigrationPanel() {
 
         {tab === "report" && (
           <>
-            <Card>
+            <Card style={{ position: "sticky", top: 0, zIndex: 10 }}>
               <div style={{ display: "flex", flexDirection: "column", gap: "12px", padding: "4px 0" }}>
                 <Text weight="semibold">Upload Retirement Report</Text>
                 <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>

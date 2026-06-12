@@ -372,6 +372,28 @@ def build_docx_report(report_data: dict, narrative: dict) -> bytes:
 
 # ── PDF ───────────────────────────────────────────────────────────────────────
 
+def _sanitize_pdf(text: str) -> str:
+    """Replace non-Latin-1 characters so fpdf built-in Helvetica doesn't crash."""
+    return (
+        str(text)
+        .replace("\u2014", "-")    # em dash —
+        .replace("\u2013", "-")    # en dash –
+        .replace("\u00B7", " * ")  # middle dot ·
+        .replace("\u2022", "-")    # bullet •
+        .replace("\u2019", "'")    # right single quote
+        .replace("\u2018", "'")    # left single quote
+        .replace("\u201C", '"')    # left double quote
+        .replace("\u201D", '"')    # right double quote
+        .replace("\u00A0", " ")    # non-breaking space
+        .replace("\u2264", "<=")   # ≤
+        .replace("\u2265", ">=")   # ≥
+        .replace("\u00AE", "(R)")  # ®
+        .replace("\u2122", "(TM)") # ™
+        .encode("latin-1", errors="replace")
+        .decode("latin-1")
+    )
+
+
 def build_pdf_report(report_data: dict, narrative: dict) -> bytes:
     from fpdf import FPDF  # type: ignore[import-untyped]
 
@@ -401,7 +423,7 @@ def build_pdf_report(report_data: dict, narrative: dict) -> bytes:
             self.set_font("Helvetica", size=7)
             self.set_text_color(255, 255, 255)
             self.set_xy(10, 0)
-            self.cell(190, 5, "Azure OpenAI Model Retirement Analysis  —  Confidential", align="L")
+            self.cell(190, 5, "Azure OpenAI Model Retirement Analysis - Confidential", align="L")
             self.set_text_color(0, 0, 0)
             self.ln(7)
 
@@ -409,7 +431,7 @@ def build_pdf_report(report_data: dict, narrative: dict) -> bytes:
             self.set_y(-11)
             self.set_font("Helvetica", size=7)
             self.set_text_color(*MUTED_RGB)
-            self.cell(0, 5, f"Generated {analysis_date}  ·  Azure Migration Advisor  ·  Page {self.page_no()}", align="C")
+            self.cell(0, 5, f"Generated {analysis_date} | Azure Migration Advisor | Page {self.page_no()}", align="C")
             self.set_text_color(0, 0, 0)
 
     pdf = _PDF(orientation="P", unit="mm", format="A4")
@@ -429,7 +451,7 @@ def build_pdf_report(report_data: dict, narrative: dict) -> bytes:
     pdf.set_font("Helvetica", "", 9)
     pdf.set_text_color(*ACCENT_RGB)
     pdf.set_x(21)
-    pdf.cell(170, 7, f"Migration Advisor Report  ·  {analysis_date}", ln=True)
+    pdf.cell(170, 7, f"Migration Advisor Report | {analysis_date}", ln=True)
     pdf.ln(10)
     pdf.set_text_color(0, 0, 0)
 
@@ -442,14 +464,14 @@ def build_pdf_report(report_data: dict, narrative: dict) -> bytes:
     pdf.ln(2)
     pdf.set_font("Helvetica", "", 9)
     pdf.set_text_color(0, 0, 0)
-    pdf.multi_cell(0, 5, narrative.get("executive_summary", ""))
+    pdf.multi_cell(0, 5, _sanitize_pdf(narrative.get("executive_summary", "")))
     pdf.ln(4)
 
     # ── Stat cards
     stats = [
         ("Critical", summary.get("critical", 0), URGENCY_RGB["CRITICAL"]),
-        ("High (≤30d)", summary.get("high", 0), URGENCY_RGB["HIGH"]),
-        ("Medium (≤90d)", summary.get("medium", 0), URGENCY_RGB["MEDIUM"]),
+        ("High (<=30d)", summary.get("high", 0), URGENCY_RGB["HIGH"]),
+        ("Medium (<=90d)", summary.get("medium", 0), URGENCY_RGB["MEDIUM"]),
         ("Low", summary.get("low", 0), URGENCY_RGB["LOW"]),
         ("High-Usage Urgent", summary.get("high_usage_urgent", 0), URGENCY_RGB["CRITICAL"]),
     ]
@@ -481,8 +503,8 @@ def build_pdf_report(report_data: dict, narrative: dict) -> bytes:
     for risk in narrative.get("key_risks", []):
         pdf.set_font("Helvetica", "", 9)
         pdf.set_x(17)
-        pdf.cell(4, 5, chr(8226))
-        pdf.multi_cell(0, 5, risk)
+        pdf.cell(4, 5, "-")
+        pdf.multi_cell(0, 5, _sanitize_pdf(risk))
     pdf.ln(4)
 
     # ── Model Risk Matrix
@@ -512,11 +534,11 @@ def build_pdf_report(report_data: dict, narrative: dict) -> bytes:
             days = m.get("days_until_retirement")
             urgency = m.get("urgency", "").upper()
             row = [
-                m.get("model", "")[:30],
-                urgency,
-                m.get("retirement_date", ""),
-                str(days) if days is not None else "—",
-                (opts[0]["model"] if opts else "None found")[:35],
+                _sanitize_pdf(m.get("model", ""))[:30],
+                _sanitize_pdf(urgency),
+                _sanitize_pdf(m.get("retirement_date", "")),
+                str(days) if days is not None else "-",
+                _sanitize_pdf(opts[0]["model"] if opts else "None found")[:35],
             ]
             for w, val in zip(col_w, row):
                 pdf.cell(w, 5, val, border=0, fill=True)
@@ -549,7 +571,7 @@ def build_pdf_report(report_data: dict, narrative: dict) -> bytes:
         pdf.set_font("Helvetica", "B", 9)
         pdf.set_text_color(255, 255, 255)
         pdf.set_xy(21, y0)
-        pdf.cell(140, 7, f"{c.get('tp_name', '?')}  ·  TPID {tpid}")
+        pdf.cell(140, 7, _sanitize_pdf(f"{c.get('tp_name', '?')}  -  TPID {tpid}"))
         pdf.set_font("Helvetica", "", 7)
         pdf.set_text_color(*bar_color)
         pdf.cell(32, 7, priority, align="R", ln=True)
@@ -560,12 +582,12 @@ def build_pdf_report(report_data: dict, narrative: dict) -> bytes:
             pdf.set_font("Helvetica", "I", 8)
             pdf.set_text_color(80, 80, 80)
             pdf.set_x(18)
-            pdf.multi_cell(0, 4, h["summary"])
+            pdf.multi_cell(0, 4, _sanitize_pdf(h["summary"]))
             pdf.set_text_color(0, 0, 0)
 
         for d in c.get("deployments", [])[:5]:
             opts = d.get("migration_options", [])
-            migrate_to = opts[0]["model"] if opts else "—"
+            migrate_to = _sanitize_pdf(opts[0]["model"] if opts else "-")
             days = d.get("days_until_retirement")
             days_str = (
                 f"{days}d" if days is not None and days >= 0
@@ -575,9 +597,9 @@ def build_pdf_report(report_data: dict, narrative: dict) -> bytes:
             pdf.set_fill_color(*AZURE_RGB)
             pdf.rect(20, pdf.get_y() + 1, 2, 3, "F")
             pdf.set_font("Helvetica", "", 7)
-            pdf.cell(78, 5, d.get("model", "")[:42])
+            pdf.cell(78, 5, _sanitize_pdf(d.get("model", ""))[:42])
             pdf.set_text_color(100, 100, 100)
-            pdf.cell(28, 5, d.get("retirement_date", ""))
+            pdf.cell(28, 5, _sanitize_pdf(d.get("retirement_date", "")))
             pdf.cell(18, 5, days_str)
             pdf.set_text_color(*AZURE_RGB)
             pdf.cell(0, 5, migrate_to[:32], ln=True)
@@ -586,8 +608,8 @@ def build_pdf_report(report_data: dict, narrative: dict) -> bytes:
         for action in h.get("actions", []):
             pdf.set_font("Helvetica", "", 8)
             pdf.set_x(20)
-            pdf.cell(4, 4, chr(8226))
-            pdf.multi_cell(0, 4, action)
+            pdf.cell(4, 4, "-")
+            pdf.multi_cell(0, 4, _sanitize_pdf(action))
         pdf.ln(3)
 
     # ── Next Steps
@@ -612,7 +634,7 @@ def build_pdf_report(report_data: dict, narrative: dict) -> bytes:
         pdf.set_text_color(0, 0, 0)
         pdf.set_font("Helvetica", "", 9)
         pdf.set_x(24)
-        pdf.multi_cell(0, 6, action)
+        pdf.multi_cell(0, 6, _sanitize_pdf(action))
         pdf.ln(1)
 
     return bytes(pdf.output())
