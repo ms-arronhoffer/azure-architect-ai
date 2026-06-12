@@ -47,7 +47,14 @@ interface TokenByUser {
   completion_tokens: number;
 }
 
+interface OutputByMode {
+  mode: string;
+  total: number;
+  output_rate_pct: number;
+}
+
 interface MetricsResponse {
+  // totals
   total_conversations: number;
   unique_users: number;
   active_today: number;
@@ -55,6 +62,17 @@ interface MetricsResponse {
   avg_duration_min: number;
   output_rate_pct: number;
   wow_pct: number;
+  // engagement
+  avg_msgs_per_conv: number;
+  abandonment_rate_pct: number;
+  stickiness_pct: number;
+  // retention
+  new_users_7d: number;
+  return_rate_7d: number;
+  // feature adoption
+  mode_diversity: number;
+  output_rate_by_mode: OutputByMode[];
+  // tables
   mode_breakdown: ModeCount[];
   dau_30d: DauRow[];
   top_users: TopUser[];
@@ -70,6 +88,14 @@ const useStyles = makeStyles({
     padding: "24px",
     overflowY: "auto",
     height: "100%",
+  },
+  sectionLabel: {
+    fontSize: "11px",
+    fontWeight: 700,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+    color: tokens.colorNeutralForeground4,
+    marginBottom: "-8px",
   },
   heroRow: {
     display: "flex",
@@ -104,6 +130,11 @@ const useStyles = makeStyles({
     color: tokens.colorNeutralForeground3,
     marginTop: "4px",
   },
+  heroSubtext: {
+    fontSize: "11px",
+    color: tokens.colorNeutralForeground4,
+    marginTop: "2px",
+  },
   tables: {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
@@ -125,6 +156,17 @@ const useStyles = makeStyles({
   pct: {
     color: tokens.colorNeutralForeground3,
     fontSize: "12px",
+  },
+  rateBar: {
+    display: "flex",
+    alignItems: "center",
+    gap: "6px",
+  },
+  rateBarFill: {
+    height: "6px",
+    borderRadius: "3px",
+    background: tokens.colorBrandBackground,
+    minWidth: "2px",
   },
 });
 
@@ -149,8 +191,8 @@ export default function MetricsDashboard() {
     apiFetch("/api/admin/metrics")
       .then(async (r) => {
         if (!r.ok) {
-          const text = await r.text().catch(() => r.statusText);
-          throw new Error(`${r.status}: ${text}`);
+          const t = await r.text().catch(() => r.statusText);
+          throw new Error(`${r.status}: ${t}`);
         }
         return r.json() as Promise<MetricsResponse>;
       })
@@ -202,39 +244,100 @@ export default function MetricsDashboard() {
         </Button>
       </div>
 
-      <div className={styles.heroRow}>
-        <Card className={styles.heroCard}>
-          <div className={styles.heroValue}>{data.total_conversations.toLocaleString()}</div>
-          <div className={styles.heroLabel}>Total Conversations</div>
-        </Card>
-        <Card className={styles.heroCard}>
-          <div className={styles.heroValue}>{data.unique_users.toLocaleString()}</div>
-          <div className={styles.heroLabel}>Unique Users</div>
-        </Card>
-        <Card className={styles.heroCard}>
-          <div className={styles.heroValue}>{data.active_today.toLocaleString()}</div>
-          <div className={styles.heroLabel}>Active Today</div>
-        </Card>
-        <Card className={styles.heroCard}>
-          <div className={styles.heroValue}>{data.weekly_active.toLocaleString()}</div>
-          <div className={styles.heroLabel}>Weekly Active Users</div>
-        </Card>
-        <Card className={styles.heroCard}>
-          <div className={styles.heroValue}>{data.avg_duration_min > 0 ? `${data.avg_duration_min}m` : "—"}</div>
-          <div className={styles.heroLabel}>Avg Session Duration</div>
-        </Card>
-        <Card className={styles.heroCard}>
-          <div className={styles.heroValue}>{data.output_rate_pct}%</div>
-          <div className={styles.heroLabel}>Output Generated Rate</div>
-        </Card>
-        <Card className={styles.heroCard}>
-          <div className={wowPositive ? styles.heroValuePositive : wowNegative ? styles.heroValueNegative : styles.heroValue}>
-            {wowLabel(data.wow_pct)}
-          </div>
-          <div className={styles.heroLabel}>Week-over-Week Growth</div>
-        </Card>
+      {/* ── Volume ── */}
+      <div>
+        <div className={styles.sectionLabel}>Volume</div>
+        <div className={styles.heroRow} style={{ marginTop: "12px" }}>
+          <Card className={styles.heroCard}>
+            <div className={styles.heroValue}>{data.total_conversations.toLocaleString()}</div>
+            <div className={styles.heroLabel}>Total Conversations</div>
+          </Card>
+          <Card className={styles.heroCard}>
+            <div className={styles.heroValue}>{data.unique_users.toLocaleString()}</div>
+            <div className={styles.heroLabel}>Unique Users</div>
+          </Card>
+          <Card className={styles.heroCard}>
+            <div className={styles.heroValue}>{data.active_today.toLocaleString()}</div>
+            <div className={styles.heroLabel}>Active Today</div>
+          </Card>
+          <Card className={styles.heroCard}>
+            <div className={styles.heroValue}>{data.weekly_active.toLocaleString()}</div>
+            <div className={styles.heroLabel}>Weekly Active Users</div>
+          </Card>
+          <Card className={styles.heroCard}>
+            <div className={wowPositive ? styles.heroValuePositive : wowNegative ? styles.heroValueNegative : styles.heroValue}>
+              {wowLabel(data.wow_pct)}
+            </div>
+            <div className={styles.heroLabel}>Week-over-Week Growth</div>
+          </Card>
+        </div>
       </div>
 
+      {/* ── Engagement ── */}
+      <div>
+        <div className={styles.sectionLabel}>Engagement</div>
+        <div className={styles.heroRow} style={{ marginTop: "12px" }}>
+          <Card className={styles.heroCard}>
+            <div className={styles.heroValue}>{data.avg_duration_min > 0 ? `${data.avg_duration_min}m` : "—"}</div>
+            <div className={styles.heroLabel}>Avg Session Duration</div>
+          </Card>
+          <Card className={styles.heroCard}>
+            <div className={styles.heroValue}>{data.avg_msgs_per_conv > 0 ? data.avg_msgs_per_conv : "—"}</div>
+            <div className={styles.heroLabel}>Avg Messages / Conv</div>
+            <div className={styles.heroSubtext}>higher = deeper engagement</div>
+          </Card>
+          <Card className={styles.heroCard}>
+            <div className={data.abandonment_rate_pct > 50 ? styles.heroValueNegative : styles.heroValue}>
+              {data.abandonment_rate_pct}%
+            </div>
+            <div className={styles.heroLabel}>Short Session Rate</div>
+            <div className={styles.heroSubtext}>≤ 1 user turn</div>
+          </Card>
+          <Card className={styles.heroCard}>
+            <div className={styles.heroValue}>{data.output_rate_pct}%</div>
+            <div className={styles.heroLabel}>Output Generated Rate</div>
+            <div className={styles.heroSubtext}>conversations with structured result</div>
+          </Card>
+          <Card className={styles.heroCard}>
+            <div className={styles.heroValue}>{data.stickiness_pct}%</div>
+            <div className={styles.heroLabel}>Stickiness (DAU/WAU)</div>
+            <div className={styles.heroSubtext}>{"≥ 20% is strong for tools"}</div>
+          </Card>
+        </div>
+      </div>
+
+      {/* ── Retention ── */}
+      <div>
+        <div className={styles.sectionLabel}>Retention</div>
+        <div className={styles.heroRow} style={{ marginTop: "12px" }}>
+          <Card className={styles.heroCard}>
+            <div className={data.return_rate_7d >= 40 ? styles.heroValuePositive : styles.heroValue}>
+              {data.return_rate_7d > 0 ? `${data.return_rate_7d}%` : "—"}
+            </div>
+            <div className={styles.heroLabel}>7-Day Return Rate</div>
+            <div className={styles.heroSubtext}>prior-week users who came back</div>
+          </Card>
+          <Card className={styles.heroCard}>
+            <div className={styles.heroValue}>{data.new_users_7d.toLocaleString()}</div>
+            <div className={styles.heroLabel}>New Users (7 days)</div>
+            <div className={styles.heroSubtext}>first conversation this week</div>
+          </Card>
+        </div>
+      </div>
+
+      {/* ── Feature Adoption ── */}
+      <div>
+        <div className={styles.sectionLabel}>Feature Adoption</div>
+        <div className={styles.heroRow} style={{ marginTop: "12px" }}>
+          <Card className={styles.heroCard}>
+            <div className={styles.heroValue}>{data.mode_diversity}</div>
+            <div className={styles.heroLabel}>Avg Modes per User</div>
+            <div className={styles.heroSubtext}>breadth of feature usage</div>
+          </Card>
+        </div>
+      </div>
+
+      {/* ── Tables ── */}
       <div className={styles.tables}>
         <Card className={styles.tableCard}>
           <CardHeader header={<Text className={styles.tableTitle}>Mode Usage</Text>} />
@@ -263,24 +366,30 @@ export default function MetricsDashboard() {
         </Card>
 
         <Card className={styles.tableCard}>
-          <CardHeader header={<Text className={styles.tableTitle}>Top Users (last 30 days)</Text>} />
+          <CardHeader header={<Text className={styles.tableTitle}>Output Rate by Mode</Text>} />
           <div className={styles.tableWrap}>
             <Table size="small">
               <TableHeader>
                 <TableRow>
-                  <TableHeaderCell>User ID</TableHeaderCell>
+                  <TableHeaderCell>Mode</TableHeaderCell>
                   <TableHeaderCell>Conversations</TableHeaderCell>
+                  <TableHeaderCell>Output Rate</TableHeaderCell>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {data.top_users.map((row) => (
-                  <TableRow key={row.user_id}>
+                {data.output_rate_by_mode.map((row) => (
+                  <TableRow key={row.mode}>
+                    <TableCell>{row.mode}</TableCell>
+                    <TableCell>{row.total.toLocaleString()}</TableCell>
                     <TableCell>
-                      <Text style={{ fontSize: "11px", fontFamily: "monospace" }}>
-                        {row.user_id.length > 20 ? `${row.user_id.slice(0, 20)}…` : row.user_id}
-                      </Text>
+                      <div className={styles.rateBar}>
+                        <div
+                          className={styles.rateBarFill}
+                          style={{ width: `${Math.max(row.output_rate_pct, 2)}px` }}
+                        />
+                        <span className={styles.pct}>{row.output_rate_pct}%</span>
+                      </div>
                     </TableCell>
-                    <TableCell>{row.count.toLocaleString()}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -305,6 +414,32 @@ export default function MetricsDashboard() {
                     <TableCell>{dayLabel(row.day)}</TableCell>
                     <TableCell>{row.users}</TableCell>
                     <TableCell>{row.conversations}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </Card>
+
+        <Card className={styles.tableCard}>
+          <CardHeader header={<Text className={styles.tableTitle}>Top Users (last 30 days)</Text>} />
+          <div className={styles.tableWrap}>
+            <Table size="small">
+              <TableHeader>
+                <TableRow>
+                  <TableHeaderCell>User ID</TableHeaderCell>
+                  <TableHeaderCell>Conversations</TableHeaderCell>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {data.top_users.map((row) => (
+                  <TableRow key={row.user_id}>
+                    <TableCell>
+                      <Text style={{ fontSize: "11px", fontFamily: "monospace" }}>
+                        {row.user_id.length > 20 ? `${row.user_id.slice(0, 20)}…` : row.user_id}
+                      </Text>
+                    </TableCell>
+                    <TableCell>{row.count.toLocaleString()}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>

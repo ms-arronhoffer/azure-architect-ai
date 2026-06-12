@@ -24,7 +24,148 @@ async def get_metrics(
     this_week_start_ms = (now - 7 * 86400) * 1000
     prev_week_start_ms = (now - 14 * 86400) * 1000
 
-    # Mode breakdown
+    # ── totals ────────────────────────────────────────────────────────────────
+    total = await db.scalar(select(func.count()).select_from(Conversation)) or 0
+    unique_users = await db.scalar(
+        select(func.count(func.distinct(Conversation.user_id))).select_from(Conversation)
+    ) or 0
+
+    # ── active users (union conversations + token usage) ──────────────────────
+    async def _count_active(cutoff_ms: int) -> int:
+        conv_q = select(Conversation.user_id.label("user_id")).where(
+            Conversation.updated_at >= cutoff_ms,
+            Conversation.user_id.isnot(None),
+        )
+        token_q = select(TokenUsage.user_id.label("user_id")).where(
+            TokenUsage.created_at >= cutoff_ms,
+            TokenUsage.user_id.isnot(None),
+        )
+        combined = union(conv_q, token_q).subquery()
+        return await db.scalar(select(func.count()).select_from(combined)) or 0
+
+    active_today = await _count_active(today_start_ms)
+    weekly_active = await _count_active(seven_days_ago_ms)
+    stickiness_pct = round((active_today / weekly_active * 100) if weekly_active else 0, 1)
+
+    # ── session duration ──────────────────────────────────────────────────────
+    avg_duration_ms = await db.scalar(
+        select(func.avg(Conversation.updated_at - Conversation.created_at))
+        .where(Conversation.updated_at > Conversation.created_at)
+    ) or 0
+    avg_duration_min = round(avg_duration_ms / 60000, 1)
+
+    # ── output rate (all-up) ──────────────────────────────────────────────────
+    with_output = await db.scalar(
+        select(func.count())
+        .where(Conversation.structured_result.isnot(None))
+        .select_from(Conversation)
+    ) or 0
+    output_rate_pct = round((with_output / total * 100) if total else 0, 1)
+
+    # ── week-over-week growth ─────────────────────────────────────────────────
+    this_week = await db.scalar(
+        select(func.count()).where(Conversation.created_at >= this_week_start_ms).select_from(Conversation)
+    ) or 0
+    prev_week = await db.scalar(
+        select(func.count())
+        .where(Conversation.created_at >= prev_week_start_ms)
+        .where(Conversation.created_at < this_week_start_ms)
+        .select_from(Conversation)
+    ) or 0
+    wow_pct = round(((this_week - prev_week) / prev_week * 100) if prev_week else 0, 1)
+
+    # ── engagement depth ──────────────────────────────────────────────────────
+    # Average messages per conversation (json_array_length works in PostgreSQL + SQLite 3.38+)
+    avg_msgs_raw = await db.scalar(
+        select(func.avg(func.json_array_length(Conversation.messages)))
+        .where(func.json_array_length(Conversation.messages) > 0)
+    ) or 0
+    avg_msgs_per_conv = round(float(avg_msgs_raw), 1)
+
+    # Abandonment — conversations with ≤ 2 messages (≤ 1 user turn)
+    abandoned = await db.scalar(
+        select(func.count())
+        .where(func.json_array_length(Conversation.messages) <= 2)
+        .select_from(Conversation)
+    ) or 0
+    abandonment_rate_pct = round((abandoned / total * 100) if total else 0, 1)
+
+    # ── retention ─────────────────────────────────────────────────────────────
+    # New users — first conversation within last 7 days
+    first_seen_sq = (
+        select(
+            Conversation.user_id,
+            func.min(Conversation.created_at).label("first_seen"),
+        )
+        .where(Conversation.user_id.isnot(None))
+        .group_by(Conversation.user_id)
+        .subquery()
+    )
+    new_users_7d = await db.scalar(
+        select(func.count())
+        .select_from(first_seen_sq)
+        .where(first_seen_sq.c.first_seen >= seven_days_ago_ms)
+    ) or 0
+
+    # Return rate — of users active 7-14 days ago, % who returned this week
+    prev_week_active_users = (
+        select(Conversation.user_id)
+        .where(
+            Conversation.updated_at >= prev_week_start_ms,
+            Conversation.updated_at < this_week_start_ms,
+            Conversation.user_id.isnot(None),
+        )
+        .distinct()
+    )
+    prev_week_user_count = await db.scalar(
+        select(func.count()).select_from(prev_week_active_users.subquery())
+    ) or 0
+    returned_count = await db.scalar(
+        select(func.count(func.distinct(Conversation.user_id)))
+        .where(
+            Conversation.updated_at >= this_week_start_ms,
+            Conversation.user_id.isnot(None),
+            Conversation.user_id.in_(prev_week_active_users),
+        )
+    ) or 0
+    return_rate_7d = round((returned_count / prev_week_user_count * 100) if prev_week_user_count else 0, 1)
+
+    # ── feature adoption ──────────────────────────────────────────────────────
+    # Mode diversity — avg distinct modes used per user
+    modes_per_user_sq = (
+        select(
+            Conversation.user_id,
+            func.count(func.distinct(Conversation.mode)).label("mode_count"),
+        )
+        .where(Conversation.user_id.isnot(None))
+        .group_by(Conversation.user_id)
+        .subquery()
+    )
+    avg_diversity_raw = await db.scalar(
+        select(func.avg(modes_per_user_sq.c.mode_count))
+    ) or 1.0
+    mode_diversity = round(float(avg_diversity_raw), 1)
+
+    # Output rate per mode
+    mode_output_rows = (await db.execute(
+        select(
+            Conversation.mode,
+            func.count().label("total"),
+            func.count(Conversation.structured_result).label("with_output"),
+        )
+        .group_by(Conversation.mode)
+        .order_by(func.count().desc())
+    )).all()
+    output_rate_by_mode = [
+        {
+            "mode": r.mode,
+            "total": r.total,
+            "output_rate_pct": round((r.with_output / r.total * 100) if r.total else 0, 1),
+        }
+        for r in mode_output_rows
+    ]
+
+    # ── mode breakdown ────────────────────────────────────────────────────────
     mode_rows = (await db.execute(
         select(Conversation.mode, func.count().label("count"))
         .group_by(Conversation.mode)
@@ -32,8 +173,7 @@ async def get_metrics(
     )).all()
     mode_counts = [{"mode": r.mode, "count": r.count} for r in mode_rows]
 
-    # DAU — last 30 days, bucketed by day. Union conversations + token usage so days with
-    # token activity but no saved conversation record still appear.
+    # ── DAU 30d (union conversations + token usage) ───────────────────────────
     conv_day_q = select(
         (Conversation.updated_at // 86400000 * 86400000).label("day"),
         Conversation.user_id.label("user_id"),
@@ -51,7 +191,6 @@ async def get_metrics(
         .group_by(combined_days.c.day)
         .order_by(combined_days.c.day)
     )).all()
-
     conv_count_rows = (await db.execute(
         select(
             (Conversation.updated_at // 86400000 * 86400000).label("day"),
@@ -67,7 +206,7 @@ async def get_metrics(
         for r in dau_user_rows
     ]
 
-    # Top users by conversation count
+    # ── top users ─────────────────────────────────────────────────────────────
     user_rows = (await db.execute(
         select(Conversation.user_id, func.count().label("count"))
         .where(Conversation.user_id.isnot(None))
@@ -80,56 +219,7 @@ async def get_metrics(
         for r in user_rows
     ]
 
-    total = await db.scalar(select(func.count()).select_from(Conversation)) or 0
-    unique_users = await db.scalar(
-        select(func.count(func.distinct(Conversation.user_id))).select_from(Conversation)
-    ) or 0
-
-    # Active users — union conversations + token usage so users with token activity but no
-    # saved conversation record are still counted.
-    async def _count_active(cutoff_ms: int) -> int:
-        conv_q = select(Conversation.user_id.label("user_id")).where(
-            Conversation.updated_at >= cutoff_ms,
-            Conversation.user_id.isnot(None),
-        )
-        token_q = select(TokenUsage.user_id.label("user_id")).where(
-            TokenUsage.created_at >= cutoff_ms,
-            TokenUsage.user_id.isnot(None),
-        )
-        combined = union(conv_q, token_q).subquery()
-        return await db.scalar(select(func.count()).select_from(combined)) or 0
-
-    active_today = await _count_active(today_start_ms)
-    weekly_active = await _count_active(seven_days_ago_ms)
-
-    # Avg session duration in minutes (updated_at - created_at for conversations with >0 duration)
-    avg_duration_ms = await db.scalar(
-        select(func.avg(Conversation.updated_at - Conversation.created_at))
-        .where(Conversation.updated_at > Conversation.created_at)
-    ) or 0
-    avg_duration_min = round(avg_duration_ms / 60000, 1)
-
-    # Output rate — conversations that generated a structured result
-    with_output = await db.scalar(
-        select(func.count())
-        .where(Conversation.structured_result.isnot(None))
-        .select_from(Conversation)
-    ) or 0
-    output_rate_pct = round((with_output / total * 100) if total else 0, 1)
-
-    # Week-over-week growth (conversations this week vs prior week)
-    this_week = await db.scalar(
-        select(func.count()).where(Conversation.created_at >= this_week_start_ms).select_from(Conversation)
-    ) or 0
-    prev_week = await db.scalar(
-        select(func.count())
-        .where(Conversation.created_at >= prev_week_start_ms)
-        .where(Conversation.created_at < this_week_start_ms)
-        .select_from(Conversation)
-    ) or 0
-    wow_pct = round(((this_week - prev_week) / prev_week * 100) if prev_week else 0, 1)
-
-    # Token usage by model (last 30 days)
+    # ── token usage ───────────────────────────────────────────────────────────
     model_token_rows = (await db.execute(
         select(
             TokenUsage.model,
@@ -149,7 +239,6 @@ async def get_metrics(
         for r in model_token_rows
     ]
 
-    # Token usage by user (last 30 days, hashed)
     user_token_rows = (await db.execute(
         select(
             TokenUsage.user_id,
@@ -171,6 +260,7 @@ async def get_metrics(
     ]
 
     return {
+        # totals
         "total_conversations": total,
         "unique_users": unique_users,
         "active_today": active_today,
@@ -178,6 +268,17 @@ async def get_metrics(
         "avg_duration_min": avg_duration_min,
         "output_rate_pct": output_rate_pct,
         "wow_pct": wow_pct,
+        # engagement
+        "avg_msgs_per_conv": avg_msgs_per_conv,
+        "abandonment_rate_pct": abandonment_rate_pct,
+        "stickiness_pct": stickiness_pct,
+        # retention
+        "new_users_7d": new_users_7d,
+        "return_rate_7d": return_rate_7d,
+        # feature adoption
+        "mode_diversity": mode_diversity,
+        "output_rate_by_mode": output_rate_by_mode,
+        # tables
         "mode_breakdown": mode_counts,
         "dau_30d": dau,
         "top_users": top_users,
