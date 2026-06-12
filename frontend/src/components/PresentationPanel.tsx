@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import {
   Badge,
   Button,
@@ -14,15 +14,20 @@ import {
 import {
   ArrowDownloadRegular,
   ArrowRightRegular,
+  AttachRegular,
   CheckmarkRegular,
   DismissRegular,
+  DocumentRegular,
   EditRegular,
   SparkleRegular,
 } from "@fluentui/react-icons";
 
-import type { DeckOutline, DeckRecommendation } from "../types";
+import type { DeckOutline, DeckRecommendation, SlideOutlineItem } from "../types";
 import ChatPanel from "./ChatPanel";
 import { apiFetch } from "../config/api";
+
+const SLIDE_BG = "#1A2028";
+const SLIDE_MUTED = "#809AB0";
 
 const useStyles = makeStyles({
   root: {
@@ -81,7 +86,7 @@ const useStyles = makeStyles({
     display: "flex",
     flexDirection: "column",
     gap: "20px",
-    maxWidth: "820px",
+    maxWidth: "900px",
     width: "100%",
     marginLeft: "auto",
     marginRight: "auto",
@@ -125,6 +130,39 @@ const useStyles = makeStyles({
     gridTemplateColumns: "1fr 1fr",
     gap: "12px",
   },
+  // ── file upload zone ────────────────────────────────────────────────────
+  uploadZone: {
+    border: `2px dashed ${tokens.colorNeutralStroke1}`,
+    borderRadius: "8px",
+    padding: "16px",
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    gap: "6px",
+    cursor: "pointer",
+    background: tokens.colorNeutralBackground1,
+  },
+  uploadZoneActive: {
+    border: `2px dashed ${tokens.colorBrandStroke1}`,
+    background: tokens.colorBrandBackground2,
+  },
+  fileList: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "4px",
+    marginTop: "8px",
+  },
+  fileItem: {
+    display: "flex",
+    alignItems: "center",
+    gap: "6px",
+    padding: "5px 8px",
+    background: tokens.colorNeutralBackground3,
+    borderRadius: "6px",
+    fontSize: "12px",
+    color: tokens.colorNeutralForeground2,
+  },
+  // ── status / cards ──────────────────────────────────────────────────────
   statusBox: {
     display: "flex",
     alignItems: "center",
@@ -176,15 +214,22 @@ const useStyles = makeStyles({
     color: tokens.colorNeutralForeground1,
     boxSizing: "border-box",
   },
-  successCard: {
-    padding: "20px 22px",
+  // ── done / preview ──────────────────────────────────────────────────────
+  doneHeader: {
+    padding: "16px 20px",
     backgroundColor: tokens.colorNeutralBackground2,
     borderRadius: "10px",
     border: `1px solid ${tokens.colorNeutralStroke2}`,
     display: "flex",
-    flexDirection: "column",
-    gap: "14px",
-    alignItems: "flex-start",
+    alignItems: "center",
+    justifyContent: "space-between",
+    flexWrap: "wrap",
+    gap: "12px",
+  },
+  slideGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))",
+    gap: "10px",
   },
   outlinePreview: {
     display: "flex",
@@ -229,6 +274,44 @@ const LAYOUT_LABEL: Record<string, string> = {
   references: "References",
 };
 
+const ACCEPTED_TYPES = ".xlsx,.xls,.pdf,.docx,.doc,.csv,.txt,.pptx";
+
+function SlideCard({ slide }: { slide: SlideOutlineItem }) {
+  return (
+    <div style={{
+      background: SLIDE_BG,
+      borderRadius: "8px",
+      padding: "12px 14px",
+      aspectRatio: "16 / 9",
+      display: "flex",
+      flexDirection: "column",
+      overflow: "hidden",
+      border: "1px solid rgba(255,255,255,0.1)",
+    }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "5px" }}>
+        <span style={{ fontSize: "9px", color: "#5BA8F5", fontWeight: 700 }}>{slide.slide_number}</span>
+        <span style={{ fontSize: "8px", background: "rgba(255,255,255,0.08)", color: SLIDE_MUTED, padding: "1px 5px", borderRadius: "8px" }}>
+          {LAYOUT_LABEL[slide.layout] ?? slide.layout}
+        </span>
+      </div>
+      <div style={{
+        fontSize: "10px", fontWeight: 600, color: "#FFFFFF", lineHeight: 1.25,
+        marginBottom: "5px", overflow: "hidden",
+        display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical",
+      }}>
+        {slide.title}
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: "2px", overflow: "hidden", flex: 1 }}>
+        {slide.content.slice(0, 3).map((c, i) => (
+          <div key={i} style={{ fontSize: "8px", color: SLIDE_MUTED, lineHeight: 1.3, overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis" }}>
+            · {c}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function PresentationPanel() {
   const styles = useStyles();
   const [activeTab, setActiveTab] = useState<"coach" | "build">("coach");
@@ -240,6 +323,11 @@ export default function PresentationPanel() {
   const [numSlides, setNumSlides] = useState("10");
   const [conversationContext, setConversationContext] = useState("");
 
+  // File upload state
+  const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
+  const [isDragOver, setIsDragOver] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   // Pipeline state
   const [phase, setPhase] = useState<Phase>("idle");
   const [statusMsg, setStatusMsg] = useState("");
@@ -249,10 +337,26 @@ export default function PresentationPanel() {
   const [overallAssessment, setOverallAssessment] = useState("");
   const [editableJson, setEditableJson] = useState("");
   const [jsonError, setJsonError] = useState("");
+  const [pptxBlobUrl, setPptxBlobUrl] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
+  function addFiles(incoming: FileList | null) {
+    if (!incoming) return;
+    const next = [...uploadedFiles];
+    for (const f of Array.from(incoming)) {
+      if (!next.find((e) => e.name === f.name && e.size === f.size)) next.push(f);
+    }
+    setUploadedFiles(next);
+  }
+
+  const onDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(false);
+    addFiles(e.dataTransfer.files);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [uploadedFiles]);
+
   function handleBuildFromConversation(conversationText: string) {
-    // Extract first user message as topic seed
     const firstUserLine = conversationText.split("\n").find((l) => l.startsWith("User:"));
     const seedTopic = firstUserLine ? firstUserLine.replace(/^User:\s*/, "").slice(0, 200) : "";
     setTopic((t) => t || seedTopic);
@@ -271,16 +375,17 @@ export default function PresentationPanel() {
 
     abortRef.current = new AbortController();
     try {
+      const fd = new FormData();
+      fd.append("topic", topic);
+      fd.append("audience", audience);
+      fd.append("objectives", objectives);
+      fd.append("num_slides", String(parseInt(numSlides, 10) || 10));
+      fd.append("conversation_context", conversationContext);
+      for (const f of uploadedFiles) fd.append("files", f, f.name);
+
       const res = await apiFetch("/api/presentation/outline", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          topic,
-          audience,
-          objectives,
-          num_slides: parseInt(numSlides, 10) || 10,
-          conversation_context: conversationContext,
-        }),
+        body: fd,
         signal: abortRef.current.signal,
       });
 
@@ -307,8 +412,6 @@ export default function PresentationPanel() {
             setRecommendations(evt.recommendations);
             setOverallAssessment(evt.overall_assessment);
             setPhase("review");
-          } else if (evt.type === "done") {
-            // handled by "review" event
           }
         }
       }
@@ -347,7 +450,6 @@ export default function PresentationPanel() {
 
   async function handleBuild(outline: DeckOutline) {
     setPhase("building");
-    setStatusMsg("Building presentation…");
     try {
       const res = await apiFetch("/api/presentation/build", {
         method: "POST",
@@ -356,20 +458,27 @@ export default function PresentationPanel() {
       });
       if (!res.ok) throw new Error("Build failed");
       const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "presentation.pptx";
-      a.click();
-      URL.revokeObjectURL(url);
+      if (pptxBlobUrl) URL.revokeObjectURL(pptxBlobUrl);
+      setPptxBlobUrl(URL.createObjectURL(blob));
       setPhase("done");
     } catch {
       setPhase("review");
-      setStatusMsg("Build failed. Please try again.");
     }
   }
 
+  function downloadPptx() {
+    if (!pptxBlobUrl) return;
+    const safeName = (displayOutline?.deck_title || "presentation")
+      .replace(/[^a-z0-9\s]/gi, "").trim().replace(/\s+/g, "_").toLowerCase();
+    const a = document.createElement("a");
+    a.href = pptxBlobUrl;
+    a.download = `${safeName}.pptx`;
+    a.click();
+  }
+
   function reset() {
+    if (pptxBlobUrl) URL.revokeObjectURL(pptxBlobUrl);
+    setPptxBlobUrl(null);
     setPhase("idle");
     setTopic("");
     setAudience("");
@@ -382,6 +491,7 @@ export default function PresentationPanel() {
     setEditableJson("");
     setStatusMsg("");
     setConversationContext("");
+    setUploadedFiles([]);
   }
 
   const displayOutline = improvedOutline ?? originalOutline;
@@ -401,7 +511,6 @@ export default function PresentationPanel() {
 
       {activeTab === "coach" && (
         <div className={styles.chatWrap}>
-          {/* Banner: always visible, invites user to build */}
           <div className={styles.coachBanner}>
             <div className={styles.coachBannerLeft}>
               <Text size={300} weight="semibold">Presentation Coach</Text>
@@ -419,7 +528,6 @@ export default function PresentationPanel() {
             </Button>
           </div>
 
-          {/* Shared topic bar: what the user types here pre-fills the Build Deck form */}
           <div className={styles.topicRow}>
             <Text size={200} style={{ color: tokens.colorNeutralForeground3, whiteSpace: "nowrap" }}>
               Topic:
@@ -450,7 +558,7 @@ export default function PresentationPanel() {
 
       {activeTab === "build" && (
         <div className={styles.builder}>
-          {/* ── Input form (always visible when idle) ─────────────── */}
+          {/* ── Input form ────────────────────────────────────────── */}
           {phase === "idle" && (
             <div className={styles.form}>
               <Text size={500} weight="semibold">Build a Presentation</Text>
@@ -518,6 +626,59 @@ export default function PresentationPanel() {
                 />
               </div>
 
+              {/* ── Supporting document upload ─────────────────────── */}
+              <div className={styles.fieldWrap}>
+                <Label>Supporting Documents <span style={{ fontWeight: 400, color: tokens.colorNeutralForeground3 }}>(optional)</span></Label>
+                <div
+                  className={`${styles.uploadZone} ${isDragOver ? styles.uploadZoneActive : ""}`}
+                  onClick={() => fileInputRef.current?.click()}
+                  onDragOver={(e) => { e.preventDefault(); setIsDragOver(true); }}
+                  onDragLeave={() => setIsDragOver(false)}
+                  onDrop={onDrop}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => e.key === "Enter" && fileInputRef.current?.click()}
+                >
+                  <AttachRegular style={{ fontSize: "20px", color: tokens.colorNeutralForeground3 }} />
+                  <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
+                    Drop files here or click to browse
+                  </Text>
+                  <Text size={100} style={{ color: tokens.colorNeutralForeground4 }}>
+                    PDF, DOCX, XLSX, XLS, PPTX, CSV, TXT
+                  </Text>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    multiple
+                    accept={ACCEPTED_TYPES}
+                    style={{ display: "none" }}
+                    onChange={(e) => addFiles(e.target.files)}
+                  />
+                </div>
+                {uploadedFiles.length > 0 && (
+                  <div className={styles.fileList}>
+                    {uploadedFiles.map((f, i) => (
+                      <div key={i} className={styles.fileItem}>
+                        <DocumentRegular style={{ fontSize: "14px", flexShrink: 0 }} />
+                        <Text size={100} style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          {f.name}
+                        </Text>
+                        <Text size={100} style={{ color: tokens.colorNeutralForeground4, flexShrink: 0 }}>
+                          {f.size < 1024 * 1024 ? `${Math.round(f.size / 1024)}KB` : `${(f.size / 1024 / 1024).toFixed(1)}MB`}
+                        </Text>
+                        <Button
+                          size="small"
+                          appearance="subtle"
+                          icon={<DismissRegular />}
+                          onClick={(e) => { e.stopPropagation(); setUploadedFiles((prev) => prev.filter((_, j) => j !== i)); }}
+                          style={{ minWidth: 0, padding: "2px" }}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
               <div>
                 <Button
                   appearance="primary"
@@ -542,7 +703,6 @@ export default function PresentationPanel() {
           {/* ── Review phase ──────────────────────────────────────── */}
           {phase === "review" && (
             <>
-              {/* Overall assessment */}
               <div className={styles.assessmentCard}>
                 <Text size={400} weight="semibold" block style={{ marginBottom: "8px" }}>
                   AI Review
@@ -552,18 +712,13 @@ export default function PresentationPanel() {
                 </Text>
               </div>
 
-              {/* Recommendations */}
               {recommendations.length > 0 && (
                 <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
                   <Text size={300} weight="semibold">Recommendations</Text>
                   {recommendations.map((rec, i) => (
                     <div key={i} className={styles.recCard}>
                       <div className={styles.recHeader}>
-                        <Badge
-                          appearance="filled"
-                          color={SEVERITY_COLOR[rec.severity] ?? "informative"}
-                          size="small"
-                        >
+                        <Badge appearance="filled" color={SEVERITY_COLOR[rec.severity] ?? "informative"} size="small">
                           {rec.severity.toUpperCase()}
                         </Badge>
                         <Badge appearance="outline" size="small">
@@ -581,7 +736,6 @@ export default function PresentationPanel() {
                 </div>
               )}
 
-              {/* Outline preview */}
               {displayOutline && (
                 <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
                   <Text size={300} weight="semibold">
@@ -605,27 +759,14 @@ export default function PresentationPanel() {
                 </div>
               )}
 
-              {/* Action buttons */}
               <div className={styles.actionRow}>
-                <Button
-                  appearance="primary"
-                  icon={<CheckmarkRegular />}
-                  onClick={applyRecommendations}
-                >
+                <Button appearance="primary" icon={<CheckmarkRegular />} onClick={applyRecommendations}>
                   Apply Recommendations &amp; Build
                 </Button>
-                <Button
-                  appearance="secondary"
-                  icon={<EditRegular />}
-                  onClick={startEditing}
-                >
+                <Button appearance="secondary" icon={<EditRegular />} onClick={startEditing}>
                   Edit &amp; Customize
                 </Button>
-                <Button
-                  appearance="subtle"
-                  icon={<DismissRegular />}
-                  onClick={useOriginal}
-                >
+                <Button appearance="subtle" icon={<DismissRegular />} onClick={useOriginal}>
                   Use Original
                 </Button>
               </div>
@@ -670,30 +811,45 @@ export default function PresentationPanel() {
             </div>
           )}
 
-          {/* ── Done ─────────────────────────────────────────────── */}
+          {/* ── Done — preview + download ─────────────────────────── */}
           {phase === "done" && (
-            <div className={styles.successCard}>
-              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                <CheckmarkRegular style={{ color: tokens.colorPaletteGreenForeground1, fontSize: "20px" }} />
-                <Text size={400} weight="semibold">Presentation ready!</Text>
+            <>
+              <div className={styles.doneHeader}>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  <CheckmarkRegular style={{ color: tokens.colorPaletteGreenForeground1, fontSize: "20px" }} />
+                  <div>
+                    <Text size={400} weight="semibold" block>
+                      {displayOutline?.deck_title ?? "Presentation ready!"}
+                    </Text>
+                    <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
+                      {displayOutline?.slides.length ?? 0} slides · open in PowerPoint to review speaker notes
+                    </Text>
+                  </div>
+                </div>
+                <div className={styles.actionRow}>
+                  <Button appearance="primary" icon={<ArrowDownloadRegular />} onClick={downloadPptx}>
+                    Download PPTX
+                  </Button>
+                  <Button appearance="secondary" icon={<EditRegular />} onClick={() => setPhase("review")}>
+                    Edit Outline
+                  </Button>
+                  <Button appearance="subtle" onClick={reset}>
+                    Start Over
+                  </Button>
+                </div>
               </div>
-              <Text size={200} style={{ color: tokens.colorNeutralForeground2 }}>
-                Your PPTX has been downloaded. Open it in PowerPoint to review speaker notes and
-                make any final edits.
-              </Text>
-              <div className={styles.actionRow}>
-                <Button
-                  appearance="primary"
-                  icon={<ArrowDownloadRegular />}
-                  onClick={() => displayOutline && handleBuild(displayOutline)}
-                >
-                  Download Again
-                </Button>
-                <Button appearance="subtle" onClick={reset}>
-                  Start Over
-                </Button>
-              </div>
-            </div>
+
+              {displayOutline && (
+                <>
+                  <Text size={300} weight="semibold">Slide Preview</Text>
+                  <div className={styles.slideGrid}>
+                    {displayOutline.slides.map((sl) => (
+                      <SlideCard key={sl.slide_number} slide={sl} />
+                    ))}
+                  </div>
+                </>
+              )}
+            </>
           )}
         </div>
       )}

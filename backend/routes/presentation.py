@@ -1,8 +1,10 @@
 """Presentation outline (SSE) and PPTX build endpoints."""
 
+import io
 import json
+from typing import Optional
 
-from fastapi import APIRouter
+from fastapi import APIRouter, File, Form, UploadFile
 from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel
 
@@ -29,7 +31,70 @@ def _sse(payload: dict) -> str:
     return f"data: {json.dumps(payload)}\n\n"
 
 
-async def _generate(req: OutlineRequest):
+async def extract_text_from_files(files: list[UploadFile]) -> str:
+    parts: list[str] = []
+    for f in files:
+        if not f.filename:
+            continue
+        data = await f.read()
+        ext = f.filename.rsplit(".", 1)[-1].lower() if "." in f.filename else ""
+        text = ""
+        try:
+            if ext == "pdf":
+                from pypdf import PdfReader
+                reader = PdfReader(io.BytesIO(data))
+                text = "\n".join(p.extract_text() or "" for p in reader.pages)
+            elif ext == "docx":
+                from docx import Document  # type: ignore[import-untyped]
+                doc = Document(io.BytesIO(data))
+                text = "\n".join(p.text for p in doc.paragraphs if p.text.strip())
+            elif ext == "xlsx":
+                import openpyxl
+                wb = openpyxl.load_workbook(io.BytesIO(data), data_only=True)
+                lines: list[str] = []
+                for ws in wb.worksheets:
+                    lines.append(f"[Sheet: {ws.title}]")
+                    for row in ws.iter_rows(values_only=True):
+                        row_str = " | ".join(str(c) for c in row if c is not None)
+                        if row_str.strip():
+                            lines.append(row_str)
+                text = "\n".join(lines)
+            elif ext == "xls":
+                import xlrd  # type: ignore[import-untyped]
+                wb = xlrd.open_workbook(file_contents=data)
+                lines = []
+                for ws in wb.sheets():
+                    lines.append(f"[Sheet: {ws.name}]")
+                    for row_idx in range(ws.nrows):
+                        row_str = " | ".join(
+                            str(ws.cell_value(row_idx, col))
+                            for col in range(ws.ncols)
+                            if ws.cell_value(row_idx, col) != ""
+                        )
+                        if row_str.strip():
+                            lines.append(row_str)
+                text = "\n".join(lines)
+            elif ext == "pptx":
+                from pptx import Presentation  # type: ignore[import-untyped]
+                prs = Presentation(io.BytesIO(data))
+                slide_texts: list[str] = []
+                for slide in prs.slides:
+                    for shape in slide.shapes:
+                        if hasattr(shape, "text") and shape.text.strip():
+                            slide_texts.append(shape.text)
+                text = "\n".join(slide_texts)
+            else:
+                text = data.decode("utf-8", errors="replace")
+        except Exception:
+            text = data.decode("utf-8", errors="replace")
+
+        if text.strip():
+            parts.append(f"--- {f.filename} ---\n{text[:6000]}")
+
+    return "\n\n".join(parts)
+
+
+async def _generate(req: OutlineRequest, file_context: str = ""):
     client = get_client()
     deployment = get_deployment("architecture")
     outline_tool = get_tools("generate_deck_outline")[0]
@@ -51,6 +116,11 @@ async def _generate(req: OutlineRequest):
         user += (
             f"\n\nAdditional context from a coaching conversation — use this to inform "
             f"the deck's narrative, emphasis, and examples:\n\n{req.conversation_context[:3000]}"
+        )
+    if file_context:
+        user += (
+            f"\n\nSupporting documents provided by the user — incorporate relevant facts, "
+            f"data, and context into the deck:\n\n{file_context[:6000]}"
         )
 
     # ── Call 1: generate outline ────────────────────────────────────────────
@@ -98,8 +168,23 @@ async def _generate(req: OutlineRequest):
 
 
 @router.post("/presentation/outline")
-async def outline_endpoint(req: OutlineRequest):
-    return StreamingResponse(_generate(req), media_type="text/event-stream")
+async def outline_endpoint(
+    topic: str = Form(...),
+    audience: str = Form(""),
+    objectives: str = Form(""),
+    num_slides: int = Form(10),
+    conversation_context: str = Form(""),
+    files: Optional[list[UploadFile]] = File(default=None),
+):
+    req = OutlineRequest(
+        topic=topic,
+        audience=audience,
+        objectives=objectives,
+        num_slides=num_slides,
+        conversation_context=conversation_context,
+    )
+    file_context = await extract_text_from_files(files) if files else ""
+    return StreamingResponse(_generate(req, file_context=file_context), media_type="text/event-stream")
 
 
 @router.post("/presentation/build")
