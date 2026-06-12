@@ -382,7 +382,7 @@ _REPORT_COLS = [
 
 def _token_tier_score(s: str) -> int:
     d = s.strip()[:1]
-    return int(d) if d in "1234" else 0
+    return int(d) if d and d in "1234" else 0
 
 
 def _parse_report_date(s: str) -> date | None:
