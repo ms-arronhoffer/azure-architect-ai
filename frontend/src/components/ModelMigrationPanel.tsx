@@ -533,11 +533,10 @@ export default function ModelMigrationPanel() {
                         onOptionSelect={(_, d) => setPtuModel(d.optionValue ?? "")}
                         onInput={(e) => setPtuModel((e.target as HTMLInputElement).value)}
                       >
-                        {Array.from(new Set([...ptuModels, ...liveModels])).sort().map((m) => (
-                          <Option key={m} value={m}>
-                            {m}{ptuModels.includes(m) ? "" : " (no PTU rates)"}
-                          </Option>
-                        ))}
+                        {Array.from(new Set([...ptuModels, ...liveModels])).sort().map((m) => {
+                          const label = ptuModels.includes(m) ? m : `${m} (no PTU rates)`;
+                          return <Option key={m} value={m} text={label}>{label}</Option>;
+                        })}
                       </Combobox>
                     </Field>
                   </div>
