@@ -8,7 +8,8 @@ Baselines per reference arch are pulled from a small inline map keyed by
 """
 from __future__ import annotations
 
-from typing import Iterable
+from collections.abc import Iterable
+from datetime import UTC
 
 from azure.identity import DefaultAzureCredential
 from azure.mgmt.policyinsights import PolicyInsightsClient
@@ -61,7 +62,7 @@ def _policy_client() -> PolicyInsightsClient:
 def _security_client(subscription_id: str) -> SecurityCenter:
     # SecurityCenter is subscription-scoped; rebuild if sub changes.
     global _security
-    if _security is None or _security._config.subscription_id != subscription_id:  # noqa: SLF001
+    if _security is None or _security._config.subscription_id != subscription_id:
         _security = SecurityCenter(_creds(), subscription_id, asc_location="centralus")
     return _security
 
@@ -190,8 +191,8 @@ def list_sentinel_incidents(
         rg = parts[3]
         ws = parts[-1]
         client = SecurityInsights(_creds(), sub)
-        from datetime import datetime, timedelta, timezone as _tz
-        cutoff = datetime.now(_tz.utc) - timedelta(hours=lookback_hours)
+        from datetime import datetime, timedelta
+        cutoff = datetime.now(UTC) - timedelta(hours=lookback_hours)
         out: list[dict] = []
         for inc in client.incidents.list(resource_group_name=rg, workspace_name=ws):
             created = getattr(inc, "created_time_utc", None) or getattr(inc, "properties", None)

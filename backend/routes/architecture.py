@@ -4,14 +4,15 @@ Streams typed SSE events including diagram, runbook, Bicep, and cost estimate.
 """
 
 import json
-from typing import AsyncGenerator
+from collections.abc import AsyncGenerator
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
-from openai import BadRequestError, AuthenticationError, APIError
+from openai import APIError, AuthenticationError, BadRequestError
 from pydantic import BaseModel
 
 from auth import require_user, user_id_from_claims
+from limiter import limiter
 from models import ModelConfig
 from prompts.system_prompt import MODE_TEMPLATES
 from services.bicep_service import build_and_preview as build_bicep_preview
@@ -19,12 +20,11 @@ from services.diagram_service import generate_diagram
 from services.docs_service import search_azure_docs
 from services.error_sanitizer import sanitize_openai_error
 from services.mcp_service import call_mcp_tool, is_mcp_tool
-from services.openai_service import get_client, get_deployment, resolve_client_and_model
+from services.openai_service import resolve_client_and_model
 from services.pricing_service import estimate_architecture, get_regional_pricing_context
 from services.runbook_service import build_runbook
 from services.settings_service import load_settings
 from services.token_service import schedule_record_usage
-from limiter import limiter
 from tools.tool_definitions import get_tools_for_mode
 
 router = APIRouter()
@@ -92,9 +92,6 @@ async def _stream_architecture(req: ArchRequest, provider: str = "azure", model:
 
     citations: list[dict] = []
     arch_data: dict = {}
-    bicep_data: dict = {}
-    cost_items: list[dict] = []
-    adr_data: dict = {}
 
     yield f"data: {json.dumps({'type': 'status', 'message': 'Searching reference architectures...'})}\n\n"
 
@@ -177,7 +174,6 @@ async def _stream_architecture(req: ArchRequest, provider: str = "azure", model:
 
                 elif name == "generate_bicep":
                     yield f"data: {json.dumps({'type': 'status', 'message': 'Generating Bicep IaC...'})}\n\n"
-                    bicep_data = args
                     bicep_code = args.get('bicep_code', '')
                     yield f"data: {json.dumps({'type': 'bicep', 'code': bicep_code, 'target_scope': args.get('target_scope', 'resourceGroup'), 'param_file': args.get('param_file'), 'deploy_commands': args.get('deploy_commands', []), 'notes': args.get('notes', [])})}\n\n"
                     try:
@@ -214,7 +210,6 @@ async def _stream_architecture(req: ArchRequest, provider: str = "azure", model:
                 elif name == "estimate_costs":
                     yield f"data: {json.dumps({'type': 'status', 'message': 'Fetching pricing data...'})}\n\n"
                     line_items = args.get("line_items", [])
-                    cost_items = line_items
                     try:
                         estimate = await estimate_architecture(line_items)
                         estimate["optimization_tips"] = args.get("optimization_tips", [])
@@ -241,7 +236,6 @@ async def _stream_architecture(req: ArchRequest, provider: str = "azure", model:
                     result = {"status": "received"}
 
                 elif name == "generate_adr":
-                    adr_data = args
                     yield f"data: {json.dumps({'type': 'adr', 'data': args})}\n\n"
                     result = {"status": "adr_received"}
 
@@ -259,7 +253,7 @@ async def _stream_architecture(req: ArchRequest, provider: str = "azure", model:
                 elif name == "generate_cicd_pipeline":
                     yield f"data: {json.dumps({'type': 'status', 'message': 'Emitting CI/CD pipeline...'})}\n\n"
                     try:
-                        from services.cicd_emitter import emit_github_actions, emit_azure_devops
+                        from services.cicd_emitter import emit_azure_devops, emit_github_actions
                         platform = args.get("platform", "github_actions")
                         pattern = args.get("pattern_name", "")
                         environment = args.get("environment", "dev")
@@ -293,9 +287,9 @@ async def _stream_architecture(req: ArchRequest, provider: str = "azure", model:
                     yield f"data: {json.dumps({'type': 'status', 'message': 'Scoring security posture...'})}\n\n"
                     try:
                         from services.security_posture_service import (
-                            score_security_posture,
                             list_defender_recommendations,
                             list_sentinel_incidents,
+                            score_security_posture,
                         )
                         sub = args.get("subscription_id", "")
                         posture = score_security_posture(sub)
@@ -314,7 +308,8 @@ async def _stream_architecture(req: ArchRequest, provider: str = "azure", model:
                 elif name == "compare_clouds":
                     yield f"data: {json.dumps({'type': 'status', 'message': 'Comparing clouds...'})}\n\n"
                     try:
-                        from services.multicloud_service import compare_services as _cmp_svc, decision_matrix
+                        from services.multicloud_service import compare_services as _cmp_svc
+                        from services.multicloud_service import decision_matrix
                         if args.get("workload_type"):
                             payload = decision_matrix(args["workload_type"], args.get("criteria", []))
                         else:
@@ -460,7 +455,7 @@ def _build_prompt(req: ArchRequest, mode: str) -> str:
     )
     if mode == "network":
         return (
-            f"Design an Azure network topology for the following requirements:\n\n"
+            "Design an Azure network topology for the following requirements:\n\n"
             + base
             + "Call design_network_topology with a complete topology (VNets, subnets, NSG rules, private endpoints, DNS, firewall). "
             "Also call design_architecture so a diagram can be generated. "
@@ -469,7 +464,7 @@ def _build_prompt(req: ArchRequest, mode: str) -> str:
         )
     if mode == "aiarchitecture":
         return (
-            f"Design an Azure AI/ML architecture for the following requirements:\n\n"
+            "Design an Azure AI/ML architecture for the following requirements:\n\n"
             + base
             + "Call search_azure_docs to find relevant AI reference architectures. "
             "Call design_architecture with the full component list including AI services, data stores, and supporting infrastructure. "
@@ -479,7 +474,7 @@ def _build_prompt(req: ArchRequest, mode: str) -> str:
         )
     if mode == "dataplatform":
         return (
-            f"Design an Azure data platform architecture for the following requirements:\n\n"
+            "Design an Azure data platform architecture for the following requirements:\n\n"
             + base
             + "Call search_azure_docs to find relevant data platform reference architectures (Fabric, Synapse, Databricks). "
             "Call design_architecture with the full component list including ingestion, storage (medallion layers), processing, governance, and serving layers. "
@@ -489,7 +484,7 @@ def _build_prompt(req: ArchRequest, mode: str) -> str:
         )
     if mode == "apim":
         return (
-            f"Design an Azure API Management architecture for the following requirements:\n\n"
+            "Design an Azure API Management architecture for the following requirements:\n\n"
             + base
             + "Call search_azure_docs to find relevant APIM best practices and policy documentation. "
             "Call design_architecture with the full APIM topology (gateway, backends, consumers, security components). "
@@ -504,14 +499,14 @@ def _build_prompt(req: ArchRequest, mode: str) -> str:
             if req.attachments else ""
         )
         return (
-            f"Conduct a thorough architecture review (red team + WAF assessment) of the following:\n\n"
+            "Conduct a thorough architecture review (red team + WAF assessment) of the following:\n\n"
             + base
             + attachment_note
             + "\nSearch for best practices, then provide findings with severity ratings."
         )
     if mode == "drbc":
         return (
-            f"Design a comprehensive DR/BC strategy for this workload:\n\n"
+            "Design a comprehensive DR/BC strategy for this workload:\n\n"
             + base
             + "Call design_dr_strategy with your recommendation. Include a full failover runbook."
         )
@@ -548,7 +543,7 @@ def _build_prompt(req: ArchRequest, mode: str) -> str:
         )
     tool_instructions.append("After the tool calls, provide a detailed explanation.")
     return (
-        f"Design an Azure architecture for the following requirements:\n\n"
+        "Design an Azure architecture for the following requirements:\n\n"
         + base
         + " ".join(tool_instructions)
     )

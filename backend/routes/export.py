@@ -1,6 +1,5 @@
 import html as html_module
 from datetime import datetime
-from typing import Optional
 
 import markdown as md
 from fastapi import APIRouter
@@ -12,10 +11,10 @@ router = APIRouter()
 
 class CostLineItem(BaseModel):
     service: str
-    sku: Optional[str] = None
-    region: Optional[str] = None
+    sku: str | None = None
+    region: str | None = None
     quantity: float = 1
-    monthly_estimate: Optional[float] = None
+    monthly_estimate: float | None = None
 
 
 class CostEstimateBody(BaseModel):
@@ -29,13 +28,13 @@ class CostEstimateBody(BaseModel):
 class HandoffRequest(BaseModel):
     title: str = "Azure Architecture Handoff"
     description: str = ""
-    diagram_xml: Optional[str] = None
-    runbook: Optional[str] = None
-    bicep_code: Optional[str] = None
-    param_file: Optional[str] = None
+    diagram_xml: str | None = None
+    runbook: str | None = None
+    bicep_code: str | None = None
+    param_file: str | None = None
     deploy_commands: list[str] = []
-    cost_estimate: Optional[CostEstimateBody] = None
-    waf_scores: Optional[dict] = None
+    cost_estimate: CostEstimateBody | None = None
+    waf_scores: dict | None = None
 
 
 def _md(text: str) -> str:
@@ -244,15 +243,15 @@ class WorkloadSpecBody(BaseModel):
 
 
 class BriefRequest(BaseModel):
-    workload_spec: Optional[WorkloadSpecBody] = None
+    workload_spec: WorkloadSpecBody | None = None
     architecture_text: str = ""
-    diagram_xml: Optional[str] = None
-    bicep_code: Optional[str] = None
-    runbook: Optional[str] = None
+    diagram_xml: str | None = None
+    bicep_code: str | None = None
+    runbook: str | None = None
     waf_pillars: list[dict] = []
     sizing_text: str = ""
     security_text: str = ""
-    cost_estimate: Optional[CostEstimateBody] = None
+    cost_estimate: CostEstimateBody | None = None
 
 
 @router.post("/export/brief")
@@ -265,16 +264,26 @@ async def export_brief(req: BriefRequest):
     req_section = ""
     if spec and spec.name:
         rows = ""
-        if spec.type: rows += f"<tr><td>Type</td><td>{html_module.escape(spec.type)}</td></tr>"
-        if spec.criticality: rows += f"<tr><td>Criticality</td><td>{html_module.escape(spec.criticality)}</td></tr>"
-        if spec.primaryRegion: rows += f"<tr><td>Primary Region</td><td>{html_module.escape(spec.primaryRegion)}</td></tr>"
-        if spec.availabilitySla: rows += f"<tr><td>Availability SLA</td><td>{spec.availabilitySla}%</td></tr>"
-        if spec.rtoHours: rows += f"<tr><td>RTO</td><td>{spec.rtoHours} hours</td></tr>"
-        if spec.rpoHours: rows += f"<tr><td>RPO</td><td>{spec.rpoHours} hours</td></tr>"
-        if spec.complianceFrameworks: rows += f"<tr><td>Compliance</td><td>{html_module.escape(', '.join(spec.complianceFrameworks))}</td></tr>"
-        if spec.dataClassification: rows += f"<tr><td>Data Classification</td><td>{html_module.escape(spec.dataClassification)}</td></tr>"
-        if spec.monthlyBudgetUsd: rows += f"<tr><td>Monthly Budget</td><td>${spec.monthlyBudgetUsd:,.0f}</td></tr>"
-        if spec.teamSize: rows += f"<tr><td>Team</td><td>{html_module.escape(spec.teamSize)}</td></tr>"
+        if spec.type:
+            rows += f"<tr><td>Type</td><td>{html_module.escape(spec.type)}</td></tr>"
+        if spec.criticality:
+            rows += f"<tr><td>Criticality</td><td>{html_module.escape(spec.criticality)}</td></tr>"
+        if spec.primaryRegion:
+            rows += f"<tr><td>Primary Region</td><td>{html_module.escape(spec.primaryRegion)}</td></tr>"
+        if spec.availabilitySla:
+            rows += f"<tr><td>Availability SLA</td><td>{spec.availabilitySla}%</td></tr>"
+        if spec.rtoHours:
+            rows += f"<tr><td>RTO</td><td>{spec.rtoHours} hours</td></tr>"
+        if spec.rpoHours:
+            rows += f"<tr><td>RPO</td><td>{spec.rpoHours} hours</td></tr>"
+        if spec.complianceFrameworks:
+            rows += f"<tr><td>Compliance</td><td>{html_module.escape(', '.join(spec.complianceFrameworks))}</td></tr>"
+        if spec.dataClassification:
+            rows += f"<tr><td>Data Classification</td><td>{html_module.escape(spec.dataClassification)}</td></tr>"
+        if spec.monthlyBudgetUsd:
+            rows += f"<tr><td>Monthly Budget</td><td>${spec.monthlyBudgetUsd:,.0f}</td></tr>"
+        if spec.teamSize:
+            rows += f"<tr><td>Team</td><td>{html_module.escape(spec.teamSize)}</td></tr>"
         req_section = f"<section><h2>Workload Requirements</h2><table><tbody>{rows}</tbody></table></section>"
 
     sections = req_section

@@ -36,4 +36,4 @@ def schedule_record_usage(
 ) -> None:
     """Create an asyncio task to record usage. Call from inside an async context."""
     if prompt_tokens or completion_tokens:
-        asyncio.create_task(record_usage(user_id, model, mode, prompt_tokens, completion_tokens))
+        asyncio.create_task(record_usage(user_id, model, mode, prompt_tokens, completion_tokens))  # noqa: RUF006

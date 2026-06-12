@@ -131,11 +131,11 @@ def blueprint_from_reference_arch(pattern_name: str) -> IacModule:
 
 
 __all__ = [
+    "SERVICE_CATALOG",
     "IacBlueprint",
     "IacModule",
     "IacParameter",
     "IacResource",
-    "SERVICE_CATALOG",
     "blueprint_from_reference_arch",
     "module_from_reference_arch",
 ]

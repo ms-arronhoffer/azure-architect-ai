@@ -2,7 +2,6 @@
 
 from services import azure_scan_service
 
-
 SAMPLE_BICEP = """
 param location string = 'eastus'
 

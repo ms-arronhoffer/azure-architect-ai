@@ -1,7 +1,7 @@
+import json
+
 from fastapi import APIRouter
 from pydantic import BaseModel
-from typing import Optional
-import json
 
 from services.openai_service import get_client, get_deployment
 

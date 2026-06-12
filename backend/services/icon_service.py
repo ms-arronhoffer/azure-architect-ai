@@ -64,7 +64,7 @@ def _normalize(title: str) -> str:
 def _load_icon_styles() -> dict[str, str]:
     styles: dict[str, str] = {}
     try:
-        with open(_AZURE_XML_PATH, "r", encoding="utf-8") as f:
+        with open(_AZURE_XML_PATH, encoding="utf-8") as f:
             raw = f.read()
         # Strip <mxlibrary>...</mxlibrary> wrapper
         inner = re.sub(r"^<mxlibrary>|</mxlibrary>\s*$", "", raw.strip())

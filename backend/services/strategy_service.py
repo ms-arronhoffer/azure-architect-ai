@@ -1,7 +1,8 @@
 import asyncio
 import json
 import re
-from typing import Any, AsyncGenerator
+from collections.abc import AsyncGenerator
+from typing import Any
 
 _BASE_FRAMEWORK = """
 ## Foundational IT Strategy Framework
@@ -62,7 +63,7 @@ _SCHEMA = """{
   ],
   "strategic_roadmap": [
     {
-      "phase": "Phase 1 – Foundation (Months 1–6)",
+      "phase": "Phase 1 - Foundation (Months 1-6)",
       "focus": "One-sentence description of this phase's primary objective.",
       "key_initiatives": ["Initiative 1", "Initiative 2", "Initiative 3", "Initiative 4"],
       "success_metrics": ["Measurable metric 1", "Measurable metric 2", "Measurable metric 3"]
@@ -92,10 +93,10 @@ This strategy is for an API Platform. Structure ALL sections (pillars, capabilit
 **4. Developer Experience (DX) & Adoption** — Self-service developer portal for key provisioning, documentation, and API discovery (prevents shadow IT), "Paved Road" model providing boilerplate, SDKs, and Terraform modules pre-configured with security/logging standards, federated governance (domain leads own compliance, central office sets vision and tooling).
 
 ### Phased Maturity Model
-- **Phase 1 – Visibility:** Service catalog + design standards
-- **Phase 2 – Security:** Centralized auth + API Gateway (APIM)
-- **Phase 3 – Automation:** CI/CD gates, Spectral linting, contract testing (Pact)
-- **Phase 4 – Optimization:** Developer portal + federated governance
+- **Phase 1 - Visibility:** Service catalog + design standards
+- **Phase 2 - Security:** Centralized auth + API Gateway (APIM)
+- **Phase 3 - Automation:** CI/CD gates, Spectral linting, contract testing (Pact)
+- **Phase 4 - Optimization:** Developer portal + federated governance
 
 ### Required Output Mapping
 - **Strategic Pillars (5):** Map to the 4 governance pillars + 1 unifying "Platform Vision & Federated Governance" pillar.
@@ -150,7 +151,7 @@ Generate a complete Azure strategy document with:
 3. **Capability Map**: Exactly 6 capability areas covering the workload lifecycle. Each must list specific Azure service names (e.g., "Azure Kubernetes Service", not "containers"), a concise justification aligned to the business drivers, and 1-2 realistic alternatives.
 4. **WAF Alignment**: For each of the 5 Azure Well-Architected Framework pillars, assess the strategy coverage. Score 1-5 (1=major gaps, 5=fully addressed). Provide exactly 2 specific, actionable recommendations per pillar. Set "overall_score" as the integer average.
 5. **Risk Register**: Exactly 5 risks specific to this workload type and maturity level. Include a mix of technical, organizational, and compliance categories. Mitigations must be concrete Azure patterns or actions. Use "H", "M", or "L" for impact and likelihood.
-6. **Strategic Roadmap**: Exactly 4 implementation phases sequenced by dependency and risk (e.g., Foundation → Security & Compliance → Automation & Scale → Optimization & Innovation). Each phase must include: a phase name with timeframe (e.g., "Phase 1 – Foundation (Months 1–6)"), a single-sentence focus statement, 4–6 key initiatives drawn directly from the pillars and capability map, and 3–4 measurable success metrics tied to the KPI/OKR and FinOps frameworks. Phases must build on each other — each phase assumes the prior is complete.
+6. **Strategic Roadmap**: Exactly 4 implementation phases sequenced by dependency and risk (e.g., Foundation → Security & Compliance → Automation & Scale → Optimization & Innovation). Each phase must include: a phase name with timeframe (e.g., "Phase 1 - Foundation (Months 1-6)"), a single-sentence focus statement, 4-6 key initiatives drawn directly from the pillars and capability map, and 3-4 measurable success metrics tied to the KPI/OKR and FinOps frameworks. Phases must build on each other — each phase assumes the prior is complete.
 7. **Reference Links**: Include exactly 8-10 real, valid learn.microsoft.com URLs that directly support the recommendations in this strategy. Each entry must have a descriptive title and a URL beginning with https://learn.microsoft.com/. Choose URLs relevant to the specific Azure services, WAF pillars, and risk mitigations in this response.
 
 Calibrate guidance to the stated maturity level — greenfield gets foundational guidance, cloud-optimizing gets advanced patterns.
@@ -188,7 +189,7 @@ def _draft_sync(inputs: dict, client: Any, deployment: str) -> dict:
         match = re.search(r"\{.*\}", raw, re.DOTALL)
         if match:
             return json.loads(match.group())
-        raise ValueError(f"Model did not return valid JSON. Raw response starts with: {raw[:300]}")
+        raise ValueError(f"Model did not return valid JSON. Raw response starts with: {raw[:300]}") from None
 
 
 async def stream_strategy(inputs: dict, client: Any, deployment: str) -> AsyncGenerator[str, None]:

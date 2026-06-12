@@ -2,6 +2,7 @@
 
 import io
 import zipfile
+
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse
 
@@ -35,13 +36,13 @@ def _extract_pdf(data: bytes) -> str:
     try:
         from pypdf import PdfReader
     except ImportError:
-        raise HTTPException(status_code=500, detail="pypdf not installed — run: python -m pip install pypdf")
+        raise HTTPException(status_code=500, detail="pypdf not installed — run: python -m pip install pypdf") from None
     try:
         reader = PdfReader(io.BytesIO(data))
         parts = [page.extract_text() or "" for page in reader.pages]
         return "\n\n".join(p for p in parts if p.strip())
     except Exception as exc:
-        raise HTTPException(status_code=422, detail=f"Could not read PDF: {exc}")
+        raise HTTPException(status_code=422, detail=f"Could not read PDF: {exc}") from exc
 
 
 def _extract_docx(data: bytes, filename: str) -> str:
@@ -57,20 +58,20 @@ def _extract_docx(data: bytes, filename: str) -> str:
     try:
         from docx import Document
     except ImportError:
-        raise HTTPException(status_code=500, detail="python-docx not installed.")
+        raise HTTPException(status_code=500, detail="python-docx not installed.") from None
     try:
         doc = Document(io.BytesIO(data))
         parts = [para.text for para in doc.paragraphs if para.text.strip()]
         return "\n\n".join(parts)
     except Exception as exc:
-        raise HTTPException(status_code=422, detail=f"Could not read DOCX: {exc}")
+        raise HTTPException(status_code=422, detail=f"Could not read DOCX: {exc}") from exc
 
 
 def _extract_pptx(data: bytes) -> str:
     try:
         from pptx import Presentation
     except ImportError:
-        raise HTTPException(status_code=500, detail="python-pptx not installed.")
+        raise HTTPException(status_code=500, detail="python-pptx not installed.") from None
     try:
         prs = Presentation(io.BytesIO(data))
         parts = []
@@ -84,7 +85,7 @@ def _extract_pptx(data: bytes) -> str:
                 parts.append(f"[Slide {slide_num}]\n" + "\n".join(slide_texts))
         return "\n\n".join(parts)
     except Exception as exc:
-        raise HTTPException(status_code=422, detail=f"Could not read PPTX: {exc}")
+        raise HTTPException(status_code=422, detail=f"Could not read PPTX: {exc}") from exc
 
 
 def _extract_xlsx(data: bytes) -> str:
@@ -95,7 +96,7 @@ def _extract_xlsx(data: bytes) -> str:
     try:
         import openpyxl
     except ImportError:
-        raise HTTPException(status_code=500, detail="openpyxl not installed — run: python -m pip install openpyxl")
+        raise HTTPException(status_code=500, detail="openpyxl not installed — run: python -m pip install openpyxl") from None
     try:
         wb = openpyxl.load_workbook(io.BytesIO(data), read_only=True, data_only=True)
         parts = []
@@ -110,7 +111,7 @@ def _extract_xlsx(data: bytes) -> str:
         wb.close()
         return "\n\n".join(parts)
     except Exception as exc:
-        raise HTTPException(status_code=422, detail=f"Could not read XLSX: {exc}")
+        raise HTTPException(status_code=422, detail=f"Could not read XLSX: {exc}") from exc
 
 
 def _extract_xls(data: bytes) -> str:
@@ -120,7 +121,7 @@ def _extract_xls(data: bytes) -> str:
         raise HTTPException(
             status_code=422,
             detail="File is in old Excel 97-2003 (.xls) format. Open it in Excel and save as .xlsx, or contact your admin to enable .xls support.",
-        )
+        ) from None
     try:
         wb = xlrd.open_workbook(file_contents=data)
         parts = []
@@ -134,4 +135,4 @@ def _extract_xls(data: bytes) -> str:
                 parts.append(f"[Sheet: {sheet.name}]\n" + "\n".join(rows))
         return "\n\n".join(parts)
     except Exception as exc:
-        raise HTTPException(status_code=422, detail=f"Could not read XLS: {exc}")
+        raise HTTPException(status_code=422, detail=f"Could not read XLS: {exc}") from exc

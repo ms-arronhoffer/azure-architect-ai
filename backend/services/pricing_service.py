@@ -3,7 +3,7 @@
 import json
 import re
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import httpx
 
@@ -139,7 +139,7 @@ async def get_price(
 async def _mcp_price_search(service: str, sku: str, region: str) -> list[dict]:
     """Last-resort fallback: use azure-pricing-mcp to find price when direct API fails."""
     try:
-        from services.mcp_service import _session_map, call_mcp_tool  # noqa: PLC0415
+        from services.mcp_service import _session_map, call_mcp_tool
         tool = next(
             (t for t in ("azure_sku_discovery", "azure_price_search") if t in _session_map),
             None,
@@ -290,7 +290,7 @@ async def get_regional_pricing_context(region: str = "eastus") -> str:
     )
     lines: list[str] = [f"### Live Azure Pricing ({region}, pay-as-you-go)\n"]
     found_any = False
-    for (svc, _), items in zip(probes, results):
+    for (svc, _), items in zip(probes, results, strict=True):
         if isinstance(items, Exception) or not items:
             continue
         best = items[0]
@@ -330,7 +330,7 @@ async def estimate_architecture(line_items: list[dict]) -> dict:
             "swapped": swapped,
             "missing": missing,
             "data_source": PRICING_DATA_SOURCE,
-            "last_queried_at": datetime.now(timezone.utc).isoformat(),
+            "last_queried_at": datetime.now(UTC).isoformat(),
         },
         "disclaimer": (
             "Estimates based on Azure Retail (pay-as-you-go) pricing. "

@@ -1,11 +1,11 @@
 """Code generator route — generates code files via LLM and optionally pushes to GitHub."""
 
 import json
-from typing import AsyncGenerator
+from collections.abc import AsyncGenerator
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
-from openai import BadRequestError, AuthenticationError, APIError
+from openai import APIError, AuthenticationError, BadRequestError
 from pydantic import BaseModel
 
 from auth import require_user, user_id_from_claims

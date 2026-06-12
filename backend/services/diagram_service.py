@@ -50,9 +50,9 @@ def _assign_positions(components: list[dict], connections: list[dict]) -> None:
         # Nodes with no placed neighbours get a stable default that spreads them evenly.
         default_x = float(page_width) / 2
 
-        def _bary(comp: dict) -> float:
+        def _bary(comp: dict, _default: float = default_x) -> float:
             xs = [placed_x[nb] for nb in adj[comp["id"]] if nb in placed_x]
-            return sum(xs) / len(xs) if xs else default_x
+            return sum(xs) / len(xs) if xs else _default
 
         row.sort(key=_bary)
 
@@ -183,8 +183,10 @@ def generate_diagram(
             continue
         ok = _side_key(s_c, t_c, "out")
         ik = _side_key(s_c, t_c, "in")
-        oi = side_counts[ok]; side_counts[ok] += 1
-        ii = side_counts[ik]; side_counts[ik] += 1
+        oi = side_counts[ok]
+        side_counts[ok] += 1
+        ii = side_counts[ik]
+        side_counts[ik] += 1
         side_slots.append((ok, oi, ik, ii))
 
     for i, conn in enumerate(connections):

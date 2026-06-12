@@ -5,7 +5,8 @@ GET  /api/reference-architectures/{id}   → single architecture detail
 """
 
 from fastapi import APIRouter, Query
-from data.reference_archs import search_reference_archs, REFERENCE_ARCHS, CATEGORIES, ALL_TAGS
+
+from data.reference_archs import ALL_TAGS, CATEGORIES, REFERENCE_ARCHS, search_reference_archs
 
 router = APIRouter()
 

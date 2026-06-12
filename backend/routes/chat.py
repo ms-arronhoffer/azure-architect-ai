@@ -3,27 +3,30 @@ Chat route — handles all 15 modes via a unified SSE streaming endpoint.
 Tool calls are dispatched and their structured results emitted as typed SSE events.
 """
 
+import contextlib
 import json
-from typing import AsyncGenerator
+from collections.abc import AsyncGenerator
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
-from openai import BadRequestError, AuthenticationError, APIError
+from openai import APIError, AuthenticationError, BadRequestError
 from pydantic import BaseModel
 
 from auth import require_user, user_id_from_claims
+from limiter import limiter
 from models import ModelConfig
-from services.token_service import schedule_record_usage
 from observability import tool_calls_counter
 from prompts.system_prompt import get_system_prompt
-from services.docs_service import search_azure_docs
 from services.error_sanitizer import sanitize_openai_error
-from services.rag_service import cached_learn_search
 from services.mcp_service import call_mcp_tool, is_mcp_tool
-from services.openai_service import TOOL_INCOMPATIBLE_MODELS, get_client, get_deployment, resolve_client_and_model
+from services.openai_service import (
+    TOOL_INCOMPATIBLE_MODELS,
+    resolve_client_and_model,
+)
 from services.pricing_service import estimate_architecture, validate_sku
+from services.rag_service import cached_learn_search
 from services.settings_service import load_settings
-from limiter import limiter
+from services.token_service import schedule_record_usage
 from tools.tool_definitions import get_tools_for_mode
 
 router = APIRouter()
@@ -85,9 +88,9 @@ async def _stream_chat(mode: str, messages: list[dict], provider: str = "azure",
                 parts.append({"type": "file", "file": {"filename": "attachment.pdf", "file_data": att}})
             else:
                 parts[0]["text"] += f"\n\n{att}"
-        messages = messages[:-1] + [{**last, "content": parts}]
+        messages = [*messages[:-1], {**last, "content": parts}]
 
-    full_messages = [{"role": "system", "content": system}] + messages
+    full_messages = [{"role": "system", "content": system}, *messages]
     citations: list[dict] = []
 
     # Mandatory pre-retrieval for structured output modes — inject into system message
@@ -172,10 +175,8 @@ async def _stream_chat(mode: str, messages: list[dict], provider: str = "azure",
             for tc in tool_calls_raw.values():
                 name = tc["name"]
                 args = _safe_json(tc["arguments"])
-                try:
+                with contextlib.suppress(Exception):
                     tool_calls_counter.add(1, {"tool_name": name})
-                except Exception:
-                    pass
                 tool_result, sse_event = await _dispatch_tool(name, args)
 
                 if name == "search_azure_docs" and isinstance(tool_result, list):
@@ -350,8 +351,9 @@ async def _dispatch_tool(name: str, args: dict) -> tuple[object, dict | None]:
         return {"status": "landing_zone_designed"}, {"type": "landing_zone_design", "design": {**args}}
 
     if name == "validate_resource_naming":
-        from services.naming_service import validate_batch
         from dataclasses import asdict
+
+        from services.naming_service import validate_batch
         results = [asdict(r) for r in validate_batch(args.get("items", []))]
         return {"status": "names_validated", "results": results}, {
             "type": "naming_validation",

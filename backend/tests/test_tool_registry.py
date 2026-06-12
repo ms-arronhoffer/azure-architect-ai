@@ -4,9 +4,9 @@ from __future__ import annotations
 import pytest
 
 from tools.tool_definitions import (
+    _BY_NAME,
     TOOLS,
     TOOLS_BY_MODE,
-    _BY_NAME,
     get_tools_for_mode,
 )
 

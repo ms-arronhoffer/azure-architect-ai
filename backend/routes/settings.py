@@ -1,7 +1,8 @@
 from fastapi import APIRouter, HTTPException
+
+from middleware.logging import get_logger
 from models import UserSettings
 from services.settings_service import load_settings, save_settings
-from middleware.logging import get_logger
 
 router = APIRouter()
 _log = get_logger("settings")

@@ -315,4 +315,4 @@ def emit_azure_devops(
     }
 
 
-__all__ = ["emit_github_actions", "emit_azure_devops"]
+__all__ = ["emit_azure_devops", "emit_github_actions"]
