@@ -32,15 +32,15 @@ async def get_metrics(
     )).all()
     mode_counts = [{"mode": r.mode, "count": r.count} for r in mode_rows]
 
-    # DAU — last 30 days, bucketed by day (created_at is stored in milliseconds)
-    day_bucket = (Conversation.created_at // 86400000 * 86400000).label("day")
+    # DAU — last 30 days, bucketed by day (updated_at reflects last activity, not just creation)
+    day_bucket = (Conversation.updated_at // 86400000 * 86400000).label("day")
     dau_rows = (await db.execute(
         select(
             day_bucket,
             func.count(func.distinct(Conversation.user_id)).label("users"),
             func.count().label("conversations"),
         )
-        .where(Conversation.created_at >= thirty_days_ago_ms)
+        .where(Conversation.updated_at >= thirty_days_ago_ms)
         .group_by(day_bucket)
         .order_by(day_bucket)
     )).all()
@@ -64,16 +64,16 @@ async def get_metrics(
         select(func.count(func.distinct(Conversation.user_id))).select_from(Conversation)
     ) or 0
 
-    # Active today (created_at is milliseconds)
+    # Active today — any conversation updated today (not just created today)
     active_today = await db.scalar(
         select(func.count(func.distinct(Conversation.user_id)))
-        .where(Conversation.created_at >= today_start_ms)
+        .where(Conversation.updated_at >= today_start_ms)
     ) or 0
 
-    # Weekly active users (last 7 days)
+    # Weekly active users — any conversation updated in last 7 days
     weekly_active = await db.scalar(
         select(func.count(func.distinct(Conversation.user_id)))
-        .where(Conversation.created_at >= seven_days_ago_ms)
+        .where(Conversation.updated_at >= seven_days_ago_ms)
     ) or 0
 
     # Avg session duration in minutes (updated_at - created_at for conversations with >0 duration)
