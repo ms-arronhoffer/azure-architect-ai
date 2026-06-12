@@ -1,4 +1,4 @@
-import { JSX } from "react";
+import { JSX, useState } from "react";
 import {
   makeStyles,
   tokens,
@@ -17,6 +17,7 @@ import {
   BoardRegular,
   ChevronLeftRegular,
   ChevronRightRegular,
+  ChevronDownRegular,
   RocketRegular,
   FormRegular,
   CalendarRegular,
@@ -158,6 +159,18 @@ const useStyles = makeStyles({
     whiteSpace: "nowrap",
     overflow: "hidden",
     userSelect: "none",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    cursor: "pointer",
+    ":hover": {
+      color: tokens.colorNeutralForeground3,
+    },
+  },
+  sectionChevron: {
+    fontSize: "10px",
+    flexShrink: 0,
+    transition: "transform 0.15s ease",
   },
   sectionDivider: {
     height: "1px",
@@ -257,6 +270,16 @@ export default function SideNav({ mode, onModeChange, collapsed, onToggleCollaps
   const styles = useStyles();
   const { roles } = useAuth();
   const isMetricsAdmin = roles.includes("Metrics.Read");
+  const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set());
+
+  function toggleSection(label: string) {
+    setCollapsedSections((prev) => {
+      const next = new Set(prev);
+      if (next.has(label)) next.delete(label);
+      else next.add(label);
+      return next;
+    });
+  }
 
   return (
     <nav className={styles.nav} style={{ width: collapsed ? 48 : 224 }}>
@@ -271,12 +294,22 @@ export default function SideNav({ mode, onModeChange, collapsed, onToggleCollaps
       </div>
 
       <div className={styles.sections}>
-        {NAV_SECTIONS.map((section, si) => (
-          <div key={section.label}>
-            {si > 0 && !collapsed && <div className={styles.sectionDivider} />}
-            {!collapsed && <div className={styles.sectionLabel}>{section.label}</div>}
+        {NAV_SECTIONS.map((section, si) => {
+          const isSectionCollapsed = collapsedSections.has(section.label);
+          return (
+            <div key={section.label}>
+              {si > 0 && !collapsed && <div className={styles.sectionDivider} />}
+              {!collapsed && (
+                <div className={styles.sectionLabel} onClick={() => toggleSection(section.label)}>
+                  {section.label}
+                  <ChevronDownRegular
+                    className={styles.sectionChevron}
+                    style={{ transform: isSectionCollapsed ? "rotate(-90deg)" : "rotate(0deg)" }}
+                  />
+                </div>
+              )}
 
-            {section.items.map((item) => {
+              {!isSectionCollapsed && section.items.map((item) => {
               const isActive = item.activeWhen ? item.activeWhen.includes(mode) : mode === item.mode;
               const alertCount = badgeCounts[item.mode] ?? 0;
               const itemEl = (
@@ -310,7 +343,8 @@ export default function SideNav({ mode, onModeChange, collapsed, onToggleCollaps
               ) : itemEl;
             })}
           </div>
-        ))}
+        );
+      })}
 
         {isMetricsAdmin && (
           <div>
