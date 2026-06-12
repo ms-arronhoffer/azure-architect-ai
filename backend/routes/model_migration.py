@@ -10,6 +10,8 @@ from services.model_iq_service import (
     get_models,
     get_ptu_supported_models,
     get_retirements,
+    get_source_models,
+    get_target_models,
     rank_replacements,
 )
 
@@ -30,6 +32,16 @@ class PtuRequest(BaseModel):
     ptu_monthly_price: float = 0.0
     paygo_input_price: float | None = None
     paygo_output_price: float | None = None
+
+
+@router.get("/source-models")
+def source_models() -> list[str]:
+    return get_source_models()
+
+
+@router.get("/target-models/{model_id:path}")
+def target_models(model_id: str) -> list[str]:
+    return get_target_models(model_id)
 
 
 @router.get("/models")

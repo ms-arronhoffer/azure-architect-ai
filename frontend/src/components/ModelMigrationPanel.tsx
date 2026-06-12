@@ -20,11 +20,6 @@ import {
 import { ArrowSwapRegular, CalculatorRegular } from "@fluentui/react-icons";
 import { apiFetch } from "../config/api";
 
-interface ModelEntry {
-  id: string;
-  name?: string;
-}
-
 interface Replacement {
   model: string;
   score: number;
@@ -211,20 +206,6 @@ export default function ModelMigrationPanel() {
   const styles = useStyles();
   const [tab, setTab] = useState<"scorer" | "ptu">("scorer");
 
-  // ── model catalog ────────────────────────────────────────────────────────────
-  const [models, setModels] = useState<string[]>([]);
-  const [ptuModels, setPtuModels] = useState<string[]>([]);
-  useEffect(() => {
-    apiFetch("/api/model-migration/models")
-      .then((r) => r.json() as Promise<ModelEntry[]>)
-      .then((data) => setModels(data.map((m) => m.id)))
-      .catch(() => {});
-    apiFetch("/api/model-migration/ptu-models")
-      .then((r) => r.json() as Promise<string[]>)
-      .then(setPtuModels)
-      .catch(() => {});
-  }, []);
-
   // ── Migration Scorer ─────────────────────────────────────────────────────────
   const [source, setSource] = useState("");
   const [target, setTarget] = useState("");
@@ -233,6 +214,35 @@ export default function ModelMigrationPanel() {
   const [feasibility, setFeasibility] = useState<FeasibilityResult | null>(null);
   const [replacements, setReplacements] = useState<Replacement[]>([]);
   const [loadingRec, setLoadingRec] = useState(false);
+
+  // ── model catalog ────────────────────────────────────────────────────────────
+  const [models, setModels] = useState<string[]>([]);
+  const [targetModels, setTargetModels] = useState<string[]>([]);
+  const [ptuModels, setPtuModels] = useState<string[]>([]);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  useEffect(() => {
+    apiFetch("/api/model-migration/source-models")
+      .then(async (r) => {
+        if (!r.ok) throw new Error(`${r.status}: ${r.statusText}`);
+        return r.json() as Promise<string[]>;
+      })
+      .then(setModels)
+      .catch((e: unknown) => setLoadError(e instanceof Error ? e.message : String(e)));
+    apiFetch("/api/model-migration/ptu-models")
+      .then((r) => r.json() as Promise<string[]>)
+      .then(setPtuModels)
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    if (!source) { setTargetModels([]); return; }
+    apiFetch(`/api/model-migration/target-models/${encodeURIComponent(source)}`)
+      .then((r) => r.json() as Promise<string[]>)
+      .then(setTargetModels)
+      .catch(() => setTargetModels([]));
+    setTarget("");
+  }, [source]);
 
   const scoreDisabled = !source || !target || source === target || scoring;
 
@@ -341,6 +351,11 @@ export default function ModelMigrationPanel() {
       <div className={styles.body}>
         {tab === "scorer" && (
           <>
+            {loadError && (
+              <MessageBar intent="error">
+                <MessageBarBody>Failed to load models: {loadError}</MessageBarBody>
+              </MessageBar>
+            )}
             <Card>
               <div className={styles.scoreCard} style={{ flexDirection: "column", gap: "16px" }}>
                 <Text weight="semibold">Score a Migration</Text>
@@ -360,12 +375,13 @@ export default function ModelMigrationPanel() {
                   <div className={styles.field}>
                     <Field label="Target Model">
                       <Combobox
-                        placeholder="Select target model…"
+                        placeholder={source ? "Select target model…" : "Select source first…"}
                         value={target}
+                        disabled={!source}
                         onOptionSelect={(_, d) => setTarget(d.optionValue ?? "")}
                         onInput={(e) => setTarget((e.target as HTMLInputElement).value)}
                       >
-                        {models.filter((m) => m !== source).map((m) => <Option key={m} value={m}>{m}</Option>)}
+                        {targetModels.map((m) => <Option key={m} value={m}>{m}</Option>)}
                       </Combobox>
                     </Field>
                   </div>

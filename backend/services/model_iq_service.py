@@ -124,6 +124,31 @@ def rank_replacements(source_model: str) -> list[dict]:
     return results
 
 
+def get_source_models() -> list[str]:
+    evs = _load_evaluations()
+    seen: set[str] = set()
+    result = []
+    for ev in evs:
+        mid = ev["sourceModelId"]
+        if mid not in seen:
+            seen.add(mid)
+            result.append(mid)
+    return sorted(result)
+
+
+def get_target_models(source_model: str) -> list[str]:
+    evs = _load_evaluations()
+    seen: set[str] = set()
+    result = []
+    for ev in evs:
+        if ev["sourceModelId"] == source_model:
+            mid = ev["candidateModelId"]
+            if mid not in seen:
+                seen.add(mid)
+                result.append(mid)
+    return sorted(result)
+
+
 # ── PTU sizing (port of calculator.ts) ───────────────────────────────────────
 
 _TPM_PER_PTU: dict[str, dict[str, int]] = {
