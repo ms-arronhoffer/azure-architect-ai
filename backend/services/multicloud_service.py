@@ -5,7 +5,6 @@ common architect intuition and AVM/CAF guidance, not synthetic benchmarks.
 """
 from __future__ import annotations
 
-
 SERVICE_MAP: dict[str, dict[str, str | None]] = {
     # Compute
     "compute_vm": {"azure": "Virtual Machines", "aws": "EC2", "gcp": "Compute Engine"},

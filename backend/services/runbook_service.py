@@ -7,10 +7,7 @@ def build_runbook(
     """Return a markdown runbook for the architecture, using LLM-supplied deployment steps when available."""
     services = "\n".join(f"- {c['label']}" for c in components)
 
-    if deployment_steps:
-        steps_md = _render_deployment_steps(deployment_steps)
-    else:
-        steps_md = _generic_deployment_steps()
+    steps_md = _render_deployment_steps(deployment_steps) if deployment_steps else _generic_deployment_steps()
 
     return f"""# Runbook: {arch_name}
 

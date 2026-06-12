@@ -6,7 +6,7 @@ SSE script so the pipeline tests do not require any Azure OpenAI calls.
 from __future__ import annotations
 
 import json
-from typing import AsyncGenerator
+from collections.abc import AsyncGenerator
 
 import pytest
 

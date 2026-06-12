@@ -46,7 +46,7 @@ async def draft_email(req: DraftEmailRequest):
         subject, body = await draft_customer_email(selected, req.customer_context, client, deployment)
     except Exception as exc:
         log.error("whats_new.draft_error", error=str(exc))
-        raise HTTPException(status_code=500, detail="Failed to generate email draft.")
+        raise HTTPException(status_code=500, detail="Failed to generate email draft.") from exc
 
     return {"subject": subject, "body": body}
 

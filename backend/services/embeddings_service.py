@@ -5,8 +5,8 @@ doesn't tangle with embedding calls.
 """
 from __future__ import annotations
 
-from openai import AzureOpenAI
 from azure.identity import DefaultAzureCredential, get_bearer_token_provider
+from openai import AzureOpenAI
 
 from config import settings
 from middleware.logging import get_logger

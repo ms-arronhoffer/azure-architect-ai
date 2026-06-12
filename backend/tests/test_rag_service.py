@@ -1,7 +1,6 @@
 """RAG search test with mocked embeddings + in-memory SQLite."""
 from __future__ import annotations
 
-import asyncio
 import datetime as dt
 
 import pytest
@@ -18,7 +17,7 @@ async def test_search_returns_highest_scoring(monkeypatch, tmp_sqlite_db):
     monkeypatch.setattr(emb, "embed_text", lambda text: fixed_query_vec)
     monkeypatch.setattr(rag_service, "embed_text", lambda text: fixed_query_vec)
 
-    from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+    from sqlalchemy.ext.asyncio import async_sessionmaker
 
     _url, engine = tmp_sqlite_db
     SessionLocal = async_sessionmaker(engine, expire_on_commit=False)

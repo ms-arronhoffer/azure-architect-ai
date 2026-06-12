@@ -17,7 +17,7 @@ Anything heavier (RBAC over-privilege, cost delta) is left for v2.
 from __future__ import annotations
 
 import re
-from typing import Iterable
+from collections.abc import Iterable
 
 from azure.identity import DefaultAzureCredential
 from azure.mgmt.resourcegraph import ResourceGraphClient
@@ -72,7 +72,7 @@ def _query(kql: str, subscriptions: list[str]) -> list[dict]:
         return data
     if isinstance(data, dict) and "rows" in data and "columns" in data:
         cols = [c["name"] for c in data["columns"]]
-        return [dict(zip(cols, row)) for row in data["rows"]]
+        return [dict(zip(cols, row, strict=False)) for row in data["rows"]]
     return []
 
 

@@ -101,7 +101,7 @@ TOOLS = [
                                 },
                                 "likelihood": {"type": "integer", "minimum": 1, "maximum": 5},
                                 "impact": {"type": "integer", "minimum": 1, "maximum": 5},
-                                "risk_score": {"type": "integer", "minimum": 1, "maximum": 25, "description": "likelihood × impact"},
+                                "risk_score": {"type": "integer", "minimum": 1, "maximum": 25, "description": "likelihood x impact"},
                                 "mitigations": {"type": "array", "items": {"type": "string"}},
                                 "azure_controls": {"type": "array", "items": {"type": "string"}},
                                 "status": {"type": "string", "enum": ["Open", "Mitigated", "Accepted"]},

@@ -6,7 +6,7 @@ spend via Cost Management; wrapped to return `{error: str}` on auth failures.
 """
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from middleware.logging import get_logger
 
@@ -23,7 +23,7 @@ def design_budget_alerts(
     thresholds are percentages of the budget; 50/80/100/110 by default.
     """
     thresholds = alert_thresholds or [50, 80, 100, 110]
-    start = datetime.now(timezone.utc).strftime("%Y-%m-01")
+    start = datetime.now(UTC).strftime("%Y-%m-01")
 
     notification_blocks = "\n".join(
         f"""    Actual_GreaterThan_{t}_Percent: {{
@@ -98,7 +98,7 @@ output actionGroupId string = actionGroup.id
 
 
 def generate_anomaly_kql() -> str:
-    """KQL query that flags services with daily cost > 2σ above 30-day mean.
+    """KQL query that flags services with daily cost > 2 stddev above 30-day mean.
 
     Designed to run against Cost Management exports landed in a Log Analytics
     workspace (table `AzureCostExports_CL`) or `AzureDiagnostics` if available.
@@ -146,7 +146,7 @@ def fetch_current_spend(subscription_id: str) -> dict:
         cred = DefaultAzureCredential()
         client = CostManagementClient(cred)
         scope = f"/subscriptions/{subscription_id}"
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
 
         query = QueryDefinition(
@@ -186,4 +186,4 @@ def fetch_current_spend(subscription_id: str) -> dict:
         return {"error": f"Cost Management query failed: {exc}"}
 
 
-__all__ = ["design_budget_alerts", "generate_anomaly_kql", "fetch_current_spend"]
+__all__ = ["design_budget_alerts", "fetch_current_spend", "generate_anomaly_kql"]

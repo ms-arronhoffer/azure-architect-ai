@@ -1,11 +1,12 @@
-from openai import AzureOpenAI, OpenAI
-from openai import APIConnectionError, APIStatusError, RateLimitError
+import random
+import time
+
 from azure.identity import DefaultAzureCredential, get_bearer_token_provider
+from openai import APIConnectionError, APIStatusError, AzureOpenAI, OpenAI, RateLimitError
+
 from config import settings
 from middleware.logging import get_logger
 from observability import openai_tokens_histogram, tracer
-import random
-import time
 
 log = get_logger("openai_service")
 

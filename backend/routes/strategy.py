@@ -2,8 +2,8 @@ from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
-from services.strategy_service import stream_strategy
 from services.openai_service import get_client, get_deployment
+from services.strategy_service import stream_strategy
 
 router = APIRouter()
 

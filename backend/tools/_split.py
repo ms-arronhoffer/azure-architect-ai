@@ -83,9 +83,9 @@ for elem in tool_elements:
     # Each elem is a dict literal with "function": {"name": "..."}
     name = None
     if isinstance(elem, ast.Dict):
-        for k, v in zip(elem.keys, elem.values):
+        for k, v in zip(elem.keys, elem.values, strict=True):
             if isinstance(k, ast.Constant) and k.value == "function" and isinstance(v, ast.Dict):
-                for fk, fv in zip(v.keys, v.values):
+                for fk, fv in zip(v.keys, v.values, strict=True):
                     if isinstance(fk, ast.Constant) and fk.value == "name" and isinstance(fv, ast.Constant):
                         name = fv.value
                         break

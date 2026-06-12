@@ -7,11 +7,12 @@ corpus outgrows a few thousand rows.
 """
 from __future__ import annotations
 
+import contextlib
 import datetime as dt
 import hashlib
 import math
 import time
-from typing import Iterable
+from collections.abc import Iterable
 
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -33,7 +34,7 @@ CORPUS_LEARN = "learn"
 def _cosine(a: list[float], b: list[float]) -> float:
     if not a or not b or len(a) != len(b):
         return 0.0
-    dot = sum(x * y for x, y in zip(a, b))
+    dot = sum(x * y for x, y in zip(a, b, strict=True))
     na = math.sqrt(sum(x * x for x in a))
     nb = math.sqrt(sum(y * y for y in b))
     if na == 0 or nb == 0:
@@ -42,7 +43,7 @@ def _cosine(a: list[float], b: list[float]) -> float:
 
 
 def _doc_id(corpus: str, source_id: str) -> str:
-    return hashlib.sha1(f"{corpus}:{source_id}".encode("utf-8")).hexdigest()[:32]
+    return hashlib.sha1(f"{corpus}:{source_id}".encode()).hexdigest()[:32]
 
 
 def _arch_to_text(arch: dict) -> str:
@@ -75,7 +76,7 @@ async def index_documents(
         log.warning("rag.index_embed_failed", corpus=corpus, error=str(e))
         return 0
     now = dt.datetime.now(dt.UTC).replace(tzinfo=None)
-    for doc, vec in zip(items, vectors):
+    for doc, vec in zip(items, vectors, strict=True):
         doc_id = _doc_id(corpus, doc["source_id"])
         existing = await session.get(RagDocument, doc_id)
         if existing is None:
@@ -166,10 +167,8 @@ async def search(
             for score, row in scored[:k]
             if score > 0
         ]
-        try:
+        with contextlib.suppress(Exception):
             rag_cache_hit_latency_histogram.record((time.perf_counter() - start) * 1000.0)
-        except Exception:
-            pass
         return result
 
 

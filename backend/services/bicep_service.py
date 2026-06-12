@@ -1,6 +1,7 @@
 """Bicep CLI wrapper — compiles user-generated Bicep to ARM JSON and surfaces diagnostics."""
 
 import asyncio
+import contextlib
 import json
 import os
 import re
@@ -72,17 +73,17 @@ async def build_and_preview(bicep_code: str) -> dict[str, Any]:
         }
 
     with tracer.start_as_current_span("bicep.build") as span:
-        tmp = tempfile.NamedTemporaryFile(suffix=".bicep", delete=False, mode="w", encoding="utf-8")
-        try:
+        with tempfile.NamedTemporaryFile(suffix=".bicep", delete=False, mode="w", encoding="utf-8") as tmp:
             tmp.write(bicep_code)
-            tmp.close()
+            tmp_name = tmp.name
+        try:
             try:
                 proc = await asyncio.create_subprocess_exec(
                     "az",
                     "bicep",
                     "build",
                     "--file",
-                    tmp.name,
+                    tmp_name,
                     "--stdout",
                     stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.PIPE,
@@ -143,7 +144,5 @@ async def build_and_preview(bicep_code: str) -> dict[str, Any]:
                 "arm_template": arm_template_str,
             }
         finally:
-            try:
-                os.unlink(tmp.name)
-            except OSError:
-                pass
+            with contextlib.suppress(OSError):
+                os.unlink(tmp_name)

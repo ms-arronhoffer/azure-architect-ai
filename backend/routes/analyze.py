@@ -1,14 +1,15 @@
 import asyncio
 import json
-from datetime import datetime, timezone
-from typing import Any, AsyncGenerator
+from collections.abc import AsyncGenerator
+from datetime import UTC, datetime
+from typing import Any
 
 from fastapi import APIRouter, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
-from routes.architecture import ArchRequest, _stream_architecture
 from limiter import limiter
+from routes.architecture import ArchRequest, _stream_architecture
 
 router = APIRouter()
 
@@ -119,7 +120,7 @@ async def _stream_analyze(req: AnalyzeRequest) -> AsyncGenerator[str, None]:
 
     results = await asyncio.gather(arch_task, waf_task, security_task)
 
-    for job, events in zip(["architecture", "waf", "security"], results):
+    for job, events in zip(["architecture", "waf", "security"], results, strict=True):
         for event in events:
             yield event
         yield f"data: {json.dumps({'type': 'analyze_status', 'job': job, 'status': 'done'})}\n\n"
@@ -199,7 +200,7 @@ async def _stream_pipeline(req: AnalyzeRequest) -> AsyncGenerator[str, None]:
     bundled = {
         "type": "bundled_design",
         "workload_name": workload_name or "Workload",
-        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "generated_at": datetime.now(UTC).isoformat(),
         "architecture": {
             "text": arch_text,
             "runbook": arch_state.get("artifacts", {}).get("runbook", ""),

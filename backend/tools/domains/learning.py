@@ -45,7 +45,7 @@ TOOLS = [
                             "properties": {
                                 "session_label": {
                                     "type": "string",
-                                    "description": "e.g. 'Day 1 – Morning' or 'Half Day – Morning'",
+                                    "description": "e.g. 'Day 1 - Morning' or 'Half Day - Morning'",
                                 },
                                 "title": {"type": "string"},
                                 "duration_hours": {"type": "number"},

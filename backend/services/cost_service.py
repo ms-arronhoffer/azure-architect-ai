@@ -70,7 +70,7 @@ def query_mtd_by_service(subscription_id: str | None = None) -> list[dict]:
     rows = resp.rows or []
     out = []
     for row in rows:
-        item: dict[str, Any] = dict(zip(cols, row))
+        item: dict[str, Any] = dict(zip(cols, row, strict=False))
         out.append({
             "service": item.get("ServiceName") or item.get("servicename"),
             "cost": float(item.get("totalCost") or item.get("PreTaxCost") or 0.0),
