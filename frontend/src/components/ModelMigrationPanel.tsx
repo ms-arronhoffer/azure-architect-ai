@@ -530,7 +530,7 @@ export default function ModelMigrationPanel() {
         </TabList>
       </div>
 
-      <div className={styles.body}>
+      {tab !== "report" && <div className={styles.body}>
         {tab === "scorer" && (
           <>
             {loadError && (
@@ -839,8 +839,7 @@ export default function ModelMigrationPanel() {
           </>
         )}
 
-        {tab === "report" && false /* report rendered outside body */}
-      </div>
+      </div>}
 
       {tab === "report" && (
         <>
