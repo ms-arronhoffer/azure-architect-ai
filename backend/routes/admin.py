@@ -3,7 +3,7 @@ import time
 from typing import Any
 
 from fastapi import APIRouter, Depends
-from sqlalchemy import func, select, union
+from sqlalchemy import func, select, text, union
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from auth.entra import require_metrics_role
@@ -32,19 +32,40 @@ async def get_metrics(
     )).all()
     mode_counts = [{"mode": r.mode, "count": r.count} for r in mode_rows]
 
-    # DAU — last 30 days, bucketed by day (updated_at reflects last activity, not just creation)
-    day_bucket = (Conversation.updated_at // 86400000 * 86400000).label("day")
-    dau_rows = (await db.execute(
+    # DAU — last 30 days, bucketed by day. Union conversations + token usage so days with
+    # token activity but no saved conversation record still appear.
+    conv_day_q = select(
+        (Conversation.updated_at // 86400000 * 86400000).label("day"),
+        Conversation.user_id.label("user_id"),
+    ).where(Conversation.updated_at >= thirty_days_ago_ms, Conversation.user_id.isnot(None))
+    token_day_q = select(
+        (TokenUsage.created_at // 86400000 * 86400000).label("day"),
+        TokenUsage.user_id.label("user_id"),
+    ).where(TokenUsage.created_at >= thirty_days_ago_ms, TokenUsage.user_id.isnot(None))
+    combined_days = union(conv_day_q, token_day_q).subquery()
+    dau_user_rows = (await db.execute(
         select(
-            day_bucket,
-            func.count(func.distinct(Conversation.user_id)).label("users"),
+            combined_days.c.day,
+            func.count(func.distinct(combined_days.c.user_id)).label("users"),
+        )
+        .group_by(combined_days.c.day)
+        .order_by(combined_days.c.day)
+    )).all()
+
+    conv_count_rows = (await db.execute(
+        select(
+            (Conversation.updated_at // 86400000 * 86400000).label("day"),
             func.count().label("conversations"),
         )
         .where(Conversation.updated_at >= thirty_days_ago_ms)
-        .group_by(day_bucket)
-        .order_by(day_bucket)
+        .group_by(text("day"))
+        .order_by(text("day"))
     )).all()
-    dau = [{"day": r.day, "users": r.users, "conversations": r.conversations} for r in dau_rows]
+    conv_count_by_day = {r.day: r.conversations for r in conv_count_rows}
+    dau = [
+        {"day": r.day, "users": r.users, "conversations": conv_count_by_day.get(r.day, 0)}
+        for r in dau_user_rows
+    ]
 
     # Top users by conversation count
     user_rows = (await db.execute(
