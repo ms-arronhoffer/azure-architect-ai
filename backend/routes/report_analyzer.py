@@ -81,7 +81,7 @@ class MarkdownToPdfRequest(BaseModel):
 
 
 @router.post("/markdown-to-pdf")
-async def markdown_to_pdf(req: MarkdownToPdfRequest) -> Response:
+def markdown_to_pdf(req: MarkdownToPdfRequest) -> Response:
     """Convert an already-generated org tracker markdown string to a PDF download."""
     try:
         pdf_bytes = build_org_report_pdf(req.markdown, req.generated)

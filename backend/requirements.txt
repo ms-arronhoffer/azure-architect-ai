@@ -23,6 +23,7 @@ sqlalchemy[asyncio]>=2.0
 asyncpg>=0.29
 aiosqlite>=0.20
 fpdf2>=2.7
+playwright>=1.44
 alembic>=1.13
 cryptography>=43
 pyjwt[crypto]>=2.9
