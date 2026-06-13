@@ -901,8 +901,13 @@ def generate_org_report(
 
 _EMOJI_MAP = {
     "⚫": "[OD]", "🔴": "[CR]", "🟡": "[WN]", "🟢": "[OK]",
-    "⚠️": "[!]", "🏆": "[TOP]", "—": "-", "\u200b": "",
-    "\u2014": "-", "\u2013": "-", "•": "-", "\u2022": "-",
+    "⚠️": "[!]", "🏆": "[TOP]",
+    "\u2014": "-", "\u2013": "-", "\u200b": "",   # em-dash, en-dash, ZWSP
+    "•": "-", "\u2022": "-",                        # bullets
+    "≤": "<=", "≥": ">=",                           # math comparators
+    "→": "->", "←": "<-", "↑": "^", "↓": "v",
+    "\u00a0": " ",                                   # non-breaking space
+    "–": "-", "—": "-",
 }
 
 _EMOJI_RE = re.compile(
@@ -921,6 +926,8 @@ def _pdf_clean(text: str) -> str:
     text = _EMOJI_RE.sub("", text)
     text = re.sub(r"\*\*(.+?)\*\*", r"\1", text)   # strip bold markers
     text = re.sub(r"`(.+?)`", r"\1", text)           # strip inline code
+    # Drop any remaining characters outside Latin-1 to avoid fpdf font errors
+    text = text.encode("latin-1", errors="ignore").decode("latin-1")
     return text.strip()
 
 
