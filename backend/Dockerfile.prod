@@ -19,8 +19,10 @@ WORKDIR /app
 COPY backend/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Playwright Chromium for PDF generation (report_analyzer_service)
-RUN playwright install chromium --with-deps
+# Playwright Chromium for PDF generation — install to a fixed path so the
+# non-root 'app' user can find it (default would be /root/.cache/ms-playwright).
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+RUN playwright install chromium --with-deps && chmod -R 755 /ms-playwright
 
 FROM deps AS runtime
 
