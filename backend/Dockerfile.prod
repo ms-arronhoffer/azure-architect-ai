@@ -19,6 +19,9 @@ WORKDIR /app
 COPY backend/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Playwright Chromium for PDF generation (report_analyzer_service)
+RUN playwright install chromium --with-deps
+
 FROM deps AS runtime
 
 # Non-root user for runtime

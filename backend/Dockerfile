@@ -27,6 +27,9 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Playwright Chromium for PDF generation (report_analyzer_service)
+RUN playwright install chromium --with-deps
+
 COPY . .
 
 EXPOSE 8000
