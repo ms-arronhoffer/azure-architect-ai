@@ -1,4 +1,6 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import {
   makeStyles,
   tokens,
@@ -16,11 +18,6 @@ import {
   Option,
   Input,
   Divider,
-  Accordion,
-  AccordionHeader,
-  AccordionItem,
-  AccordionPanel,
-  Select,
 } from "@fluentui/react-components";
 import { ArrowSwapRegular, CalculatorRegular, DocumentTableRegular, ArrowUploadRegular, ArrowDownloadRegular } from "@fluentui/react-icons";
 import { apiFetch } from "../config/api";
@@ -71,74 +68,10 @@ interface PtuResult {
   };
 }
 
-interface ReportDeployment {
-  subscription_id: string;
-  subscription_name: string;
-  model: string;
-  normalized_model: string;
-  version: string;
-  retirement_date: string;
-  days_until_retirement: number | null;
-  urgency: "critical" | "high" | "medium" | "low" | "unknown";
-  peak_usage: string;
-  peak_usage_score: number;
-  upgrade_option: string;
-  unified: string;
-  regions: string[];
-  region_count: number;
-  migration_options: Replacement[];
-  recommendation: string;
-}
-
-interface ReportCustomer {
-  tpid: string;
-  tp_name: string;
-  csam: string;
-  priority: "critical" | "high" | "medium" | "low" | "unknown";
-  deployments: ReportDeployment[];
-}
-
-interface ReportModelSummary {
-  model: string;
-  normalized_id: string;
-  retirement_date: string;
-  days_until_retirement: number | null;
-  urgency: string;
-  row_count: number;
-  customer_count: number;
-  migration_options: Replacement[];
-}
-
-interface ReportResult {
-  summary: {
-    analysis_date: string;
-    total_rows: number;
-    unique_customers: number;
-    unique_models: number;
-    unique_deployments: number;
-    critical: number;
-    high: number;
-    medium: number;
-    low: number;
-    unknown: number;
-    high_usage_urgent: number;
-  };
-  customers: ReportCustomer[];
-  model_summary: ReportModelSummary[];
-}
-
 const RISK_COLORS: Record<string, string> = {
   low: tokens.colorPaletteGreenForeground1,
   medium: tokens.colorPaletteYellowForeground1,
   high: tokens.colorStatusDangerForeground1,
-};
-
-const URGENCY_COLORS: Record<string, string> = {
-  critical: tokens.colorStatusDangerForeground1,
-  high: tokens.colorPaletteRedForeground1,
-  medium: tokens.colorPaletteYellowForeground1,
-  low: tokens.colorPaletteGreenForeground1,
-  unknown: tokens.colorNeutralForeground3,
 };
 
 const useStyles = makeStyles({
@@ -276,90 +209,71 @@ export default function ModelMigrationPanel() {
   const [tab, setTab] = useState<"scorer" | "ptu" | "report">("scorer");
 
   // ── Report Analyzer ──────────────────────────────────────────────────────────
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const [reportText, setReportText] = useState("");
-  const [analyzing, setAnalyzing] = useState(false);
-  const [reportError, setReportError] = useState<string | null>(null);
-  const [reportResult, setReportResult] = useState<ReportResult | null>(null);
-  const [reportFileName, setReportFileName] = useState<string | null>(null);
-  const [exportFormat, setExportFormat] = useState<"pptx" | "docx" | "pdf">("pptx");
-  const [exporting, setExporting] = useState(false);
+  const mlInputRef = useRef<HTMLInputElement>(null);
+  const acrInputRef = useRef<HTMLInputElement>(null);
+  const ouInputRef = useRef<HTMLInputElement>(null);
+  const [mlFile, setMlFile] = useState<File | null>(null);
+  const [acrFile, setAcrFile] = useState<File | null>(null);
+  const [ouFile, setOuFile] = useState<File | null>(null);
+  const [generating, setGenerating] = useState(false);
+  const [orgReportError, setOrgReportError] = useState<string | null>(null);
+  const [orgReportMarkdown, setOrgReportMarkdown] = useState<string | null>(null);
+  const [orgReportGenerated, setOrgReportGenerated] = useState<string | null>(null);
 
-  const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setReportFileName(file.name);
-    const reader = new FileReader();
-    reader.onload = (ev) => setReportText(ev.target?.result as string ?? "");
-    reader.readAsText(file);
-  }, []);
-
-  const runAnalysis = useCallback(async () => {
-    if (!reportText.trim()) return;
-    setAnalyzing(true);
-    setReportError(null);
-    setReportResult(null);
+  const runOrgReport = useCallback(async () => {
+    if (!mlFile || !acrFile || !ouFile) return;
+    setGenerating(true);
+    setOrgReportError(null);
+    setOrgReportMarkdown(null);
     try {
-      const r = await apiFetch("/api/model-migration/analyze-report", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ report: reportText }),
-      });
+      const form = new FormData();
+      form.append("manager_list", mlFile, mlFile.name);
+      form.append("acr_data", acrFile, acrFile.name);
+      form.append("ou_data", ouFile, ouFile.name);
+      const r = await apiFetch("/api/report-analyzer/generate", { method: "POST", body: form });
       if (!r.ok) {
         const t = await r.text().catch(() => r.statusText);
         throw new Error(`${r.status}: ${t}`);
       }
-      setReportResult(await r.json() as ReportResult);
+      const data = await r.json() as { markdown: string; generated: string };
+      setOrgReportMarkdown(data.markdown);
+      setOrgReportGenerated(data.generated);
     } catch (e) {
-      setReportError(e instanceof Error ? e.message : String(e));
+      setOrgReportError(e instanceof Error ? e.message : String(e));
     } finally {
-      setAnalyzing(false);
+      setGenerating(false);
     }
-  }, [reportText]);
+  }, [mlFile, acrFile, ouFile]);
 
-  const exportReport = useCallback(() => {
-    if (!reportResult) return;
-    const csvEscape = (v: unknown) => {
-      const s = String(v ?? "");
-      return s.includes(",") || s.includes('"') || s.includes("\n") ? `"${s.replace(/"/g, '""')}"` : s;
-    };
-    const headers = [
-      "Priority", "Customer", "TPID", "CSAM",
-      "Subscription", "Model", "Retirement Date", "Days Until Retirement",
-      "Urgency", "Peak Usage", "Upgrade Option", "Unified",
-      "Regions", "Region Count",
-      "Top Migration Candidate", "Migration Score", "Migration Risk",
-      "Recommendation",
-    ];
-    const rows = reportResult.customers.flatMap((c) =>
-      c.deployments.map((d) => [
-        c.priority, c.tp_name, c.tpid, c.csam,
-        d.subscription_name, d.model, d.retirement_date, d.days_until_retirement ?? "",
-        d.urgency, d.peak_usage, d.upgrade_option, d.unified,
-        d.regions.join("; "), d.region_count,
-        d.migration_options[0]?.model ?? "", d.migration_options[0]?.score ?? "", d.migration_options[0]?.risk_level ?? "",
-        d.recommendation,
-      ].map(csvEscape).join(","))
-    );
-    const csv = [headers.join(","), ...rows].join("\n");
-    const blob = new Blob([csv], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `migration-report-${reportResult.summary.analysis_date}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-  }, [reportResult]);
-
-  const exportDocument = useCallback(async () => {
-    if (!reportResult) return;
-    setExporting(true);
-    setReportError(null);
+  const downloadOrgReport = useCallback(async () => {
+    if (!mlFile || !acrFile || !ouFile) return;
     try {
-      const r = await apiFetch("/api/model-migration/export-document", {
+      const form = new FormData();
+      form.append("manager_list", mlFile, mlFile.name);
+      form.append("acr_data", acrFile, acrFile.name);
+      form.append("ou_data", ouFile, ouFile.name);
+      const r = await apiFetch("/api/report-analyzer/generate/download", { method: "POST", body: form });
+      if (!r.ok) throw new Error(`${r.status}`);
+      const blob = await r.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      const today = new Date().toISOString().slice(0, 10);
+      a.download = `hls-csa-org-tracker-${today}.md`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      setOrgReportError(e instanceof Error ? e.message : String(e));
+    }
+  }, [mlFile, acrFile, ouFile]);
+
+  const downloadOrgPdf = useCallback(async () => {
+    if (!orgReportMarkdown) return;
+    try {
+      const r = await apiFetch("/api/report-analyzer/markdown-to-pdf", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ data: reportResult, format: exportFormat }),
+        body: JSON.stringify({ markdown: orgReportMarkdown, generated: orgReportGenerated ?? "" }),
       });
       if (!r.ok) {
         const t = await r.text().catch(() => r.statusText);
@@ -369,15 +283,14 @@ export default function ModelMigrationPanel() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `migration-report-${reportResult.summary.analysis_date}.${exportFormat}`;
+      const today = new Date().toISOString().slice(0, 10);
+      a.download = `hls-csa-org-tracker-${today}.pdf`;
       a.click();
       URL.revokeObjectURL(url);
     } catch (e) {
-      setReportError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setExporting(false);
+      setOrgReportError(e instanceof Error ? e.message : String(e));
     }
-  }, [reportResult, exportFormat]);
+  }, [orgReportMarkdown, orgReportGenerated]);
 
   // ── Migration Scorer ─────────────────────────────────────────────────────────
   const [source, setSource] = useState("");
@@ -845,216 +758,217 @@ export default function ModelMigrationPanel() {
         <>
           <div style={{ flexShrink: 0, padding: "12px 24px 0" }}>
             <Card>
-              <div style={{ display: "flex", flexDirection: "column", gap: "12px", padding: "4px 0" }}>
-                <Text weight="semibold">Upload Retirement Report</Text>
-                <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
-                  Upload a CSV or TSV Azure OpenAI model retirement report.
-                </Text>
-                <div style={{ display: "flex", gap: "12px", alignItems: "center", flexWrap: "wrap" }}>
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept=".csv,.tsv,.txt"
-                    style={{ display: "none" }}
-                    onChange={handleFileSelect}
-                  />
-                  <Button
-                    icon={<ArrowUploadRegular />}
-                    onClick={() => fileInputRef.current?.click()}
-                  >
-                    {reportFileName ?? "Choose file…"}
-                  </Button>
+              <div style={{ display: "flex", flexDirection: "column", gap: "14px", padding: "4px 0" }}>
+                <div>
+                  <Text weight="semibold">Generate HLS CSA Org Tracker Report</Text>
+                  <Text size={200} style={{ display: "block", color: tokens.colorNeutralForeground3, marginTop: "4px" }}>
+                    Upload three source files (xlsx or csv) to generate the full 9-section org tracker report.
+                  </Text>
+                </div>
+
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "12px" }}>
+                  {/* Manager List */}
+                  <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                    <Text size={200} weight="semibold" style={{ color: tokens.colorNeutralForeground2 }}>
+                      1. Manager List
+                    </Text>
+                    <Text size={100} style={{ color: tokens.colorNeutralForeground3 }}>
+                      TPID · Account Name · Azure CSA M
+                    </Text>
+                    <input
+                      ref={mlInputRef}
+                      type="file"
+                      accept=".csv,.xlsx"
+                      style={{ display: "none" }}
+                      onChange={(e) => setMlFile(e.target.files?.[0] ?? null)}
+                    />
+                    <Button
+                      icon={<ArrowUploadRegular />}
+                      appearance={mlFile ? "subtle" : "secondary"}
+                      style={mlFile ? { color: tokens.colorPaletteGreenForeground1 } : undefined}
+                      onClick={() => mlInputRef.current?.click()}
+                    >
+                      {mlFile ? mlFile.name : "Choose file…"}
+                    </Button>
+                  </div>
+
+                  {/* ACR Data */}
+                  <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                    <Text size={200} weight="semibold" style={{ color: tokens.colorNeutralForeground2 }}>
+                      2. ACR Data
+                    </Text>
+                    <Text size={100} style={{ color: tokens.colorNeutralForeground3 }}>
+                      Power BI multi-month export (FY26-Jul…FY26-Jun)
+                    </Text>
+                    <input
+                      ref={acrInputRef}
+                      type="file"
+                      accept=".csv,.xlsx"
+                      style={{ display: "none" }}
+                      onChange={(e) => setAcrFile(e.target.files?.[0] ?? null)}
+                    />
+                    <Button
+                      icon={<ArrowUploadRegular />}
+                      appearance={acrFile ? "subtle" : "secondary"}
+                      style={acrFile ? { color: tokens.colorPaletteGreenForeground1 } : undefined}
+                      onClick={() => acrInputRef.current?.click()}
+                    >
+                      {acrFile ? acrFile.name : "Choose file…"}
+                    </Button>
+                  </div>
+
+                  {/* OU Data */}
+                  <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                    <Text size={200} weight="semibold" style={{ color: tokens.colorNeutralForeground2 }}>
+                      3. OU Deployments
+                    </Text>
+                    <Text size={100} style={{ color: tokens.colorNeutralForeground3 }}>
+                      Customer deployment inventory (us_hls.csv)
+                    </Text>
+                    <input
+                      ref={ouInputRef}
+                      type="file"
+                      accept=".csv,.xlsx"
+                      style={{ display: "none" }}
+                      onChange={(e) => setOuFile(e.target.files?.[0] ?? null)}
+                    />
+                    <Button
+                      icon={<ArrowUploadRegular />}
+                      appearance={ouFile ? "subtle" : "secondary"}
+                      style={ouFile ? { color: tokens.colorPaletteGreenForeground1 } : undefined}
+                      onClick={() => ouInputRef.current?.click()}
+                    >
+                      {ouFile ? ouFile.name : "Choose file…"}
+                    </Button>
+                  </div>
+                </div>
+
+                <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap", paddingTop: "4px" }}>
                   <Button
                     appearance="primary"
-                    icon={analyzing ? <Spinner size="tiny" /> : <DocumentTableRegular />}
-                    disabled={!reportText.trim() || analyzing}
-                    onClick={runAnalysis}
+                    icon={generating ? <Spinner size="tiny" /> : <DocumentTableRegular />}
+                    disabled={!mlFile || !acrFile || !ouFile || generating}
+                    onClick={runOrgReport}
                   >
-                    Analyze Report
+                    {generating ? "Generating…" : "Generate Report"}
                   </Button>
-                  {reportResult && (
+                  {orgReportMarkdown && (
                     <>
-                      <Select
-                        value={exportFormat}
-                        onChange={(_, d) => setExportFormat(d.value as "pptx" | "docx" | "pdf")}
-                        style={{ minWidth: "160px" }}
-                      >
-                        <option value="pptx">PowerPoint (PPTX)</option>
-                        <option value="docx">Word Document (DOCX)</option>
-                        <option value="pdf">PDF</option>
-                      </Select>
                       <Button
-                        appearance="primary"
-                        icon={exporting ? <Spinner size="tiny" /> : <ArrowDownloadRegular />}
-                        disabled={exporting}
-                        onClick={exportDocument}
+                        appearance="subtle"
+                        icon={<ArrowDownloadRegular />}
+                        onClick={downloadOrgReport}
                       >
-                        {exporting ? "Generating…" : "Export Document"}
+                        Download .md
                       </Button>
                       <Button
                         appearance="subtle"
                         icon={<ArrowDownloadRegular />}
-                        onClick={exportReport}
-                        title="Export as CSV"
+                        onClick={downloadOrgPdf}
                       >
-                        CSV
+                        Download PDF
                       </Button>
                     </>
                   )}
-                  {reportText && !reportResult && (
+                  {orgReportGenerated && (
                     <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
-                      {reportText.trim().split("\n").length} lines loaded
+                      Generated {new Date(orgReportGenerated).toLocaleString()}
                     </Text>
                   )}
                 </div>
               </div>
             </Card>
 
-            {reportError && (
-              <MessageBar intent="error">
-                <MessageBarBody>{reportError}</MessageBarBody>
+            {orgReportError && (
+              <MessageBar intent="error" style={{ marginTop: "12px" }}>
+                <MessageBarBody>{orgReportError}</MessageBarBody>
               </MessageBar>
             )}
           </div>
-          <div style={{ flex: 1, overflowY: "auto", padding: "12px 24px 24px", display: "flex", flexDirection: "column", gap: "20px" }}>
-            {reportResult && (
-              <>
-                {/* Summary row */}
-                <div className={styles.ptuGrid}>
-                  {[
-                    { label: "Customers", value: reportResult.summary.unique_customers },
-                    { label: "Deployments", value: reportResult.summary.unique_deployments },
-                    { label: "Models at Risk", value: reportResult.summary.unique_models },
-                    { label: "Already Retired", value: reportResult.summary.critical, color: URGENCY_COLORS.critical },
-                    { label: "Retire ≤30 Days", value: reportResult.summary.high, color: URGENCY_COLORS.high },
-                    { label: "Retire ≤90 Days", value: reportResult.summary.medium, color: URGENCY_COLORS.medium },
-                    { label: "High-Usage Urgent", value: reportResult.summary.high_usage_urgent, color: URGENCY_COLORS.critical },
-                  ].map(({ label, value, color }) => (
-                    <Card className={styles.ptuCard} key={label}>
-                      <div className={styles.ptuValue} style={color ? { color } : undefined}>{value}</div>
-                      <div className={styles.ptuLabel}>{label}</div>
-                    </Card>
-                  ))}
+
+          {orgReportMarkdown && (
+            <div style={{ flex: 1, overflowY: "auto", padding: "12px 24px 24px" }}>
+              <Card style={{ padding: "24px 32px" }}>
+                <div style={{
+                  fontSize: "13px",
+                  lineHeight: "1.6",
+                  fontFamily: "inherit",
+                }}>
+                  <ReactMarkdown
+                    remarkPlugins={[remarkGfm]}
+                    components={{
+                      table: ({ children }) => (
+                        <div style={{ overflowX: "auto", marginBottom: "16px" }}>
+                          <table style={{
+                            width: "100%",
+                            borderCollapse: "collapse",
+                            fontSize: "12px",
+                          }}>{children}</table>
+                        </div>
+                      ),
+                      th: ({ children }) => (
+                        <th style={{
+                          textAlign: "left",
+                          padding: "6px 10px",
+                          fontWeight: 600,
+                          fontSize: "11px",
+                          textTransform: "uppercase",
+                          letterSpacing: "0.05em",
+                          color: tokens.colorNeutralForeground3,
+                          borderBottom: `1px solid ${tokens.colorNeutralStroke2}`,
+                          whiteSpace: "nowrap",
+                          background: tokens.colorNeutralBackground2,
+                        }}>{children}</th>
+                      ),
+                      td: ({ children }) => (
+                        <td style={{
+                          padding: "7px 10px",
+                          borderBottom: `1px solid ${tokens.colorNeutralStroke2}`,
+                          verticalAlign: "middle",
+                        }}>{children}</td>
+                      ),
+                      h1: ({ children }) => (
+                        <h1 style={{ fontSize: "18px", fontWeight: 700, margin: "24px 0 12px", color: tokens.colorNeutralForeground1 }}>{children}</h1>
+                      ),
+                      h2: ({ children }) => (
+                        <h2 style={{ fontSize: "15px", fontWeight: 600, margin: "20px 0 10px", color: tokens.colorNeutralForeground1 }}>{children}</h2>
+                      ),
+                      h3: ({ children }) => (
+                        <h3 style={{ fontSize: "13px", fontWeight: 600, margin: "14px 0 6px", color: tokens.colorNeutralForeground2 }}>{children}</h3>
+                      ),
+                      code: ({ children }) => (
+                        <code style={{
+                          fontFamily: "monospace",
+                          fontSize: "11px",
+                          background: tokens.colorNeutralBackground3,
+                          padding: "1px 4px",
+                          borderRadius: "3px",
+                        }}>{children}</code>
+                      ),
+                      blockquote: ({ children }) => (
+                        <blockquote style={{
+                          margin: "12px 0",
+                          padding: "10px 14px",
+                          borderLeft: `3px solid ${tokens.colorBrandForeground1}`,
+                          background: tokens.colorNeutralBackground2,
+                          borderRadius: "0 4px 4px 0",
+                          fontStyle: "normal",
+                        }}>{children}</blockquote>
+                      ),
+                      strong: ({ children }) => (
+                        <strong style={{ fontWeight: 600, color: tokens.colorNeutralForeground1 }}>{children}</strong>
+                      ),
+                      p: ({ children }) => (
+                        <p style={{ margin: "6px 0" }}>{children}</p>
+                      ),
+                    }}
+                  >
+                    {orgReportMarkdown}
+                  </ReactMarkdown>
                 </div>
-
-                <Divider>Model Summary</Divider>
-                <Card style={{ padding: 0 }}>
-                  <div className={styles.tableWrap}>
-                    <table className={styles.table}>
-                      <thead>
-                        <tr>
-                          <th className={styles.th}>Model</th>
-                          <th className={styles.th}>Urgency</th>
-                          <th className={styles.th}>Retires</th>
-                          <th className={styles.th}>Days</th>
-                          <th className={styles.th}>Customers</th>
-                          <th className={styles.th}>Rows</th>
-                          <th className={styles.th}>Top Migration</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {reportResult.model_summary.map((m) => (
-                          <tr key={m.model}>
-                            <td className={styles.td}>
-                              <Text style={{ fontFamily: "monospace", fontSize: "12px" }}>{m.model}</Text>
-                            </td>
-                            <td className={styles.td}>
-                              <Badge
-                                color={m.urgency === "critical" || m.urgency === "high" ? "danger" : m.urgency === "medium" ? "warning" : "success"}
-                                appearance="filled"
-                              >
-                                {m.urgency.toUpperCase()}
-                              </Badge>
-                            </td>
-                            <td className={styles.td}>{m.retirement_date}</td>
-                            <td className={styles.td} style={{ color: URGENCY_COLORS[m.urgency] }}>
-                              {m.days_until_retirement !== null ? m.days_until_retirement : "—"}
-                            </td>
-                            <td className={styles.td}>{m.customer_count}</td>
-                            <td className={styles.td}>{m.row_count}</td>
-                            <td className={styles.td}>
-                              {m.migration_options[0]
-                                ? <Text style={{ fontFamily: "monospace", fontSize: "11px" }}>
-                                    {m.migration_options[0].model} ({m.migration_options[0].score})
-                                  </Text>
-                                : <Text style={{ color: tokens.colorNeutralForeground3, fontSize: "11px" }}>None found</Text>
-                              }
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </Card>
-
-                <Divider>Customer Recommendations</Divider>
-                <Accordion multiple collapsible>
-                  {reportResult.customers.map((c) => (
-                    <AccordionItem key={c.tpid} value={c.tpid}>
-                      <AccordionHeader>
-                        <div style={{ display: "flex", alignItems: "center", gap: "10px", flex: 1 }}>
-                          <Badge
-                            color={c.priority === "critical" || c.priority === "high" ? "danger" : c.priority === "medium" ? "warning" : "success"}
-                            appearance="filled"
-                          >
-                            {c.priority.toUpperCase()}
-                          </Badge>
-                          <Text weight="semibold">{c.tp_name}</Text>
-                          <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
-                            TPID {c.tpid} · {c.deployments.length} deployment{c.deployments.length !== 1 ? "s" : ""}
-                            {c.csam ? ` · CSAM: ${c.csam}` : ""}
-                          </Text>
-                        </div>
-                      </AccordionHeader>
-                      <AccordionPanel>
-                        <div style={{ display: "flex", flexDirection: "column", gap: "12px", paddingBottom: "8px" }}>
-                          {c.deployments.map((d, i) => (
-                            <Card key={`${d.subscription_id}-${d.model}-${i}`} style={{ borderLeft: `3px solid ${URGENCY_COLORS[d.urgency]}` }}>
-                              <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                                <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
-                                  <Badge
-                                    color={d.urgency === "critical" || d.urgency === "high" ? "danger" : d.urgency === "medium" ? "warning" : "success"}
-                                    appearance="tint"
-                                  >
-                                    {d.urgency.toUpperCase()}
-                                  </Badge>
-                                  <Text weight="semibold" style={{ fontFamily: "monospace" }}>{d.model}</Text>
-                                  <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
-                                    {d.subscription_name} · retires {d.retirement_date}
-                                    {d.days_until_retirement !== null
-                                      ? ` (${d.days_until_retirement < 0 ? "PAST" : `${d.days_until_retirement}d`})`
-                                      : ""}
-                                  </Text>
-                                </div>
-                                <div style={{ display: "flex", gap: "16px", flexWrap: "wrap" }}>
-                                  <Text size={200}><strong>Usage:</strong> {d.peak_usage}</Text>
-                                  <Text size={200}><strong>Regions:</strong> {d.regions.join(", ")}</Text>
-                                  <Text size={200}><strong>Upgrade:</strong> {d.upgrade_option || "—"}</Text>
-                                  <Text size={200}><strong>Unified:</strong> {d.unified}</Text>
-                                </div>
-                                {d.migration_options.length > 0 && (
-                                  <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-                                    {d.migration_options.map((m) => (
-                                      <Badge key={m.model} appearance="outline" color={m.risk_level === "low" ? "success" : m.risk_level === "medium" ? "warning" : "danger"}>
-                                        {m.model} · {m.score}
-                                      </Badge>
-                                    ))}
-                                  </div>
-                                )}
-                                <Text size={200} style={{ color: tokens.colorNeutralForeground2, lineHeight: "1.5" }}>
-                                  {d.recommendation}
-                                </Text>
-                              </div>
-                            </Card>
-                          ))}
-                        </div>
-                      </AccordionPanel>
-                    </AccordionItem>
-                  ))}
-                </Accordion>
-              </>
-            )}
-          </div>
+              </Card>
+            </div>
+          )}
         </>
       )}
     </div>

@@ -34,6 +34,7 @@ from routes.security import router as security_router  # noqa: E402
 from routes.settings import router as settings_router  # noqa: E402
 from routes.strategy import router as strategy_router  # noqa: E402
 from routes.model_migration import router as model_migration_router  # noqa: E402
+from routes.report_analyzer import router as report_analyzer_router  # noqa: E402
 from routes.whats_new import router as whats_new_router  # noqa: E402
 
 
@@ -96,6 +97,7 @@ app.include_router(iac_router, prefix="/api")
 app.include_router(cost_router, prefix="/api")
 app.include_router(security_router, prefix="/api")
 app.include_router(model_migration_router, prefix="/api")
+app.include_router(report_analyzer_router, prefix="/api")
 app.include_router(whats_new_router, prefix="/api")
 app.include_router(strategy_router, prefix="/api")
 app.include_router(admin_router, prefix="/api")
