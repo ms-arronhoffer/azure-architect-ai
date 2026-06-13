@@ -902,7 +902,7 @@ def generate_org_report(
 _EMOJI_MAP = {
     "⚫": "[OD]", "🔴": "[CR]", "🟡": "[WN]", "🟢": "[OK]",
     "⚠️": "[!]", "🏆": "[TOP]", "—": "-", "\u200b": "",
-    "\u2014": "-", "\u2013": "-",
+    "\u2014": "-", "\u2013": "-", "•": "-", "\u2022": "-",
 }
 
 _EMOJI_RE = re.compile(
@@ -1053,7 +1053,7 @@ def build_org_report_pdf(markdown: str, generated: str = "") -> bytes:
             pdf.set_font("Helvetica", size=9)
             pdf.set_text_color(*DARK)
             pdf.set_x(MARGIN + 4)
-            pdf.multi_cell(0, 5, f"• {_pdf_clean(line[2:])}")
+            pdf.multi_cell(0, 5, f"- {_pdf_clean(line[2:])}")
 
         elif line.strip() in ("---", "***", "___"):
             pdf.set_draw_color(*MUTED)
