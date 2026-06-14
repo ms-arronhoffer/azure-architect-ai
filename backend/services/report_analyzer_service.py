@@ -1372,7 +1372,7 @@ def build_org_report_pptx(org_data: dict[str, Any], today: date) -> bytes:
         for ri, acct in enumerate(top5):
             risk_lvl = acct.get("level", "ok")
             rc = _RISK_COLORS.get(risk_lvl, _C_GRAY)
-            models = ", ".join(m.get("model", "") for m in (acct.get("atRiskModels") or [])[:3])
+            models = ", ".join((acct.get("atRiskModels") or [])[:3])
             _table_data_row(tbl_top5, ri + 1, [
                 acct.get("name", ""),
                 _fmt_acr(acct.get("monthlyAcr", 0)),
@@ -1442,7 +1442,7 @@ def build_org_report_pptx(org_data: dict[str, Any], today: date) -> bytes:
     else:
         for ri, acct in enumerate(overdue_accounts[:n_rows3]):
             dirs = ", ".join(acct.get("directors") or [])
-            models = ", ".join(m.get("model", "") for m in (acct.get("atRiskModels") or [])[:4])
+            models = ", ".join((acct.get("atRiskModels") or [])[:4])
             days = acct.get("minDays")
             _table_data_row(tbl3, ri + 1, [
                 acct.get("name", ""),
@@ -1474,7 +1474,7 @@ def build_org_report_pptx(org_data: dict[str, Any], today: date) -> bytes:
         _table_data_row(tbl4l, 1, ["No overdue accounts", "", ""])
     else:
         for ri, acct in enumerate(overdue_accounts[:n_od]):
-            models = ", ".join(m.get("model", "") for m in (acct.get("atRiskModels") or [])[:2])
+            models = ", ".join((acct.get("atRiskModels") or [])[:2])
             _table_data_row(tbl4l, ri + 1, [
                 acct.get("name", ""),
                 _fmt_acr(acct.get("monthlyAcr", 0)),
@@ -1496,7 +1496,7 @@ def build_org_report_pptx(org_data: dict[str, Any], today: date) -> bytes:
         _table_data_row(tbl4r, 1, ["No critical accounts", "", ""])
     else:
         for ri, acct in enumerate(critical_accounts[:n_cr]):
-            models = ", ".join(m.get("model", "") for m in (acct.get("atRiskModels") or [])[:2])
+            models = ", ".join((acct.get("atRiskModels") or [])[:2])
             _table_data_row(tbl4r, ri + 1, [
                 acct.get("name", ""),
                 _fmt_acr(acct.get("monthlyAcr", 0)),
