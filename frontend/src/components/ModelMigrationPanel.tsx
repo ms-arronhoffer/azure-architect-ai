@@ -307,6 +307,31 @@ export default function ModelMigrationPanel() {
     }
   }, [orgReportMarkdown, orgReportGenerated]);
 
+  const downloadRecsPdf = useCallback(async () => {
+    if (!orgRecsMarkdown) return;
+    try {
+      const r = await apiFetch("/api/report-analyzer/markdown-to-pdf", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ markdown: orgRecsMarkdown, generated: orgReportGenerated ?? "" }),
+      });
+      if (!r.ok) {
+        const t = await r.text().catch(() => r.statusText);
+        throw new Error(`${r.status}: ${t}`);
+      }
+      const blob = await r.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      const today = new Date().toISOString().slice(0, 10);
+      a.download = `hls-csa-model-iq-recommendations-${today}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      setOrgReportError(e instanceof Error ? e.message : String(e));
+    }
+  }, [orgRecsMarkdown, orgReportGenerated]);
+
   // ── Migration Scorer ─────────────────────────────────────────────────────────
   const [source, setSource] = useState("");
   const [target, setTarget] = useState("");
@@ -884,13 +909,22 @@ export default function ModelMigrationPanel() {
                         Download PDF
                       </Button>
                       {orgRecsMarkdown && (
-                        <Button
-                          appearance="subtle"
-                          icon={<ArrowDownloadRegular />}
-                          onClick={downloadOrgRecommendations}
-                        >
-                          Download Recommendations
-                        </Button>
+                        <>
+                          <Button
+                            appearance="subtle"
+                            icon={<ArrowDownloadRegular />}
+                            onClick={downloadOrgRecommendations}
+                          >
+                            Download Recommendations
+                          </Button>
+                          <Button
+                            appearance="subtle"
+                            icon={<ArrowDownloadRegular />}
+                            onClick={downloadRecsPdf}
+                          >
+                            Recommendations PDF
+                          </Button>
+                        </>
                       )}
                     </>
                   )}

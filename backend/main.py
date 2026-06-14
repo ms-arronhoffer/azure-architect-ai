@@ -25,16 +25,16 @@ from routes.health import router as health_router  # noqa: E402
 from routes.iac import router as iac_router  # noqa: E402
 from routes.improve import router as improve_router  # noqa: E402
 from routes.intake import router as intake_router  # noqa: E402
+from routes.model_migration import router as model_migration_router  # noqa: E402
 from routes.parse import router as parse_router  # noqa: E402
 from routes.presentation import router as presentation_router  # noqa: E402
 from routes.rag import router as rag_router  # noqa: E402
 from routes.reference import router as reference_router  # noqa: E402
+from routes.report_analyzer import router as report_analyzer_router  # noqa: E402
 from routes.scan import router as scan_router  # noqa: E402
 from routes.security import router as security_router  # noqa: E402
 from routes.settings import router as settings_router  # noqa: E402
 from routes.strategy import router as strategy_router  # noqa: E402
-from routes.model_migration import router as model_migration_router  # noqa: E402
-from routes.report_analyzer import router as report_analyzer_router  # noqa: E402
 from routes.whats_new import router as whats_new_router  # noqa: E402
 
 

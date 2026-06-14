@@ -13,6 +13,7 @@ All core risk logic is ported from model-iq/mcp/model-data/src/scorecard.ts.
 """
 from __future__ import annotations
 
+import contextlib
 import csv
 import io
 import json
@@ -372,10 +373,8 @@ def classify_risk(
         ret_date = ret_lookup.get(key)
     if ret_date is None and pbi_date:
         cleaned = re.sub(r"^No earlier than\s+", "", pbi_date, flags=re.IGNORECASE).strip()[:10]
-        try:
+        with contextlib.suppress(ValueError):
             ret_date = date.fromisoformat(cleaned)
-        except ValueError:
-            pass
 
     if ret_date is None:
         return "ok", None
@@ -1018,7 +1017,7 @@ Produce a markdown report with these exact sections:
 *Generated {today.isoformat()}*
 
 ## 🎯 Executive Recommendations
-3–5 bullet-point priority actions for org leadership. Lead each with the account or model name and ACR at risk.
+3-5 bullet-point priority actions for org leadership. Lead each with the account or model name and ACR at risk.
 
 ## ⚡ Immediate Actions Required
 For every OVERDUE and CRITICAL account (list all of them): specific migration action, responsible director/CSA alias, model to migrate FROM → TO, and a realistic timeline. Group by director. Include ACR at stake.
@@ -1108,6 +1107,7 @@ _PDF_FOOTER = """
 def build_org_report_pdf(md_text: str, generated: str = "") -> bytes:
     """Convert the org tracker markdown to PDF via Playwright Chromium."""
     import tempfile
+
     import markdown as md_lib
     from playwright.sync_api import sync_playwright
 
@@ -1149,5 +1149,3 @@ def build_org_report_pdf(md_text: str, generated: str = "") -> bytes:
         tmp_path.unlink(missing_ok=True)
 
     return pdf_bytes
-
-    return bytes(pdf.output())
