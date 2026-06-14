@@ -1,6 +1,6 @@
 """Report Analyzer — HLS CSA Org Tracker report generation endpoints."""
 
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 
 from fastapi import APIRouter, File, HTTPException, UploadFile
 from fastapi.responses import Response
@@ -62,7 +62,7 @@ async def generate_report(
         return {
             "markdown": markdown,
             "recommendations_markdown": recommendations_markdown,
-            "generated": datetime.now(datetime.UTC).isoformat(),
+            "generated": datetime.now(UTC).isoformat(),
         }
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
