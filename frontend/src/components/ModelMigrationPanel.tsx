@@ -208,7 +208,7 @@ export default function ModelMigrationPanel() {
   const styles = useStyles();
   const [tab, setTab] = useState<"scorer" | "ptu" | "report">("scorer");
 
-  // ── Report Analyzer ──────────────────────────────────────────────────────────
+  // ── Model IQ Report ──────────────────────────────────────────────────────────
   const mlInputRef = useRef<HTMLInputElement>(null);
   const acrInputRef = useRef<HTMLInputElement>(null);
   const ouInputRef = useRef<HTMLInputElement>(null);
@@ -218,6 +218,7 @@ export default function ModelMigrationPanel() {
   const [generating, setGenerating] = useState(false);
   const [orgReportError, setOrgReportError] = useState<string | null>(null);
   const [orgReportMarkdown, setOrgReportMarkdown] = useState<string | null>(null);
+  const [orgRecsMarkdown, setOrgRecsMarkdown] = useState<string | null>(null);
   const [orgReportGenerated, setOrgReportGenerated] = useState<string | null>(null);
 
   const runOrgReport = useCallback(async () => {
@@ -225,6 +226,7 @@ export default function ModelMigrationPanel() {
     setGenerating(true);
     setOrgReportError(null);
     setOrgReportMarkdown(null);
+    setOrgRecsMarkdown(null);
     try {
       const form = new FormData();
       form.append("manager_list", mlFile, mlFile.name);
@@ -235,8 +237,9 @@ export default function ModelMigrationPanel() {
         const t = await r.text().catch(() => r.statusText);
         throw new Error(`${r.status}: ${t}`);
       }
-      const data = await r.json() as { markdown: string; generated: string };
+      const data = await r.json() as { markdown: string; recommendations_markdown: string; generated: string };
       setOrgReportMarkdown(data.markdown);
+      setOrgRecsMarkdown(data.recommendations_markdown || null);
       setOrgReportGenerated(data.generated);
     } catch (e) {
       setOrgReportError(e instanceof Error ? e.message : String(e));
@@ -266,6 +269,18 @@ export default function ModelMigrationPanel() {
       setOrgReportError(e instanceof Error ? e.message : String(e));
     }
   }, [mlFile, acrFile, ouFile]);
+
+  const downloadOrgRecommendations = useCallback(() => {
+    if (!orgRecsMarkdown) return;
+    const blob = new Blob([orgRecsMarkdown], { type: "text/markdown" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    const today = new Date().toISOString().slice(0, 10);
+    a.download = `hls-csa-model-iq-recommendations-${today}.md`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [orgRecsMarkdown]);
 
   const downloadOrgPdf = useCallback(async () => {
     if (!orgReportMarkdown) return;
@@ -439,7 +454,7 @@ export default function ModelMigrationPanel() {
         >
           <Tab value="scorer" icon={<ArrowSwapRegular />}>Migration Scorer</Tab>
           <Tab value="ptu" icon={<CalculatorRegular />}>PTU Planner</Tab>
-          <Tab value="report" icon={<DocumentTableRegular />}>Report Analyzer</Tab>
+          <Tab value="report" icon={<DocumentTableRegular />}>Model IQ Report</Tab>
         </TabList>
       </div>
 
@@ -868,6 +883,15 @@ export default function ModelMigrationPanel() {
                       >
                         Download PDF
                       </Button>
+                      {orgRecsMarkdown && (
+                        <Button
+                          appearance="subtle"
+                          icon={<ArrowDownloadRegular />}
+                          onClick={downloadOrgRecommendations}
+                        >
+                          Download Recommendations
+                        </Button>
+                      )}
                     </>
                   )}
                   {orgReportGenerated && (

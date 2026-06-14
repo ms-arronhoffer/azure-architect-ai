@@ -858,19 +858,16 @@ def render_report(
 # ─── Main Entry Point ────────────────────────────────────────────────────────
 
 
-def generate_org_report(
+def compute_org_data(
     manager_list_data: bytes,
     manager_list_name: str,
     acr_data: bytes,
     acr_name: str,
     ou_data: bytes,
     ou_name: str,
-    today: date | None = None,
-) -> str:
-    """Orchestrate all phases and return the 9-section markdown report."""
-    if today is None:
-        today = date.today()
-
+    today: date,
+) -> tuple[dict, list[dict], str]:
+    """Load and process all input files. Returns (org_scorecard, model_summary, month_col)."""
     month_col = get_last_full_month_column(today)
     ret_lookup, ret_replacements = load_retirements()
 
@@ -888,13 +885,168 @@ def generate_org_report(
         org_map, account_directors, tpid_index,
         ret_lookup, acr_by_name, name_to_tpid, today,
     )
-
     model_summary = build_model_fleet_summary(tpid_index, ret_lookup, ret_replacements, today)
+    return org_scorecard, model_summary, month_col
 
+
+def generate_org_report(
+    manager_list_data: bytes,
+    manager_list_name: str,
+    acr_data: bytes,
+    acr_name: str,
+    ou_data: bytes,
+    ou_name: str,
+    today: date | None = None,
+) -> str:
+    """Orchestrate all phases and return the 9-section markdown report."""
+    if today is None:
+        today = date.today()
+    org_scorecard, model_summary, month_col = compute_org_data(
+        manager_list_data, manager_list_name,
+        acr_data, acr_name,
+        ou_data, ou_name,
+        today,
+    )
     return render_report(
         org_scorecard, model_summary, today, month_col,
         manager_list_name, acr_name, ou_name,
     )
+
+
+def generate_recommendations(
+    org_scorecard: dict,
+    model_summary: list[dict],
+    today: date,
+) -> str:
+    """Generate AI-powered recommendations from the org scorecard (mirrors model-iq advisor)."""
+    from services.openai_service import get_client, get_deployment  # type: ignore[import]
+
+    totals = org_scorecard.get("totals", {})
+    all_accounts = org_scorecard.get("allAccounts", [])
+    director_summaries = org_scorecard.get("directorSummaries", [])
+
+    urgent = [a for a in all_accounts if a.get("level") in ("overdue", "critical")][:25]
+    warning_accts = [a for a in all_accounts if a.get("level") == "warning"][:15]
+
+    def _a(val: float) -> str:
+        return f"${val:,.0f}"
+
+    ctx: list[str] = [
+        f"**Date:** {today.isoformat()}",
+        f"**Org:** {totals.get('accountsWithDeployments', 0)} accounts | "
+        f"{totals.get('directorsWithDeployments', 0)} directors | "
+        f"{_a(totals.get('totalMonthlyAcr', 0))}/mo ACR | "
+        f"{totals.get('totalDeployments', 0)} deployments",
+        f"**Risk:** ⚫ {totals.get('overdue', 0)} overdue | "
+        f"🔴 {totals.get('critical', 0)} critical | "
+        f"🟡 {totals.get('warning', 0)} warning | "
+        f"(overdue ACR: {_a(totals.get('overdueAcr', 0))}/mo, "
+        f"critical ACR: {_a(totals.get('criticalAcr', 0))}/mo)",
+        "",
+        "### Overdue & Critical Accounts",
+        "| Account | Directors | Status | Days | ACR/mo | At-Risk Models |",
+        "|---------|-----------|--------|------|--------|----------------|",
+    ]
+    for a in urgent:
+        emoji = "⚫" if a["level"] == "overdue" else "🔴"
+        days_val = a.get("minDays")
+        days_str = "OVERDUE" if days_val is None or days_val <= 0 else str(days_val)
+        models = ", ".join(a.get("atRiskModels", [])[:3])
+        dirs = ", ".join(a.get("directors", []))
+        ctx.append(
+            f"| {a['name']} | {dirs} | {emoji} {a['level'].upper()} | "
+            f"{days_str} | {_a(a.get('monthlyAcr', 0))} | {models} |"
+        )
+
+    if warning_accts:
+        ctx += [
+            "",
+            "### Warning Accounts (≤180 days)",
+            "| Account | Directors | Days | ACR/mo | At-Risk Models |",
+            "|---------|-----------|------|--------|----------------|",
+        ]
+        for a in warning_accts:
+            models = ", ".join(a.get("atRiskModels", [])[:2])
+            dirs = ", ".join(a.get("directors", []))
+            ctx.append(
+                f"| {a['name']} | {dirs} | {a.get('minDays', '?')} | "
+                f"{_a(a.get('monthlyAcr', 0))} | {models} |"
+            )
+
+    if model_summary:
+        ctx += [
+            "",
+            "### Fleet-Wide Model Retirements (≤180 days)",
+            "| Model | Ret. Date | Days | Accts | Deploys | Replacement |",
+            "|-------|-----------|------|-------|---------|-------------|",
+        ]
+        for m in model_summary[:20]:
+            ctx.append(
+                f"| {m['model']} | {m['retirementDate']} | {m['days']} | "
+                f"{m['hlsAccounts']} | {m['hlsDeploys']} | {m['replacement']} |"
+            )
+
+    ctx += [
+        "",
+        "### Director Summary",
+        "| Director | Accounts | ACR/mo | ⚫ Overdue | 🔴 Critical | 🟡 Warning |",
+        "|----------|----------|--------|-----------|------------|-----------|",
+    ]
+    for d in director_summaries[:15]:
+        ctx.append(
+            f"| {d['director']} | {d['accounts']} | {_a(d['monthlyAcr'])} | "
+            f"{d['overdue']} | {d['critical']} | {d['warning']} |"
+        )
+
+    context = "\n".join(ctx)
+
+    system = (
+        "You are a strategic advisor for Microsoft's HLS (Health & Life Sciences) "
+        "Customer Success organization. Generate specific, actionable recommendations "
+        "based on Azure OpenAI model retirement risk data. Name exact accounts, models, "
+        "and CSA managers. Prioritize by revenue (ACR) and urgency. "
+        "Output clean GitHub-flavored markdown. No preamble or meta-commentary."
+    )
+
+    user = f"""Based on the HLS CSA org tracker data below, generate a recommendations report.
+
+{context}
+
+Produce a markdown report with these exact sections:
+
+# HLS CSA Model IQ — Recommendations
+*Generated {today.isoformat()}*
+
+## 🎯 Executive Recommendations
+3–5 bullet-point priority actions for org leadership. Lead each with the account or model name and ACR at risk.
+
+## ⚡ Immediate Actions Required
+For every OVERDUE and CRITICAL account (list all of them): specific migration action, responsible director/CSA alias, model to migrate FROM → TO, and a realistic timeline. Group by director. Include ACR at stake.
+
+## 📋 Priority Migration Plans
+Top 10 at-risk accounts by ACR: for each, one paragraph with current at-risk models, recommended replacement model(s), migration complexity (Low/Medium/High), and suggested completion date.
+
+## 🔄 Model Fleet Migration Roadmap
+For each retiring model in the fleet: recommended replacement (use known Azure OpenAI successors: gpt-4o → gpt-4.1, gpt-4o-mini → gpt-4.1-mini, gpt-35-turbo → gpt-4o-mini), migration notes (prompt compatibility, latency/cost tradeoffs), affected HLS account count, and retirement deadline.
+
+## 📊 Director Action Plans
+For each director with at-risk accounts: bullet list of their accounts requiring action with specific next steps and timeline.
+
+Use exact account names, model names, and director aliases from the data. Be specific and actionable."""
+
+    client = get_client()
+    deployment = get_deployment("architecture")
+
+    resp = client.chat.completions.create(
+        model=deployment,
+        messages=[
+            {"role": "system", "content": system},
+            {"role": "user", "content": user},
+        ],
+        temperature=0.3,
+        max_completion_tokens=4000,
+    )
+    return resp.choices[0].message.content or ""
 
 
 # ── PDF export ────────────────────────────────────────────────────────────────

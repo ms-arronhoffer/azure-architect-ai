@@ -6,7 +6,13 @@ from fastapi import APIRouter, File, HTTPException, UploadFile
 from fastapi.responses import Response
 from pydantic import BaseModel
 
-from services.report_analyzer_service import build_org_report_pdf, generate_org_report
+from services.report_analyzer_service import (
+    build_org_report_pdf,
+    compute_org_data,
+    generate_org_report,
+    generate_recommendations,
+    render_report,
+)
 
 router = APIRouter(prefix="/report-analyzer", tags=["report-analyzer"])
 
@@ -17,29 +23,45 @@ async def generate_report(
     acr_data: UploadFile = File(...),
     ou_data: UploadFile = File(...),
 ) -> dict:
-    """Generate an HLS CSA Org Tracker markdown report from three input files.
+    """Generate the org tracker report and AI recommendations from three input files.
 
-    Accepts xlsx or csv for each input:
-    - manager_list: CSA manager list (TPID, Account Name, Azure CSA M)
-    - acr_data: Power BI ACR export (multi-month, FY26-Jul..FY26-Jun)
-    - ou_data: OU customer deployments (TPID, TP Name, Model, Retirement Date, ...)
-
-    Returns the full 9-section markdown report and generation timestamp.
+    Returns:
+        markdown: 9-section HLS CSA Org Tracker report
+        recommendations_markdown: AI-generated action plan (empty string if LLM unavailable)
+        generated: ISO timestamp
     """
     try:
         ml_bytes = await manager_list.read()
         acr_bytes = await acr_data.read()
         ou_bytes = await ou_data.read()
-        markdown = generate_org_report(
-            manager_list_data=ml_bytes,
-            manager_list_name=manager_list.filename or "manager_list.csv",
-            acr_data=acr_bytes,
-            acr_name=acr_data.filename or "acr_data.csv",
-            ou_data=ou_bytes,
-            ou_name=ou_data.filename or "ou_data.csv",
+
+        today = date.today()
+        ml_name = manager_list.filename or "manager_list.csv"
+        acr_name = acr_data.filename or "acr_data.csv"
+        ou_name = ou_data.filename or "ou_data.csv"
+
+        org_scorecard, model_summary, month_col = compute_org_data(
+            ml_bytes, ml_name,
+            acr_bytes, acr_name,
+            ou_bytes, ou_name,
+            today,
         )
+
+        markdown = render_report(
+            org_scorecard, model_summary, today, month_col,
+            ml_name, acr_name, ou_name,
+        )
+
+        try:
+            recommendations_markdown = generate_recommendations(
+                org_scorecard, model_summary, today
+            )
+        except Exception:
+            recommendations_markdown = ""
+
         return {
             "markdown": markdown,
+            "recommendations_markdown": recommendations_markdown,
             "generated": datetime.now(timezone.utc).isoformat(),
         }
     except Exception as exc:
@@ -93,3 +115,4 @@ def markdown_to_pdf(req: MarkdownToPdfRequest) -> Response:
         )
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
+
