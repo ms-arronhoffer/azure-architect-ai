@@ -368,8 +368,8 @@ def get_live_models() -> list[str]:
 _URGENCY_RANK = {"critical": 4, "high": 3, "medium": 2, "low": 1, "unknown": 0}
 _RANK_TO_URGENCY = {v: k for k, v in _URGENCY_RANK.items()}
 _TIER_LABELS = {
-    4: "4-Very High (>2.5M/wk)", 3: "3-High (500k–2.5M/wk)",
-    2: "2-Medium (75k–500k/wk)", 1: "1-Low (<75k/wk)", 0: "Unknown",
+    4: "4-Very High (>2.5M/wk)", 3: "3-High (500k-2.5M/wk)",
+    2: "2-Medium (75k-500k/wk)", 1: "1-Low (<75k/wk)", 0: "Unknown",
 }
 
 _REPORT_COLS = [
@@ -427,8 +427,8 @@ def _migration_rec(
         parts.append(f"Plan migration for {model_name} (retires in {days or '?'} days).")
 
     usage_desc = {
-        4: "very high (>2.5M tokens/wk)", 3: "high (500k–2.5M/wk)",
-        2: "medium (75k–500k/wk)", 1: "low (<75k/wk)", 0: "unknown",
+        4: "very high (>2.5M tokens/wk)", 3: "high (500k-2.5M/wk)",
+        2: "medium (75k-500k/wk)", 1: "low (<75k/wk)", 0: "unknown",
     }
     parts.append(f"Usage: {usage_desc.get(peak_score, 'unknown')} — validate target capacity before cutover.")
 
@@ -479,7 +479,7 @@ def analyze_retirement_report(tsv_text: str) -> dict:
         if len(parts) < 3:
             continue
         padded = parts + [""] * max(0, len(_REPORT_COLS) - len(parts))
-        raw_rows.append(dict(zip(_REPORT_COLS, padded[: len(_REPORT_COLS)])))
+        raw_rows.append(dict(zip(_REPORT_COLS, padded[: len(_REPORT_COLS)], strict=False)))
 
     # Detect and skip header row
     if raw_rows and raw_rows[0].get("tpid", "").strip().upper() == "TPID":

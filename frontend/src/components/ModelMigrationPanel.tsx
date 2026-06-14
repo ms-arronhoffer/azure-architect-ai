@@ -220,6 +220,7 @@ export default function ModelMigrationPanel() {
   const [orgReportMarkdown, setOrgReportMarkdown] = useState<string | null>(null);
   const [orgRecsMarkdown, setOrgRecsMarkdown] = useState<string | null>(null);
   const [orgReportGenerated, setOrgReportGenerated] = useState<string | null>(null);
+  const [orgData, setOrgData] = useState<Record<string, unknown> | null>(null);
 
   const runOrgReport = useCallback(async () => {
     if (!mlFile || !acrFile || !ouFile) return;
@@ -227,6 +228,7 @@ export default function ModelMigrationPanel() {
     setOrgReportError(null);
     setOrgReportMarkdown(null);
     setOrgRecsMarkdown(null);
+    setOrgData(null);
     try {
       const form = new FormData();
       form.append("manager_list", mlFile, mlFile.name);
@@ -237,10 +239,11 @@ export default function ModelMigrationPanel() {
         const t = await r.text().catch(() => r.statusText);
         throw new Error(`${r.status}: ${t}`);
       }
-      const data = await r.json() as { markdown: string; recommendations_markdown: string; generated: string };
+      const data = await r.json() as { markdown: string; recommendations_markdown: string; generated: string; org_data: Record<string, unknown> };
       setOrgReportMarkdown(data.markdown);
       setOrgRecsMarkdown(data.recommendations_markdown || null);
       setOrgReportGenerated(data.generated);
+      setOrgData(data.org_data ?? null);
     } catch (e) {
       setOrgReportError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -248,39 +251,23 @@ export default function ModelMigrationPanel() {
     }
   }, [mlFile, acrFile, ouFile]);
 
-  const downloadOrgReport = useCallback(async () => {
-    if (!mlFile || !acrFile || !ouFile) return;
-    try {
-      const form = new FormData();
-      form.append("manager_list", mlFile, mlFile.name);
-      form.append("acr_data", acrFile, acrFile.name);
-      form.append("ou_data", ouFile, ouFile.name);
-      const r = await apiFetch("/api/report-analyzer/generate/download", { method: "POST", body: form });
-      if (!r.ok) throw new Error(`${r.status}`);
-      const blob = await r.blob();
-      const url = URL.createObjectURL(blob);
+  const downloadMarkdowns = useCallback(() => {
+    const today = new Date().toISOString().slice(0, 10);
+    if (orgReportMarkdown) {
       const a = document.createElement("a");
-      a.href = url;
-      const today = new Date().toISOString().slice(0, 10);
+      a.href = URL.createObjectURL(new Blob([orgReportMarkdown], { type: "text/markdown" }));
       a.download = `hls-csa-org-tracker-${today}.md`;
       a.click();
-      URL.revokeObjectURL(url);
-    } catch (e) {
-      setOrgReportError(e instanceof Error ? e.message : String(e));
     }
-  }, [mlFile, acrFile, ouFile]);
-
-  const downloadOrgRecommendations = useCallback(() => {
-    if (!orgRecsMarkdown) return;
-    const blob = new Blob([orgRecsMarkdown], { type: "text/markdown" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    const today = new Date().toISOString().slice(0, 10);
-    a.download = `hls-csa-model-iq-recommendations-${today}.md`;
-    a.click();
-    URL.revokeObjectURL(url);
-  }, [orgRecsMarkdown]);
+    if (orgRecsMarkdown) {
+      setTimeout(() => {
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(new Blob([orgRecsMarkdown], { type: "text/markdown" }));
+        a.download = `hls-csa-model-iq-recommendations-${today}.md`;
+        a.click();
+      }, 100);
+    }
+  }, [orgReportMarkdown, orgRecsMarkdown]);
 
   const downloadOrgPdf = useCallback(async () => {
     if (!orgReportMarkdown) return;
@@ -331,6 +318,61 @@ export default function ModelMigrationPanel() {
       setOrgReportError(e instanceof Error ? e.message : String(e));
     }
   }, [orgRecsMarkdown, orgReportGenerated]);
+
+  const downloadOrgPptx = useCallback(async () => {
+    if (!orgData) return;
+    try {
+      const r = await apiFetch("/api/report-analyzer/org-to-pptx", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ org_data: orgData, generated: orgReportGenerated ?? "" }),
+      });
+      if (!r.ok) {
+        const t = await r.text().catch(() => r.statusText);
+        throw new Error(`${r.status}: ${t}`);
+      }
+      const blob = await r.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      const today = new Date().toISOString().slice(0, 10);
+      a.download = `hls-csa-model-iq-${today}.pptx`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      setOrgReportError(e instanceof Error ? e.message : String(e));
+    }
+  }, [orgData, orgReportGenerated]);
+
+  const downloadAll = useCallback(async () => {
+    if (!orgReportMarkdown || !orgData) return;
+    try {
+      const r = await apiFetch("/api/report-analyzer/download-all", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          markdown: orgReportMarkdown,
+          recommendations_markdown: orgRecsMarkdown ?? "",
+          generated: orgReportGenerated ?? "",
+          org_data: orgData,
+        }),
+      });
+      if (!r.ok) {
+        const t = await r.text().catch(() => r.statusText);
+        throw new Error(`${r.status}: ${t}`);
+      }
+      const blob = await r.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      const today = new Date().toISOString().slice(0, 10);
+      a.download = `hls-csa-model-iq-${today}.zip`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      setOrgReportError(e instanceof Error ? e.message : String(e));
+    }
+  }, [orgReportMarkdown, orgRecsMarkdown, orgReportGenerated, orgData]);
 
   // ── Migration Scorer ─────────────────────────────────────────────────────────
   const [source, setSource] = useState("");
@@ -897,34 +939,43 @@ export default function ModelMigrationPanel() {
                       <Button
                         appearance="subtle"
                         icon={<ArrowDownloadRegular />}
-                        onClick={downloadOrgReport}
+                        onClick={downloadMarkdowns}
                       >
-                        Download .md
+                        Download Markdown
                       </Button>
                       <Button
                         appearance="subtle"
                         icon={<ArrowDownloadRegular />}
                         onClick={downloadOrgPdf}
                       >
-                        Download PDF
+                        Report PDF
                       </Button>
                       {orgRecsMarkdown && (
-                        <>
-                          <Button
-                            appearance="subtle"
-                            icon={<ArrowDownloadRegular />}
-                            onClick={downloadOrgRecommendations}
-                          >
-                            Download Recommendations
-                          </Button>
-                          <Button
-                            appearance="subtle"
-                            icon={<ArrowDownloadRegular />}
-                            onClick={downloadRecsPdf}
-                          >
-                            Recommendations PDF
-                          </Button>
-                        </>
+                        <Button
+                          appearance="subtle"
+                          icon={<ArrowDownloadRegular />}
+                          onClick={downloadRecsPdf}
+                        >
+                          Recommendations PDF
+                        </Button>
+                      )}
+                      {orgData && (
+                        <Button
+                          appearance="subtle"
+                          icon={<ArrowDownloadRegular />}
+                          onClick={downloadOrgPptx}
+                        >
+                          Download PPTX
+                        </Button>
+                      )}
+                      {orgData && (
+                        <Button
+                          appearance="primary"
+                          icon={<ArrowDownloadRegular />}
+                          onClick={downloadAll}
+                        >
+                          Download All
+                        </Button>
                       )}
                     </>
                   )}

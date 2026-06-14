@@ -1149,3 +1149,384 @@ def build_org_report_pdf(md_text: str, generated: str = "") -> bytes:
         tmp_path.unlink(missing_ok=True)
 
     return pdf_bytes
+
+
+# ── PPTX color palette ─────────────────────────────────────────────────────
+_C_DARK   = (0x1A, 0x25, 0x35)
+_C_WHITE  = (0xFF, 0xFF, 0xFF)
+_C_LTBLUE = (0x50, 0xA8, 0xE8)
+_C_MSFT   = (0x00, 0x78, 0xD4)
+_C_RED    = (0xC0, 0x00, 0x00)
+_C_ORANGE = (0xD4, 0x70, 0x0A)
+_C_AMBER  = (0xC4, 0x8A, 0x00)
+_C_GRAY   = (0x6B, 0x7E, 0x8F)
+_C_SLATE  = (0x3A, 0x4A, 0x5C)
+_C_LTBG   = (0xF0, 0xF4, 0xF8)
+
+_RISK_COLORS: dict[str, tuple[int, int, int]] = {
+    "overdue":  _C_RED,
+    "critical": _C_ORANGE,
+    "warning":  _C_AMBER,
+    "ok":       _C_GRAY,
+}
+
+
+def make_org_data(org_scorecard: dict[str, Any], model_summary: list[dict[str, Any]], month_col: str) -> dict[str, Any]:
+    """Return a JSON-safe dict suitable for sending to the frontend and back."""
+    def _default(obj: object) -> str:
+        if isinstance(obj, date):
+            return obj.isoformat()
+        raise TypeError(f"Not serializable: {type(obj)}")
+
+    raw: dict[str, Any] = {
+        "totals": org_scorecard.get("totals", {}),
+        "allAccounts": org_scorecard.get("allAccounts", []),
+        "model_summary": model_summary,
+        "month_label": month_col,
+    }
+    return json.loads(json.dumps(raw, default=_default))  # type: ignore[no-any-return]
+
+
+def build_org_report_pptx(org_data: dict[str, Any], today: date) -> bytes:
+    """Generate a 4-slide Model IQ Risk Review PPTX matching the reference deck style."""
+    from io import BytesIO
+
+    from pptx import Presentation  # type: ignore[import-untyped]
+    from pptx.dml.color import RGBColor  # type: ignore[import-untyped]
+    from pptx.util import Emu, Pt  # type: ignore[import-untyped]
+
+    EMU_PER_IN = 914400
+
+    def _rgb(t: tuple[int, int, int]) -> RGBColor:
+        return RGBColor(*t)
+
+    def _inches(v: float) -> Emu:
+        return Emu(int(v * EMU_PER_IN))
+
+    def _rect(slide: Any, left: float, t: float, w: float, h: float,
+              fill: tuple[int, int, int] | None = None, alpha: int | None = None) -> Any:
+        from pptx.util import Emu as E2
+        shape = slide.shapes.add_shape(
+            1,  # MSO_AUTO_SHAPE_TYPE.RECTANGLE
+            E2(int(left * EMU_PER_IN)), E2(int(t * EMU_PER_IN)),
+            E2(int(w * EMU_PER_IN)), E2(int(h * EMU_PER_IN)),
+        )
+        shape.line.fill.background()
+        if fill:
+            shape.fill.solid()
+            shape.fill.fore_color.rgb = _rgb(fill)
+        else:
+            shape.fill.background()
+        return shape
+
+    def _add_text(slide: Any, text: str, left: float, t: float, w: float, h: float,
+                  size: float = 12, bold: bool = False, color: tuple[int, int, int] = _C_WHITE,
+                  align: str = "left", wrap: bool = True) -> Any:
+        from pptx.enum.text import PP_ALIGN  # type: ignore[import-untyped]
+        from pptx.util import Emu as E2
+        tb = slide.shapes.add_textbox(
+            E2(int(left * EMU_PER_IN)), E2(int(t * EMU_PER_IN)),
+            E2(int(w * EMU_PER_IN)), E2(int(h * EMU_PER_IN)),
+        )
+        tb.text_frame.word_wrap = wrap
+        p = tb.text_frame.paragraphs[0]
+        al = {"left": PP_ALIGN.LEFT, "center": PP_ALIGN.CENTER, "right": PP_ALIGN.RIGHT}.get(align, PP_ALIGN.LEFT)
+        p.alignment = al
+        run = p.add_run()
+        run.text = text
+        run.font.size = Pt(size)
+        run.font.bold = bold
+        run.font.color.rgb = _rgb(color)
+        return tb
+
+    def _header(slide: Any, title: str, subtitle: str = "") -> None:
+        _rect(slide, 0, 0, 10, 0.50, fill=_C_DARK)
+        _rect(slide, 0, 0.50, 10, 0.05, fill=_C_LTBLUE)
+        _add_text(slide, title, 0.2, 0.05, 6.0, 0.45, size=18, bold=True, color=_C_WHITE)
+        if subtitle:
+            _add_text(slide, subtitle, 6.1, 0.08, 3.7, 0.38, size=10, bold=False, color=_C_LTBLUE, align="right")
+        _add_text(
+            slide,
+            f"Azure HLS CSA  |  Model IQ Risk Review  |  {today.strftime('%B %Y')}",
+            0.1, 5.40, 9.8, 0.2, size=7, bold=False, color=_C_GRAY, align="center",
+        )
+
+    def _table_header_row(table: Any, headers: list[str],
+                          fill: tuple[int, int, int] = _C_SLATE,
+                          txt: tuple[int, int, int] = _C_WHITE, size: float = 8) -> None:
+        from pptx.enum.text import PP_ALIGN  # type: ignore[import-untyped]
+        row = table.rows[0]
+        for i, hdr in enumerate(headers):
+            cell = row.cells[i]
+            cell.fill.solid()
+            cell.fill.fore_color.rgb = _rgb(fill)
+            p = cell.text_frame.paragraphs[0]
+            p.alignment = PP_ALIGN.CENTER
+            run = p.add_run()
+            run.text = hdr
+            run.font.size = Pt(size)
+            run.font.bold = True
+            run.font.color.rgb = _rgb(txt)
+
+    def _table_data_row(table: Any, row_idx: int, values: list[str],
+                        fill: tuple[int, int, int] | None = None,
+                        txt: tuple[int, int, int] = _C_DARK, size: float = 7.5,
+                        aligns: list[str] | None = None) -> None:
+        from pptx.enum.text import PP_ALIGN  # type: ignore[import-untyped]
+        row = table.rows[row_idx]
+        for i, val in enumerate(values):
+            cell = row.cells[i]
+            if fill:
+                cell.fill.solid()
+                cell.fill.fore_color.rgb = _rgb(fill)
+            else:
+                cell.fill.solid()
+                cell.fill.fore_color.rgb = _rgb(_C_WHITE if row_idx % 2 == 0 else _C_LTBG)
+            p = cell.text_frame.paragraphs[0]
+            al_str = (aligns[i] if aligns and i < len(aligns) else "left")
+            p.alignment = {"left": PP_ALIGN.LEFT, "center": PP_ALIGN.CENTER, "right": PP_ALIGN.RIGHT}.get(al_str, PP_ALIGN.LEFT)
+            run = p.add_run()
+            run.text = val
+            run.font.size = Pt(size)
+            run.font.color.rgb = _rgb(txt)
+
+    # ── Presentation setup ────────────────────────────────────────────────
+    prs = Presentation()
+    prs.slide_width  = _inches(10.0)
+    prs.slide_height = _inches(5.63)
+    blank_layout = prs.slide_layouts[6]
+
+    totals       = org_data.get("totals", {})
+    all_accounts = org_data.get("allAccounts", [])
+    model_sum    = org_data.get("model_summary", [])
+    month_label  = org_data.get("month_label", "")
+
+    overdue_accounts  = [a for a in all_accounts if a.get("level") == "overdue"]
+    critical_accounts = [a for a in all_accounts if a.get("level") == "critical"]
+
+    def _fmt_acr(v: float) -> str:
+        if v >= 1_000_000:
+            return f"${v / 1_000_000:.1f}M"
+        if v >= 1_000:
+            return f"${v / 1_000:.0f}K"
+        return f"${v:.0f}"
+
+    def _fmt_days(d: int | None) -> str:
+        if d is None:
+            return "—"
+        if d <= 0:
+            return f"{abs(d)}d overdue"
+        return f"{d}d"
+
+    # ── Slide 1: Portfolio at a Glance ────────────────────────────────────
+    s1 = prs.slides.add_slide(blank_layout)
+    _rect(s1, 0, 0, 10, 5.63, fill=_C_LTBG)
+    _header(s1, "Portfolio at a Glance", subtitle=f"ACR: {month_label}")
+
+    total_acr  = totals.get("totalMonthlyAcr", 0)
+    n_accounts = totals.get("accountsWithDeployments", 0)
+    n_deploys  = totals.get("totalDeployments", 0)
+    n_overdue  = totals.get("overdue", 0)
+    n_critical = totals.get("critical", 0)
+    n_warning  = totals.get("warning", 0)
+
+    kpi_cards = [
+        ("Total Monthly ACR", _fmt_acr(total_acr)),
+        ("Accounts", str(n_accounts)),
+        ("AI Deployments", str(n_deploys)),
+    ]
+    card_w, card_h = 2.5, 1.0
+    for i, (label, val) in enumerate(kpi_cards):
+        cx = 0.5 + i * 3.1
+        _rect(s1, cx, 0.65, card_w, card_h, fill=_C_DARK)
+        _add_text(s1, label, cx + 0.1, 0.67, card_w - 0.2, 0.3, size=7, bold=False, color=_C_LTBLUE, align="center")
+        _add_text(s1, val,   cx + 0.1, 0.97, card_w - 0.2, 0.55, size=20, bold=True, color=_C_WHITE, align="center")
+
+    risk_panels = [
+        ("OVERDUE", n_overdue, totals.get("overdueAcr", 0),  _C_RED,    2.6),
+        ("CRITICAL", n_critical, totals.get("criticalAcr", 0), _C_ORANGE, 5.5),
+    ]
+    for label, count, acr, col, cx in risk_panels:
+        _rect(s1, cx, 1.80, 2.35, 1.20, fill=col)
+        _add_text(s1, label,         cx + 0.1, 1.82, 2.15, 0.28, size=9, bold=True, color=_C_WHITE, align="center")
+        _add_text(s1, str(count),    cx + 0.1, 2.10, 2.15, 0.55, size=22, bold=True, color=_C_WHITE, align="center")
+        _add_text(s1, "accounts",    cx + 0.1, 2.62, 2.15, 0.22, size=7, bold=False, color=_C_WHITE, align="center")
+        _add_text(s1, _fmt_acr(acr) + " at risk", cx + 0.1, 2.82, 2.15, 0.22, size=7, bold=False, color=_C_WHITE, align="center")
+
+    _rect(s1, 0.4, 1.78, 2.0, 1.24, fill=_C_MSFT)
+    _add_text(s1, "WARNING",      0.5, 1.80, 1.8, 0.28, size=9, bold=True, color=_C_WHITE, align="center")
+    _add_text(s1, str(n_warning), 0.5, 2.08, 1.8, 0.55, size=22, bold=True, color=_C_WHITE, align="center")
+    _add_text(s1, "accounts",     0.5, 2.60, 1.8, 0.22, size=7, bold=False, color=_C_WHITE, align="center")
+
+    # Top 5 accounts table
+    top5 = sorted(all_accounts, key=lambda a: a.get("monthlyAcr", 0), reverse=True)[:5]
+    if top5:
+        top5_headers = ["Account", "ACR/mo", "Risk", "Models at Risk"]
+        col_w_top5 = [3.0, 0.9, 0.8, 2.8]
+        tbl_top5 = s1.shapes.add_table(len(top5) + 1, 4,
+                                        _inches(0.2), _inches(3.15),
+                                        _inches(9.6), _inches(2.1)).table
+        for ci, cw in enumerate(col_w_top5):
+            tbl_top5.columns[ci].width = _inches(cw)
+        _table_header_row(tbl_top5, top5_headers, fill=_C_SLATE)
+        for ri, acct in enumerate(top5):
+            risk_lvl = acct.get("level", "ok")
+            rc = _RISK_COLORS.get(risk_lvl, _C_GRAY)
+            models = ", ".join(m.get("model", "") for m in (acct.get("atRiskModels") or [])[:3])
+            _table_data_row(tbl_top5, ri + 1, [
+                acct.get("name", ""),
+                _fmt_acr(acct.get("monthlyAcr", 0)),
+                risk_lvl.upper(),
+                models or "—",
+            ], aligns=["left", "right", "center", "left"])
+            days = acct.get("minDays")
+            if days is not None and days <= 0:
+                tbl_top5.rows[ri + 1].cells[2].fill.solid()
+                tbl_top5.rows[ri + 1].cells[2].fill.fore_color.rgb = _rgb(rc)
+
+    # ── Slide 2: Retiring Models ───────────────────────────────────────────
+    s2 = prs.slides.add_slide(blank_layout)
+    _rect(s2, 0, 0, 10, 5.63, fill=_C_LTBG)
+    _header(s2, "Models Retiring Within 180 Days", subtitle="Fleet-Wide Exposure")
+
+    retiring = [m for m in model_sum if (m.get("days") or 999) <= 180]
+    retiring.sort(key=lambda m: m.get("days") or 999)
+    headers2 = ["Model", "Retirement Date", "Days", "HLS Deployments", "HLS Accounts", "Replacement"]
+    col_w2   = [2.0, 1.4, 0.65, 1.35, 1.2, 3.0]
+    n_rows2  = max(len(retiring), 1)
+    tbl2 = s2.shapes.add_table(n_rows2 + 1, 6,
+                                _inches(0.2), _inches(0.65),
+                                _inches(9.6), _inches(4.7)).table
+    for ci, cw in enumerate(col_w2):
+        tbl2.columns[ci].width = _inches(cw)
+    _table_header_row(tbl2, headers2, fill=_C_DARK)
+    if not retiring:
+        _table_data_row(tbl2, 1, ["No models retiring within 180 days", "", "", "", "", ""])
+    else:
+        for ri, m in enumerate(retiring[:n_rows2]):
+            days = m.get("days")
+            if days is not None and days <= 0:
+                lvl_col = _C_RED
+            elif days is not None and days <= 90:
+                lvl_col = _C_ORANGE
+            elif days is not None and days <= 180:
+                lvl_col = _C_AMBER
+            else:
+                lvl_col = None
+            _table_data_row(tbl2, ri + 1, [
+                m.get("model", ""),
+                m.get("retirementDate", ""),
+                _fmt_days(days),
+                str(m.get("hlsDeploys", 0)),
+                str(m.get("hlsAccounts", 0)),
+                m.get("replacement", "—") or "—",
+            ], fill=lvl_col, txt=_C_WHITE if lvl_col else _C_DARK,
+               aligns=["left", "center", "center", "center", "center", "left"])
+
+    # ── Slide 3: Overdue Accounts ──────────────────────────────────────────
+    s3 = prs.slides.add_slide(blank_layout)
+    _rect(s3, 0, 0, 10, 5.63, fill=_C_LTBG)
+    _header(s3, "Overdue Accounts", subtitle="Retirement date has passed")
+
+    headers3 = ["Account", "Director", "Monthly ACR", "Days Overdue", "Models at Risk"]
+    col_w3   = [2.8, 1.5, 1.1, 1.1, 4.1]
+    n_rows3  = max(len(overdue_accounts), 1)
+    tbl3 = s3.shapes.add_table(n_rows3 + 1, 5,
+                                _inches(0.2), _inches(0.65),
+                                _inches(9.6), _inches(4.7)).table
+    for ci, cw in enumerate(col_w3):
+        tbl3.columns[ci].width = _inches(cw)
+    _table_header_row(tbl3, headers3, fill=_C_RED)
+    if not overdue_accounts:
+        _table_data_row(tbl3, 1, ["No overdue accounts", "", "", "", ""])
+    else:
+        for ri, acct in enumerate(overdue_accounts[:n_rows3]):
+            dirs = ", ".join(acct.get("directors") or [])
+            models = ", ".join(m.get("model", "") for m in (acct.get("atRiskModels") or [])[:4])
+            days = acct.get("minDays")
+            _table_data_row(tbl3, ri + 1, [
+                acct.get("name", ""),
+                dirs,
+                _fmt_acr(acct.get("monthlyAcr", 0)),
+                _fmt_days(days),
+                models or "—",
+            ], aligns=["left", "left", "right", "center", "left"])
+
+    # ── Slide 4: Action Plan ───────────────────────────────────────────────
+    s4 = prs.slides.add_slide(blank_layout)
+    _rect(s4, 0, 0, 10, 5.63, fill=_C_LTBG)
+    _header(s4, "Action Plan", subtitle="Immediate and Near-Term Priorities")
+
+    # Left column — overdue
+    _rect(s4, 0.2, 0.65, 4.65, 0.35, fill=_C_RED)
+    _add_text(s4, f"OVERDUE — {len(overdue_accounts)} Accounts", 0.3, 0.67, 4.45, 0.30,
+              size=10, bold=True, color=_C_WHITE)
+    col_left_headers = ["Account", "ACR/mo", "Key Models"]
+    col_left_w = [2.2, 0.9, 1.55]
+    n_od = max(len(overdue_accounts), 1)
+    tbl4l = s4.shapes.add_table(n_od + 1, 3,
+                                 _inches(0.2), _inches(1.0),
+                                 _inches(4.65), _inches(4.3)).table
+    for ci, cw in enumerate(col_left_w):
+        tbl4l.columns[ci].width = _inches(cw)
+    _table_header_row(tbl4l, col_left_headers, fill=_C_SLATE, size=7.5)
+    if not overdue_accounts:
+        _table_data_row(tbl4l, 1, ["No overdue accounts", "", ""])
+    else:
+        for ri, acct in enumerate(overdue_accounts[:n_od]):
+            models = ", ".join(m.get("model", "") for m in (acct.get("atRiskModels") or [])[:2])
+            _table_data_row(tbl4l, ri + 1, [
+                acct.get("name", ""),
+                _fmt_acr(acct.get("monthlyAcr", 0)),
+                models or "—",
+            ], aligns=["left", "right", "left"])
+
+    # Right column — critical
+    _rect(s4, 5.15, 0.65, 4.65, 0.35, fill=_C_ORANGE)
+    _add_text(s4, f"CRITICAL — {len(critical_accounts)} Accounts (≤90 days)", 5.25, 0.67, 4.45, 0.30,
+              size=10, bold=True, color=_C_WHITE)
+    n_cr = max(len(critical_accounts), 1)
+    tbl4r = s4.shapes.add_table(n_cr + 1, 3,
+                                 _inches(5.15), _inches(1.0),
+                                 _inches(4.65), _inches(4.3)).table
+    for ci, cw in enumerate(col_left_w):
+        tbl4r.columns[ci].width = _inches(cw)
+    _table_header_row(tbl4r, col_left_headers, fill=_C_SLATE, size=7.5)
+    if not critical_accounts:
+        _table_data_row(tbl4r, 1, ["No critical accounts", "", ""])
+    else:
+        for ri, acct in enumerate(critical_accounts[:n_cr]):
+            models = ", ".join(m.get("model", "") for m in (acct.get("atRiskModels") or [])[:2])
+            _table_data_row(tbl4r, ri + 1, [
+                acct.get("name", ""),
+                _fmt_acr(acct.get("monthlyAcr", 0)),
+                models or "—",
+            ], aligns=["left", "right", "left"])
+
+    out = BytesIO()
+    prs.save(out)
+    return out.getvalue()
+
+
+def build_download_all_zip(
+    markdown: str,
+    recommendations_markdown: str,
+    generated: str,
+    org_data: dict[str, Any],
+    today: date,
+) -> bytes:
+    """Bundle report PDF, recommendations PDF (if any), and PPTX into a single ZIP."""
+    import zipfile
+
+    date_str = today.isoformat()
+    report_pdf = build_org_report_pdf(markdown, generated)
+    pptx_bytes = build_org_report_pptx(org_data, today)
+
+    out = io.BytesIO()
+    with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as zf:
+        zf.writestr(f"hls-csa-org-tracker-{date_str}.pdf", report_pdf)
+        if recommendations_markdown.strip():
+            recs_pdf = build_org_report_pdf(recommendations_markdown, generated)
+            zf.writestr(f"hls-csa-recommendations-{date_str}.pdf", recs_pdf)
+        zf.writestr(f"hls-csa-model-iq-{date_str}.pptx", pptx_bytes)
+    return out.getvalue()

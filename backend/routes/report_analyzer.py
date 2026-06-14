@@ -7,10 +7,13 @@ from fastapi.responses import Response
 from pydantic import BaseModel
 
 from services.report_analyzer_service import (
+    build_download_all_zip,
     build_org_report_pdf,
+    build_org_report_pptx,
     compute_org_data,
     generate_org_report,
     generate_recommendations,
+    make_org_data,
     render_report,
 )
 
@@ -63,6 +66,7 @@ async def generate_report(
             "markdown": markdown,
             "recommendations_markdown": recommendations_markdown,
             "generated": datetime.now(UTC).isoformat(),
+            "org_data": make_org_data(org_scorecard, model_summary, month_col),
         }
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -111,6 +115,54 @@ def markdown_to_pdf(req: MarkdownToPdfRequest) -> Response:
         return Response(
             content=pdf_bytes,
             media_type="application/pdf",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+class OrgToPptxRequest(BaseModel):
+    org_data: dict
+    generated: str = ""
+
+
+@router.post("/org-to-pptx")
+def org_to_pptx(req: OrgToPptxRequest) -> Response:
+    """Convert org_data JSON to a PPTX download."""
+    try:
+        pptx_bytes = build_org_report_pptx(req.org_data, date.today())
+        filename = f"hls-csa-model-iq-{date.today().isoformat()}.pptx"
+        return Response(
+            content=pptx_bytes,
+            media_type="application/vnd.openxmlformats-officedocument.presentationml.presentation",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+class DownloadAllRequest(BaseModel):
+    markdown: str
+    recommendations_markdown: str = ""
+    generated: str = ""
+    org_data: dict
+
+
+@router.post("/download-all")
+def download_all(req: DownloadAllRequest) -> Response:
+    """Bundle report PDF, recommendations PDF (if any), and PPTX into a single ZIP download."""
+    try:
+        zip_bytes = build_download_all_zip(
+            req.markdown,
+            req.recommendations_markdown,
+            req.generated,
+            req.org_data,
+            date.today(),
+        )
+        filename = f"hls-csa-model-iq-{date.today().isoformat()}.zip"
+        return Response(
+            content=zip_bytes,
+            media_type="application/zip",
             headers={"Content-Disposition": f'attachment; filename="{filename}"'},
         )
     except Exception as exc:

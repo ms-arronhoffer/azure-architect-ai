@@ -13,7 +13,6 @@ from io import BytesIO
 from services.openai_service import get_client, get_deployment
 from services.pptx_service import build_presentation
 
-
 # ── LLM narrative ─────────────────────────────────────────────────────────────
 
 _NARRATIVE_TOOL = {
@@ -162,7 +161,7 @@ def _build_outline(report_data: dict, narrative: dict) -> dict:
         {
             "layout": "content",
             "title": "Executive Summary",
-            "content": [narrative.get("executive_summary", "")] + narrative.get("key_risks", [])[:5],
+            "content": [narrative.get("executive_summary", ""), *narrative.get("key_risks", [])[:5]],
             "speaker_notes": "Key business risks for this retirement cycle.",
         },
         {
@@ -227,8 +226,9 @@ def build_pptx_report(report_data: dict, narrative: dict) -> bytes:
 
 def build_docx_report(report_data: dict, narrative: dict) -> bytes:
     from docx import Document  # type: ignore[import-untyped]
-    from docx.enum.text import WD_ALIGN_PARAGRAPH
-    from docx.shared import Inches, Pt, RGBColor as DocxRGB
+    from docx.enum.text import WD_ALIGN_PARAGRAPH  # type: ignore[import-untyped]
+    from docx.shared import Inches, Pt  # type: ignore[import-untyped]
+    from docx.shared import RGBColor as DocxRGB
 
     AZURE = DocxRGB(0x00, 0x78, 0xD4)
     MUTED = DocxRGB(0x80, 0x98, 0xB0)
@@ -377,7 +377,7 @@ def _sanitize_pdf(text: str) -> str:
     return (
         str(text)
         .replace("\u2014", "-")    # em dash —
-        .replace("\u2013", "-")    # en dash –
+        .replace("\u2013", "-")    # en dash -
         .replace("\u00B7", " * ")  # middle dot ·
         .replace("\u2022", "-")    # bullet •
         .replace("\u2019", "'")    # right single quote
@@ -522,7 +522,7 @@ def build_pdf_report(report_data: dict, narrative: dict) -> bytes:
         pdf.set_fill_color(*DARK_RGB)
         pdf.set_text_color(255, 255, 255)
         pdf.set_font("Helvetica", "B", 7)
-        for w, h in zip(col_w, hdrs):
+        for w, h in zip(col_w, hdrs, strict=False):
             pdf.cell(w, 5, h, border=0, fill=True)
         pdf.ln()
         pdf.set_text_color(0, 0, 0)
@@ -540,7 +540,7 @@ def build_pdf_report(report_data: dict, narrative: dict) -> bytes:
                 str(days) if days is not None else "-",
                 _sanitize_pdf(opts[0]["model"] if opts else "None found")[:35],
             ]
-            for w, val in zip(col_w, row):
+            for w, val in zip(col_w, row, strict=False):
                 pdf.cell(w, 5, val, border=0, fill=True)
             pdf.ln()
     pdf.ln(5)

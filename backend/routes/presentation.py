@@ -2,7 +2,6 @@
 
 import io
 import json
-from typing import Optional
 
 from fastapi import APIRouter, File, Form, UploadFile
 from fastapi.responses import Response, StreamingResponse
@@ -174,7 +173,7 @@ async def outline_endpoint(
     objectives: str = Form(""),
     num_slides: int = Form(10),
     conversation_context: str = Form(""),
-    files: Optional[list[UploadFile]] = File(default=None),
+    files: list[UploadFile] | None = File(default=None),
 ):
     req = OutlineRequest(
         topic=topic,
