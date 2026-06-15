@@ -44,6 +44,29 @@ RISK_EMOJI: dict[str, str] = {
 # ─── File Loading ────────────────────────────────────────────────────────────
 
 
+def _xlsx_to_csv_bytes(data: bytes) -> bytes:
+    """Convert xlsx bytes → csv bytes (utf-8) so all values are uniform strings."""
+    import csv as _csv
+
+    import openpyxl  # type: ignore[import]
+
+    wb = openpyxl.load_workbook(io.BytesIO(data), read_only=True, data_only=True)
+    ws = wb.active
+    out = io.StringIO()
+    writer = _csv.writer(out)
+    for row in ws.iter_rows(values_only=True):
+        writer.writerow(["" if v is None else str(v) for v in row])
+    wb.close()
+    return out.getvalue().encode("utf-8")
+
+
+def _to_raw_rows(data: bytes, filename: str) -> list[list[str]]:
+    """Return raw rows as list[list[str]] regardless of source format."""
+    if filename.lower().endswith(".xlsx"):
+        data = _xlsx_to_csv_bytes(data)
+    return _csv_to_raw_rows(data)
+
+
 def _xlsx_to_raw_rows(data: bytes) -> list[list[Any]]:
     import openpyxl  # type: ignore[import]
 
@@ -64,7 +87,7 @@ def _csv_to_raw_rows(data: bytes) -> list[list[str]]:
 
 def load_file(data: bytes, filename: str) -> list[dict]:
     """Generic loader: xlsx or csv with row 1 as headers → list[dict]."""
-    rows = _xlsx_to_raw_rows(data) if filename.lower().endswith(".xlsx") else _csv_to_raw_rows(data)
+    rows = _to_raw_rows(data, filename)
     if not rows:
         return []
     headers = [str(h).strip() if h is not None else "" for h in rows[0]]
@@ -112,7 +135,7 @@ def parse_acr_data(data: bytes, filename: str, month_col: str) -> dict[str, floa
       Row 1: TPAccountName,ServiceCompGrouping,$ ACR,…   ← label row (skip)
       Row 2+: ABBOTT LABORATORIES,Total,"$37,027",…
     """
-    rows = _xlsx_to_raw_rows(data) if filename.lower().endswith(".xlsx") else _csv_to_raw_rows(data)
+    rows = _to_raw_rows(data, filename)
     if not rows:
         return {}
 
