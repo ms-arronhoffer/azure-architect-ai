@@ -207,18 +207,22 @@ export default function DemoShowcasePanel() {
         onOpenChange={(_, data) => { if (!data.open) setDeleteTarget(null); }}
       >
         <DialogSurface>
-          <DialogTitle>Delete demo?</DialogTitle>
+          <DialogTitle>Are you sure you want to delete this demo?</DialogTitle>
           <DialogBody>
             <Text>
-              This will permanently remove "{deleteTarget?.title}" from the catalog.
+              This will <strong>permanently</strong> remove "{deleteTarget?.title}" from the catalog. This action cannot be undone.
             </Text>
           </DialogBody>
           <DialogActions>
-            <Button appearance="secondary" onClick={() => setDeleteTarget(null)}>
+            <Button appearance="secondary" onClick={() => setDeleteTarget(null)} autoFocus>
               Cancel
             </Button>
-            <Button appearance="primary" onClick={confirmDelete}>
-              Delete
+            <Button
+              appearance="primary"
+              onClick={confirmDelete}
+              style={{ backgroundColor: tokens.colorPaletteRedBackground3, borderColor: tokens.colorPaletteRedBorder2 }}
+            >
+              Delete permanently
             </Button>
           </DialogActions>
         </DialogSurface>

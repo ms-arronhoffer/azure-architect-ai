@@ -102,6 +102,29 @@ TOOLS_BY_MODE: dict[str, list] = {
     "fabricplanner":        get_tools("plan_fabric_capacity", "search_azure_docs"),
     "adfpipeline":          get_tools("generate_adf_pipeline", "search_azure_docs"),
     "medalliondesigner":    get_tools("design_medallion_schema", "search_azure_docs"),
+    # ── Network Desk specialists (Azure-only) ──
+    "netvnet":         get_tools("search_azure_docs", "design_network_topology", "generate_bicep",
+                                 "generate_terraform", "validate_resource_naming",
+                                 "suggest_resource_name", "estimate_costs"),
+    "netfirewall":     get_tools("search_azure_docs", "design_network_topology", "generate_bicep",
+                                 "generate_terraform", "validate_resource_naming"),
+    "netsecurity":     get_tools("search_azure_docs", "design_network_topology", "generate_bicep",
+                                 "generate_terraform", "validate_resource_naming"),
+    "nethybrid":       get_tools("search_azure_docs", "design_network_topology", "generate_bicep",
+                                 "generate_terraform", "estimate_costs"),
+    "netprivatelink":  get_tools("search_azure_docs", "design_network_topology", "generate_bicep",
+                                 "generate_terraform"),
+    "netvwan":         get_tools("search_azure_docs", "design_network_topology", "generate_bicep",
+                                 "generate_terraform", "estimate_costs"),
+    "netdns":          get_tools("search_azure_docs", "generate_bicep", "generate_terraform"),
+    "netmonitor":      get_tools("search_azure_docs", "generate_kql_queries",
+                                 "generate_monitoring_config"),
+    "nettroubleshoot": get_tools("search_azure_docs", "diagnose_issue", "generate_kql_queries",
+                                 "generate_remediation_runbook"),
+    "netiac":          get_tools("search_azure_docs", "generate_bicep", "generate_terraform",
+                                 "generate_arm", "validate_resource_naming",
+                                 "suggest_resource_name"),
+    "netpricing":      get_tools("search_azure_docs", "estimate_costs"),
 }
 
 # Modes that benefit from MCP tools (informational/guidance, not subscription-bound actions)
@@ -114,6 +137,8 @@ _MCP_ENABLED_MODES = {
     "governance", "security", "ops",
     "pipelineforge", "runbookstudio", "namingstandards", "rfpproposal",
     "datapipelineadvisor", "fabricplanner", "adfpipeline", "medalliondesigner",
+    "netvnet", "netfirewall", "netsecurity", "nethybrid", "netprivatelink",
+    "netvwan", "netdns", "netmonitor", "nettroubleshoot", "netiac", "netpricing",
 }
 
 

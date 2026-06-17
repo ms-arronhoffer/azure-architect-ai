@@ -69,6 +69,17 @@ const MODE_LABELS: Record<Mode, string> = {
   medalliondesigner: "Medallion Schema Designer",
   modelmigration: "Migration Advisor",
   showcase: "Demo Showcase",
+  netvnet: "VNet & Subnet Architect",
+  netfirewall: "Firewall Engineer",
+  netsecurity: "Network Security",
+  nethybrid: "Hybrid Connectivity",
+  netprivatelink: "Private Link & Endpoints",
+  netvwan: "Virtual WAN",
+  netdns: "DNS Specialist",
+  netmonitor: "Network Monitor",
+  nettroubleshoot: "Network Troubleshooter",
+  netiac: "Network IaC",
+  netpricing: "Network Pricing",
 };
 
 const MODE_SECTION: Partial<Record<Mode, string>> = {
@@ -115,6 +126,17 @@ const MODE_SECTION: Partial<Record<Mode, string>> = {
   fabricplanner: "Data Engineering",
   adfpipeline: "Data Engineering",
   medalliondesigner: "Data Engineering",
+  netvnet: "Networking",
+  netfirewall: "Networking",
+  netsecurity: "Networking",
+  nethybrid: "Networking",
+  netprivatelink: "Networking",
+  netvwan: "Networking",
+  netdns: "Networking",
+  netmonitor: "Networking",
+  nettroubleshoot: "Networking",
+  netiac: "Networking",
+  netpricing: "Networking",
 };
 
 const useStyles = makeStyles({

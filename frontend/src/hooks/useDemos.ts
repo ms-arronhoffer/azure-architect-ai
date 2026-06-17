@@ -14,6 +14,7 @@ export interface DemoInput {
   tags: string[];
   video_url: string | null;
   repo_url: string | null;
+  live_url: string | null;
   thumbnail_url: string | null;
   featured: boolean;
 }

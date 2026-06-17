@@ -46,6 +46,17 @@ export type Mode =
   | "medalliondesigner"
   | "modelmigration"
   | "showcase"
+  | "netvnet"
+  | "netfirewall"
+  | "netsecurity"
+  | "nethybrid"
+  | "netprivatelink"
+  | "netvwan"
+  | "netdns"
+  | "netmonitor"
+  | "nettroubleshoot"
+  | "netiac"
+  | "netpricing"
   | "admin";
 
 // ── Demo showcase ────────────────────────────────────────────────────────────
@@ -57,6 +68,7 @@ export interface Demo {
   tags: string[];
   video_url: string | null;
   repo_url: string | null;
+  live_url: string | null;
   thumbnail_url: string | null;
   featured: boolean;
   created_at: string;

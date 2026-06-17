@@ -32,6 +32,7 @@ _SEED_DEMOS: list[dict[str, Any]] = [
         "tags": ["Azure OpenAI", "Azure AI Search", "GPT-4o", "Streaming"],
         "video_url": None,
         "repo_url": "https://github.com/ms-arronhoffer/azure-ai-search-demo",
+        "live_url": None,
         "thumbnail_url": None,
         "featured": True,
         "created_at": "2026-05-01T00:00:00Z",
@@ -46,6 +47,7 @@ _SEED_DEMOS: list[dict[str, Any]] = [
         "tags": ["Azure AI", "Document Intelligence", "Vision", "Python"],
         "video_url": None,
         "repo_url": "https://github.com/ms-arronhoffer/azure-doc-intelligence-demo",
+        "live_url": None,
         "thumbnail_url": None,
         "featured": False,
         "created_at": "2026-04-15T00:00:00Z",
@@ -59,6 +61,7 @@ class DemoIn(BaseModel):
     tags: list[str] = Field(default_factory=list)
     video_url: str | None = None
     repo_url: str | None = None
+    live_url: str | None = None
     thumbnail_url: str | None = None
     featured: bool = False
 
@@ -69,6 +72,7 @@ class DemoPatch(BaseModel):
     tags: list[str] | None = None
     video_url: str | None = None
     repo_url: str | None = None
+    live_url: str | None = None
     thumbnail_url: str | None = None
     featured: bool | None = None
 
@@ -81,6 +85,7 @@ def _serialize(row: Demo) -> dict[str, Any]:
         "tags": row.tags or [],
         "video_url": row.video_url,
         "repo_url": row.repo_url,
+        "live_url": row.live_url,
         "thumbnail_url": row.thumbnail_url,
         "featured": bool(row.featured),
         "created_at": row.created_at,
@@ -128,6 +133,7 @@ async def create_demo(body: DemoIn, session: AsyncSession = Depends(get_session)
         tags=body.tags,
         video_url=body.video_url or None,
         repo_url=body.repo_url or None,
+        live_url=body.live_url or None,
         thumbnail_url=body.thumbnail_url or None,
         featured=body.featured,
         created_at=now,

@@ -90,6 +90,7 @@ class Demo(Base):
     tags: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
     video_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     repo_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    live_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     thumbnail_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     featured: Mapped[bool] = mapped_column(nullable=False, default=False)
     created_at: Mapped[str] = mapped_column(String(64), nullable=False)
@@ -106,6 +107,15 @@ async def init_db() -> None:
         await conn.execute(
             text("UPDATE conversations SET user_id = 'default' WHERE user_id IS NULL")
         )
+        await _ensure_column(conn, "demos", "live_url", "TEXT")
+
+
+async def _ensure_column(conn, table: str, column: str, ddl_type: str) -> None:
+    """Add `column` to `table` if missing. Lightweight in-place migration for SQLite."""
+    rows = (await conn.execute(text(f"PRAGMA table_info({table})"))).all()
+    if any(r[1] == column for r in rows):
+        return
+    await conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {column} {ddl_type}"))
 
 
 async def get_session() -> AsyncIterator[AsyncSession]:

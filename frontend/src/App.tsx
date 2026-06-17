@@ -5,6 +5,7 @@ import SideNav from "./components/SideNav";
 import Header from "./components/Header";
 import HistoryDrawer from "./components/HistoryDrawer";
 import AdvisorPanel, { ADVISOR_MODES } from "./components/AdvisorPanel";
+import NetworkDeskPanel, { NETWORK_DESK_MODES } from "./components/NetworkDeskPanel";
 import ArchitecturePanel from "./components/ArchitecturePanel";
 import WAFPanel from "./components/WAFPanel";
 import ReviewPanel from "./components/ReviewPanel";
@@ -251,6 +252,24 @@ export default function App() {
     if (mode === "runbookstudio") return <RunbookStudioPanel key="runbookstudio" onRefine={handleRefine} sessionId={runbookStudioSessionId} onSave={handlePanelSave} initialSession={panelSession("runbookstudio")} />;
     if (mode === "namingstandards") return <NamingStandardsPanel key="namingstandards" onRefine={handleRefine} sessionId={namingStandardsSessionId} onSave={handlePanelSave} initialSession={panelSession("namingstandards")} />;
     if (mode === "rfpproposal") return <RfpProposalPanel key="rfpproposal" onRefine={handleRefine} sessionId={rfpProposalSessionId} onSave={handlePanelSave} initialSession={panelSession("rfpproposal")} />;
+    if (NETWORK_DESK_MODES.includes(mode)) {
+      return (
+        <NetworkDeskPanel
+          key={chatKey}
+          mode={mode}
+          onModeChange={handleModeChange}
+          conversationId={selectedConversation?.id}
+          initialMessages={initialMessages}
+          suggestedReplies={refinementSeed?.suggestedReplies}
+          modelConfig={settings.mode_models[mode]}
+          workloadContext={workloadContext}
+          onOpenContext={() => setContextOpen(true)}
+          onFork={handleFork}
+          onSave={(id, m, msgs) => upsert(id, m, msgs)}
+          onContinueIn={handleContinueIn}
+        />
+      );
+    }
     if (ADVISOR_MODES.includes(mode)) {
       return (
         <AdvisorPanel

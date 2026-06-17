@@ -42,6 +42,7 @@ const EMPTY: DemoInput = {
   tags: [],
   video_url: null,
   repo_url: null,
+  live_url: null,
   thumbnail_url: null,
   featured: false,
 };
@@ -53,6 +54,7 @@ function demoToInput(d: Demo): DemoInput {
     tags: d.tags,
     video_url: d.video_url,
     repo_url: d.repo_url,
+    live_url: d.live_url,
     thumbnail_url: d.thumbnail_url,
     featured: d.featured,
   };
@@ -131,6 +133,13 @@ export function DemoFormDialog({ open, initial, onClose, onSubmit }: DemoFormDia
                 value={form.repo_url ?? ""}
                 onChange={(_, d) => update("repo_url", d.value || null)}
                 placeholder="https://github.com/..."
+              />
+            </Field>
+            <Field label="Live Demo URL" hint="Hosted/deployed app users can interact with">
+              <Input
+                value={form.live_url ?? ""}
+                onChange={(_, d) => update("live_url", d.value || null)}
+                placeholder="https://demo.example.com"
               />
             </Field>
             <Field label="Thumbnail URL" hint="Optional — overrides auto-generated YouTube thumbnail">

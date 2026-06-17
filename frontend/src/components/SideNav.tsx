@@ -39,6 +39,7 @@ import {
   PlugConnectedRegular,
   TableRegular,
   PlayCircleRegular,
+  GlobeRegular,
 } from "@fluentui/react-icons";
 import type { Mode } from "../types";
 import { useAuth } from "../auth/AuthProvider";
@@ -64,6 +65,11 @@ const ADVISOR_MODES: Mode[] = [
 ];
 
 const ARCH_MODES: Mode[] = ["architecture", "network", "aiarchitecture", "dataplatform", "apim"];
+
+const NETWORK_DESK_MODES: Mode[] = [
+  "netvnet", "netfirewall", "netsecurity", "nethybrid", "netprivatelink",
+  "netvwan", "netdns", "netmonitor", "nettroubleshoot", "netiac", "netpricing",
+];
 
 const NAV_SECTIONS: NavSectionDef[] = [
   {
@@ -96,6 +102,12 @@ const NAV_SECTIONS: NavSectionDef[] = [
       { mode: "landingzone", label: "Landing Zone", icon: <LayerRegular />, description: "Azure CAF landing zone design with management groups" },
       { mode: "pipelineforge", label: "Pipeline Forge", icon: <BranchForkRegular />, description: "Generate GitHub Actions & Azure DevOps CI/CD pipelines" },
       { mode: "namingstandards", label: "Naming Standards", icon: <TagRegular />, description: "CAF naming conventions + Bicep/Terraform enforcement module" },
+    ],
+  },
+  {
+    label: "Networking",
+    items: [
+      { mode: "netvnet", label: "Network Desk", icon: <GlobeRegular />, description: "11 specialist advisors for Azure networking", activeWhen: NETWORK_DESK_MODES },
     ],
   },
   {

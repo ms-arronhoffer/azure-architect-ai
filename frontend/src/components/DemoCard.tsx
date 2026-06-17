@@ -14,6 +14,7 @@ import {
 import {
   Video24Regular,
   Code24Regular,
+  Open24Regular,
   StarFilled,
   NewFilled,
   EditRegular,
@@ -221,6 +222,18 @@ export function DemoCard({ demo, onEdit, onDelete }: DemoCardProps) {
               onClick={() => setModalOpen(true)}
             >
               Watch
+            </Button>
+          )}
+          {demo.live_url && (
+            <Button
+              appearance={demo.video_url ? "outline" : "primary"}
+              icon={<Open24Regular />}
+              as="a"
+              href={demo.live_url}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Live Demo
             </Button>
           )}
           {demo.repo_url && (
