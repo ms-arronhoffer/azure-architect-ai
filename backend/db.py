@@ -79,6 +79,22 @@ class TokenUsage(Base):
     created_at: Mapped[int] = mapped_column(BigInteger, nullable=False, index=True)
 
 
+class Demo(Base):
+    """Demo showcase entry — global (not user-scoped) catalog of demos."""
+
+    __tablename__ = "demos"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    title: Mapped[str] = mapped_column(Text, nullable=False)
+    description: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    tags: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    video_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    repo_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    thumbnail_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    featured: Mapped[bool] = mapped_column(nullable=False, default=False)
+    created_at: Mapped[str] = mapped_column(String(64), nullable=False)
+
+
 _engine = create_async_engine(settings.database_url, future=True, pool_pre_ping=True)
 _Session = async_sessionmaker(_engine, expire_on_commit=False)
 
@@ -110,6 +126,7 @@ def session_scope() -> AsyncSession:
 __all__ = [
     "Base",
     "Conversation",
+    "Demo",
     "RagDocument",
     "TokenUsage",
     "UserSecret",

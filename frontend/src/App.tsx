@@ -36,6 +36,7 @@ import TelemetryDebugDrawer from "./components/TelemetryDebugDrawer";
 import FabricPlannerPanel from "./components/FabricPlannerPanel";
 import AdfPipelinePanel from "./components/AdfPipelinePanel";
 import MedallionDesignerPanel from "./components/MedallionDesignerPanel";
+import DemoShowcasePanel from "./components/DemoShowcasePanel";
 import { useConversationHistory } from "./hooks/useConversationHistory";
 import { useWorkloadContext } from "./hooks/useWorkloadContext";
 import { useSettings } from "./hooks/useSettings";
@@ -241,6 +242,7 @@ export default function App() {
     if (mode === "fabricplanner") return <FabricPlannerPanel key="fabricplanner" />;
     if (mode === "adfpipeline") return <AdfPipelinePanel key="adfpipeline" />;
     if (mode === "medalliondesigner") return <MedallionDesignerPanel key="medalliondesigner" />;
+    if (mode === "showcase") return <DemoShowcasePanel key="showcase" />;
     if (mode === "presentation") return <PresentationPanel key="presentation" />;
     if (mode === "codegen") return <CodegenPanel key="codegen" onRefine={handleRefine} />;
     if (mode === "learningplan") return <LearningPlanPanel key="learningplan" />;

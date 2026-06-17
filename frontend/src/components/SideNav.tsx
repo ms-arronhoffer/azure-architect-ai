@@ -38,6 +38,7 @@ import {
   ScalesRegular,
   PlugConnectedRegular,
   TableRegular,
+  PlayCircleRegular,
 } from "@fluentui/react-icons";
 import type { Mode } from "../types";
 import { useAuth } from "../auth/AuthProvider";
@@ -72,6 +73,7 @@ const NAV_SECTIONS: NavSectionDef[] = [
       { mode: "servicehealth", label: "Service Health", icon: <HeartPulseRegular />, description: "Azure service incidents and health advisories" },
       { mode: "modellifecycle", label: "Model Lifecycle", icon: <CalendarRegular />, description: "Azure Foundry model retirement schedule" },
       { mode: "modelmigration", label: "Migration Advisor", icon: <ArrowSwapRegular />, description: "Score model migrations and plan PTU capacity" },
+      { mode: "showcase", label: "Demo Showcase", icon: <PlayCircleRegular />, description: "Browse and contribute to the demo catalog" },
     ],
   },
   {
