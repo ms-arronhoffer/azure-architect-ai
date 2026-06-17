@@ -111,9 +111,16 @@ async def init_db() -> None:
 
 
 async def _ensure_column(conn, table: str, column: str, ddl_type: str) -> None:
-    """Add `column` to `table` if missing. Lightweight in-place migration for SQLite."""
-    rows = (await conn.execute(text(f"PRAGMA table_info({table})"))).all()
-    if any(r[1] == column for r in rows):
+    """Add `column` to `table` if missing. Dialect-agnostic via SQLAlchemy Inspector."""
+    from sqlalchemy import inspect
+
+    def _has_column(sync_conn) -> bool:
+        insp = inspect(sync_conn)
+        if table not in insp.get_table_names():
+            return True  # table doesn't exist yet; create_all will build it correctly
+        return any(c["name"] == column for c in insp.get_columns(table))
+
+    if await conn.run_sync(_has_column):
         return
     await conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {column} {ddl_type}"))
 
