@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ChatMessage, Mode, ModelConfig, StructuredResult } from "../types";
 import { useSSE } from "./useSSE";
 
-export function useChat(mode: Mode, _conversationId?: string, onSave?: (msgs: ChatMessage[]) => void, initialMessages?: ChatMessage[], modelConfig?: ModelConfig) {
+export function useChat(mode: Mode, _conversationId?: string, onSave?: (msgs: ChatMessage[]) => void, initialMessages?: ChatMessage[], modelConfig?: ModelConfig, onDiagram?: (xml: string) => void) {
   // If the last initialMessage is a user message, auto-send it on mount.
   // useMemo with [] deps so this only computes once (stable across renders).
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -58,6 +58,10 @@ export function useChat(mode: Mode, _conversationId?: string, onSave?: (msgs: Ch
         llm_config: modelConfig ?? null,
         attachments: attachments?.length ? attachments : null,
       }, (event) => {
+        if (event.type === "diagram" && typeof event.xml === "string") {
+          onDiagram?.(event.xml);
+          return;
+        }
         setMessages((prev) =>
           prev.map((m) => {
             if (m.id !== assistantId) return m;
@@ -87,7 +91,7 @@ export function useChat(mode: Mode, _conversationId?: string, onSave?: (msgs: Ch
         )
       );
     },
-    [messages, mode, stream]
+    [messages, mode, stream, onDiagram]
   );
 
   const loadMessages = useCallback((msgs: ChatMessage[]) => {

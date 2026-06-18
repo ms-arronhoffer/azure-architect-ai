@@ -963,9 +963,10 @@ interface ChatPanelProps {
   onSave?: (id: string, mode: Mode, messages: ChatMessageType[]) => void;
   onBuildDeck?: (conversationText: string) => void;
   onContinueIn?: (mode: Mode, seed: string) => void;
+  onDiagram?: (xml: string) => void;
 }
 
-export default function ChatPanel({ mode, conversationId: savedId, initialMessages, suggestedReplies, modelConfig, workloadContext, onOpenContext, onFork, onSave, onBuildDeck, onContinueIn }: ChatPanelProps) {
+export default function ChatPanel({ mode, conversationId: savedId, initialMessages, suggestedReplies, modelConfig, workloadContext, onOpenContext, onFork, onSave, onBuildDeck, onContinueIn, onDiagram }: ChatPanelProps) {
   const styles = useStyles();
   const convId = useRef(savedId ?? crypto.randomUUID()).current;
   const subtopics = GROUP_SUBTOPICS[mode];
@@ -978,6 +979,7 @@ export default function ChatPanel({ mode, conversationId: savedId, initialMessag
     onSave ? (msgs) => onSave(convId, effectiveMode, msgs) : undefined,
     initialMessages,
     modelConfig,
+    onDiagram,
   );
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);

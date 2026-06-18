@@ -1013,6 +1013,7 @@ TOOL USE:
 - Call generate_bicep with target_scope="resourceGroup" for VNet/subnet/peering/route-table resources
 - Call validate_resource_naming and suggest_resource_name for CAF-aligned VNet/subnet names
 - Call estimate_costs when peering volume or gateway SKUs materially affect spend
+- For topology/architecture diagrams, also call design_architecture with structured components and connections — this drives the draw.io diagram pane on the right
 
 {_NETDESK_VALIDATION_NOTE}
 """
@@ -1034,6 +1035,7 @@ TOOL USE:
 - Call design_network_topology to capture the firewall placement and routing intent
 - Call generate_bicep for AzureFirewall, AzureFirewallPolicy, RuleCollectionGroup resources
 - Call search_azure_docs for current FQDN tag list and supported categories
+- For topology/architecture diagrams, also call design_architecture with structured components and connections — this drives the draw.io diagram pane on the right
 
 {_NETDESK_VALIDATION_NOTE}
 """
@@ -1072,6 +1074,7 @@ TOOL USE:
 - Call search_azure_docs for current circuit SKUs, supported peering locations, and BGP behaviour
 - Call estimate_costs for circuit SKU + egress-volume scenarios
 - Call generate_bicep for VirtualNetworkGateway, ExpressRouteCircuit, Connection resources
+- For topology/architecture diagrams, also call design_architecture with structured components and connections — this drives the draw.io diagram pane on the right
 
 {_NETDESK_VALIDATION_NOTE}
 """
@@ -1090,6 +1093,7 @@ KEY DOMAINS:
 TOOL USE:
 - Call search_azure_docs for the current Private Link service catalog and DNS zone names
 - Call generate_bicep for PrivateEndpoint, PrivateDnsZone, and VirtualNetworkLink resources
+- For topology/architecture diagrams, also call design_architecture with structured components and connections — this drives the draw.io diagram pane on the right
 
 {_NETDESK_VALIDATION_NOTE}
 """
@@ -1108,6 +1112,7 @@ TOOL USE:
 - Call search_azure_docs for current vWAN limits, hub-SKU pricing, and feature parity
 - Call estimate_costs for scale-unit + Firewall + ER-gateway combinations
 - Call generate_bicep for VirtualWan, VirtualHub, HubRouteTable resources
+- For topology/architecture diagrams, also call design_architecture with structured components and connections — this drives the draw.io diagram pane on the right
 
 {_NETDESK_VALIDATION_NOTE}
 """
@@ -1191,6 +1196,7 @@ TOOL USE:
 - Call generate_bicep with target_scope="resourceGroup" or "subscription" depending on resource scope
 - Call generate_terraform when the user explicitly requests Terraform
 - Call validate_resource_naming and suggest_resource_name for CAF-aligned identifiers
+- For topology/architecture diagrams, also call design_architecture with structured components and connections — this drives the draw.io diagram pane on the right
 
 {_NETDESK_VALIDATION_NOTE}
 """
@@ -1245,6 +1251,7 @@ TOOL USE:
 - Call search_azure_docs for current SKU specs, regional availability, and quota defaults
 - Call estimate_costs (azure-pricing MCP) for SKU + region pricing — never invent prices
 - Call generate_bicep with target_scope="resourceGroup" for Microsoft.Compute/virtualMachines
+- For topology/architecture diagrams, also call design_architecture with structured components and connections — this drives the draw.io diagram pane on the right
 
 {_COMPDESK_VALIDATION_NOTE}
 """
@@ -1303,6 +1310,7 @@ TOOL USE:
 - Call search_azure_docs for current AZ region map and zonal service support
 - Call generate_bicep for AvailabilitySet, ProximityPlacementGroup, and zonal VM definitions
 - Call assess_waf_pillar focused on Reliability when scoring an HA design
+- For topology/architecture diagrams, also call design_architecture with structured components and connections — this drives the draw.io diagram pane on the right
 
 {_COMPDESK_VALIDATION_NOTE}
 """
@@ -1323,6 +1331,7 @@ TOOL USE:
 - Call design_dr_strategy for the structured RPO/RTO + paired-region plan
 - Call generate_remediation_runbook for the failover/failback runbook
 - Call estimate_costs for replication + storage + compute-on-failover pricing
+- For topology/architecture diagrams, also call design_architecture with structured components and connections — this drives the draw.io diagram pane on the right
 
 {_COMPDESK_VALIDATION_NOTE}
 """
@@ -1456,7 +1465,7 @@ KEY DOMAINS:
 
 TOOL USE:
 - Call search_azure_docs for current Foundry Hub/Project topology, model-region availability, and PTU SKU specs
-- Call design_architecture for the end-to-end AI workload topology
+- Call design_architecture for the end-to-end AI workload topology — this drives the draw.io diagram pane on the right
 - Call generate_bicep for Microsoft.MachineLearningServices/workspaces and AOAI deployments
 
 {_AIDESK_VALIDATION_NOTE}
@@ -1494,7 +1503,7 @@ KEY DOMAINS:
 
 TOOL USE:
 - Call search_azure_docs for current AI Search SKU limits, vector dimensions, and integrated vectorization
-- Call design_architecture for the indexer + AOAI + chat orchestrator topology
+- Call design_architecture for the indexer + AOAI + chat orchestrator topology — this drives the draw.io diagram pane on the right
 - Call generate_bicep for Microsoft.Search/searchServices and indexer skillsets
 
 {_AIDESK_VALIDATION_NOTE}
@@ -1513,7 +1522,7 @@ KEY DOMAINS:
 
 TOOL USE:
 - Call search_azure_docs for current Foundry Agent Service capabilities, model-feature matrix, and SK release notes
-- Call design_architecture for multi-agent topologies
+- Call design_architecture for multi-agent topologies — this drives the draw.io diagram pane on the right
 - Call generate_code_files when the user wants scaffold for SK/AutoGen agents
 
 {_AIDESK_VALIDATION_NOTE}
@@ -1551,7 +1560,7 @@ KEY DOMAINS:
 
 TOOL USE:
 - Call search_azure_docs for current AML SKU specs, endpoint quotas, and pipeline component schema
-- Call design_architecture for the train → register → deploy → monitor pipeline
+- Call design_architecture for the train → register → deploy → monitor pipeline — this drives the draw.io diagram pane on the right
 - Call generate_bicep for Microsoft.MachineLearningServices resources
 
 {_AIDESK_VALIDATION_NOTE}
@@ -1629,6 +1638,7 @@ TOOL USE:
 - Call generate_bicep with target_scope="resourceGroup" or "subscription"
 - Call generate_terraform when user explicitly requests Terraform
 - Call validate_resource_naming and suggest_resource_name for CAF-aligned identifiers
+- For topology/architecture diagrams, also call design_architecture with structured components and connections — this drives the draw.io diagram pane on the right
 
 {_AIDESK_VALIDATION_NOTE}
 """
@@ -1659,6 +1669,7 @@ TOOL USE:
 - Call search_azure_docs for current ADLS Gen2 limits, ACL behavior, and lifecycle management policies
 - Call generate_bicep for Microsoft.Storage/storageAccounts with HNS enabled and lifecycle rules
 - Call estimate_costs for hot/cool/archive tier mix scenarios
+- For topology/architecture diagrams, also call design_architecture with structured components and connections — this drives the draw.io diagram pane on the right
 
 {_DATADESK_VALIDATION_NOTE}
 """
@@ -1676,7 +1687,7 @@ KEY DOMAINS:
 
 TOOL USE:
 - Call search_azure_docs for current Fabric Warehouse limits, Synapse Dedicated SQL deprecation roadmap
-- Call design_architecture for the lake → DW → semantic model flow
+- Call design_architecture for the lake → DW → semantic model flow — this drives the draw.io diagram pane on the right
 - Call generate_bicep for Microsoft.Synapse and Microsoft.Fabric resources
 
 {_DATADESK_VALIDATION_NOTE}
@@ -1695,7 +1706,7 @@ KEY DOMAINS:
 
 TOOL USE:
 - Call search_azure_docs for current Event Hubs SKU limits, RTI feature matrix, and ASA deprecation status
-- Call design_architecture for the ingest → process → serve pipeline
+- Call design_architecture for the ingest → process → serve pipeline — this drives the draw.io diagram pane on the right
 - Call generate_bicep for Microsoft.EventHub and Microsoft.Fabric resources
 
 {_DATADESK_VALIDATION_NOTE}
@@ -1715,6 +1726,7 @@ KEY DOMAINS:
 TOOL USE:
 - Call search_azure_docs for current Fabric Lakehouse, OneLake shortcuts, and Databricks Delta features
 - Call design_medallion_schema for structured Bronze/Silver/Gold output
+- For topology/architecture diagrams, also call design_architecture with structured components and connections — this drives the draw.io diagram pane on the right
 - Call generate_bicep for Fabric capacity / Databricks workspace resources
 
 {_DATADESK_VALIDATION_NOTE}
@@ -1831,6 +1843,7 @@ TOOL USE:
 - Call generate_bicep with target_scope="resourceGroup" or "subscription"
 - Call generate_terraform when user explicitly requests Terraform
 - Call validate_resource_naming and suggest_resource_name for CAF-aligned identifiers
+- For topology/architecture diagrams, also call design_architecture with structured components and connections — this drives the draw.io diagram pane on the right
 
 {_DATADESK_VALIDATION_NOTE}
 """

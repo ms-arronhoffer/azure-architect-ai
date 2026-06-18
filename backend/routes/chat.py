@@ -34,6 +34,15 @@ router = APIRouter()
 # Modes that use the architecture route instead (handled by architecture.py)
 ARCH_ROUTE_MODES = {"architecture", "waf", "review", "drbc"}
 
+# Desk modes whose design_architecture tool call should produce a draw.io diagram
+# (mirrors the diagram pane behavior in ArchitecturePanel for the desk experience).
+DIAGRAM_ENABLED_MODES = frozenset({
+    "netvnet", "netfirewall", "nethybrid", "netprivatelink", "netvwan", "netiac",
+    "compsku", "compha", "compdr",
+    "aifoundry", "airag", "aiagents", "aimlops", "aiiac",
+    "datalake", "datawarehouse", "datalakehouse", "datastream", "dataiac",
+})
+
 
 class ChatMessage(BaseModel):
     role: str
@@ -184,6 +193,23 @@ async def _stream_chat(mode: str, messages: list[dict], provider: str = "azure",
 
                 if sse_event:
                     yield f"data: {json.dumps(sse_event)}\n\n"
+
+                # Desk diagram emission: when an architecture-shaped desk mode
+                # calls design_architecture, render the components/connections
+                # via diagram_service and stream the mxfile XML.
+                if name == "design_architecture" and mode in DIAGRAM_ENABLED_MODES:
+                    components = args.get("components", [])
+                    if components:
+                        try:
+                            from services.diagram_service import generate_diagram
+                            diagram_xml = generate_diagram(
+                                components=components,
+                                connections=args.get("connections", []),
+                                title=(args.get("title") or args.get("name") or "Architecture")[:60],
+                            )
+                            yield f"data: {json.dumps({'type': 'diagram', 'xml': diagram_xml})}\n\n"
+                        except Exception as e:
+                            yield f"data: {json.dumps({'type': 'error', 'message': f'Diagram error: {e}'})}\n\n"
 
                 full_messages.append({
                     "role": "tool",
@@ -430,6 +456,15 @@ async def _dispatch_tool(name: str, args: dict) -> tuple[object, dict | None]:
     if name == "design_medallion_schema":
         event = {"type": "medallion_schema", "design": {**args}}
         return {"status": "schema_designed"}, event
+
+    if name == "design_architecture":
+        # Diagram emission happens in _stream_chat (it needs `mode`).
+        # Return a status so the LLM knows the design was accepted.
+        return {
+            "status": "design_received",
+            "component_count": len(args.get("components", [])),
+            "connection_count": len(args.get("connections", [])),
+        }, None
 
     return {}, None
 

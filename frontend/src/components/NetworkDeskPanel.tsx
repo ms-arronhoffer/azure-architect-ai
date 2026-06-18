@@ -1,7 +1,18 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { makeStyles, tokens, Select, Label } from "@fluentui/react-components";
 import ChatPanel from "./ChatPanel";
+import DeskDiagramPane from "./DeskDiagramPane";
+import { useDiagramState } from "../hooks/useDiagramState";
 import type { ChatMessage, Mode, ModelConfig, WorkloadContext } from "../types";
+
+const DIAGRAM_MODES = new Set<Mode>([
+  "netvnet",
+  "netfirewall",
+  "nethybrid",
+  "netprivatelink",
+  "netvwan",
+  "netiac",
+]);
 
 const NETWORK_GROUPS = [
   {
@@ -63,6 +74,24 @@ const useStyles = makeStyles({
     background: tokens.colorNeutralBackground2,
     flexShrink: 0,
   },
+  splitBody: {
+    display: "flex",
+    flex: 1,
+    minHeight: 0,
+    overflow: "hidden",
+  },
+  chatSide: {
+    flex: "1.2 1 0",
+    minWidth: 0,
+    display: "flex",
+    flexDirection: "column",
+  },
+  diagramSide: {
+    flex: "1 1 0",
+    minWidth: "480px",
+    display: "flex",
+    flexDirection: "column",
+  },
 });
 
 const MODEL_OPTIONS = [
@@ -104,11 +133,34 @@ export default function NetworkDeskPanel({
 }: NetworkDeskPanelProps) {
   const styles = useStyles();
   const [selectedModel, setSelectedModel] = useState<string>("gpt-5.4-mini");
+  const diagram = useDiagramState();
+
+  useEffect(() => {
+    diagram.clear();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode]);
 
   const effectiveModelConfig: ModelConfig = {
     provider: modelConfig?.provider ?? "azure",
     model: selectedModel,
   };
+
+  const showDiagram = DIAGRAM_MODES.has(mode);
+  const chat = (
+    <ChatPanel
+      mode={mode}
+      conversationId={conversationId}
+      initialMessages={initialMessages}
+      suggestedReplies={suggestedReplies}
+      modelConfig={effectiveModelConfig}
+      workloadContext={workloadContext}
+      onOpenContext={onOpenContext}
+      onFork={onFork}
+      onSave={onSave}
+      onContinueIn={onContinueIn}
+      onDiagram={diagram.setXml}
+    />
+  );
 
   return (
     <div className={styles.wrapper}>
@@ -150,18 +202,16 @@ export default function NetworkDeskPanel({
           ))}
         </Select>
       </div>
-      <ChatPanel
-        mode={mode}
-        conversationId={conversationId}
-        initialMessages={initialMessages}
-        suggestedReplies={suggestedReplies}
-        modelConfig={effectiveModelConfig}
-        workloadContext={workloadContext}
-        onOpenContext={onOpenContext}
-        onFork={onFork}
-        onSave={onSave}
-        onContinueIn={onContinueIn}
-      />
+      {showDiagram ? (
+        <div className={styles.splitBody}>
+          <div className={styles.chatSide}>{chat}</div>
+          <div className={styles.diagramSide}>
+            <DeskDiagramPane diagram={diagram} />
+          </div>
+        </div>
+      ) : (
+        chat
+      )}
     </div>
   );
 }
