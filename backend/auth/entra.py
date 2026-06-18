@@ -145,3 +145,12 @@ def user_id_from_claims(claims: dict[str, Any] | None) -> str:
         return "default"
     # Prefer the immutable object id (oid) over sub for cross-app stability.
     return str(claims.get("oid") or claims.get("sub") or "default")
+
+
+def tenant_id_from_claims(claims: dict[str, Any] | None) -> str:
+    """Entra `tid` claim is the issuing tenant directory. Defaults to "default"
+    when auth is disabled or the claim is absent (e.g. local dev, tests).
+    """
+    if not claims:
+        return "default"
+    return str(claims.get("tid") or "default")

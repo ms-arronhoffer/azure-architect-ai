@@ -780,6 +780,15 @@ async def architecture(request: Request, req: ArchRequest, claims=Depends(requir
     provider = mc.provider if mc else "azure"
     model = mc.model if mc else ""
     user_id = user_id_from_claims(claims)
+    from fastapi import HTTPException
+
+    from services.token_service import check_daily_budget
+    allowed, used, limit = await check_daily_budget(user_id)
+    if not allowed:
+        raise HTTPException(
+            status_code=429,
+            detail={"error": "daily_token_budget_exceeded", "used_tokens": used, "limit_tokens": limit},
+        )
     github_token = ""
     if provider in {"github-models", "github-copilot"}:
         from db import session_scope

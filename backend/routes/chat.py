@@ -484,6 +484,15 @@ async def chat(request: Request, req: ChatRequest, claims=Depends(require_user))
     provider = mc.provider if mc else "azure"
     model = mc.model if mc else ""
     user_id = user_id_from_claims(claims)
+    from fastapi import HTTPException
+
+    from services.token_service import check_daily_budget
+    allowed, used, limit = await check_daily_budget(user_id)
+    if not allowed:
+        raise HTTPException(
+            status_code=429,
+            detail={"error": "daily_token_budget_exceeded", "used_tokens": used, "limit_tokens": limit},
+        )
     messages = [m.model_dump() for m in req.messages]
     github_token = ""
     if provider in {"github-models", "github-copilot"}:

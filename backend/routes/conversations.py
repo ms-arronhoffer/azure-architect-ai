@@ -5,16 +5,14 @@ from pydantic import BaseModel
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from auth.entra import get_current_user
+from auth.entra import get_current_user, user_id_from_claims
 from db import Conversation, get_session, select
 
 router = APIRouter()
 
 
 def _uid(claims: dict[str, Any] | None) -> str:
-    if not claims:
-        return "default"
-    return claims.get("oid") or claims.get("sub") or "default"
+    return user_id_from_claims(claims)
 
 
 class ConversationRecord(BaseModel):
@@ -66,8 +64,11 @@ async def upsert_conversation(
     user_id = _uid(claims)
     existing = await session.get(Conversation, record.id)
     if existing is not None:
+        if existing.user_id and existing.user_id != user_id:
+            # Don't leak existence of another user's conversation — 404, not 403.
+            raise HTTPException(status_code=404, detail="Not found")
         _apply_update(existing, record)
-        if user_id and existing.user_id is None:
+        if existing.user_id is None:
             existing.user_id = user_id
         await session.commit()
         return {"ok": True}
@@ -92,6 +93,8 @@ async def upsert_conversation(
         existing = await session.get(Conversation, record.id)
         if existing is None:
             raise
+        if existing.user_id and existing.user_id != user_id:
+            raise HTTPException(status_code=404, detail="Not found") from None
         _apply_update(existing, record)
         await session.commit()
     return {"ok": True}
@@ -101,9 +104,11 @@ async def upsert_conversation(
 async def delete_conversation(
     conversation_id: str,
     session: AsyncSession = Depends(get_session),
+    claims: dict[str, Any] | None = Depends(get_current_user),
 ):
+    user_id = _uid(claims)
     obj = await session.get(Conversation, conversation_id)
-    if obj is None:
+    if obj is None or (obj.user_id and obj.user_id != user_id):
         raise HTTPException(status_code=404, detail="Not found")
     await session.delete(obj)
     await session.commit()
@@ -111,8 +116,13 @@ async def delete_conversation(
 
 
 @router.delete("/conversations")
-async def clear_conversations(session: AsyncSession = Depends(get_session)):
-    rows = (await session.execute(select(Conversation))).scalars().all()
+async def clear_conversations(
+    session: AsyncSession = Depends(get_session),
+    claims: dict[str, Any] | None = Depends(get_current_user),
+):
+    user_id = _uid(claims)
+    query = select(Conversation).where(Conversation.user_id == user_id)
+    rows = (await session.execute(query)).scalars().all()
     for r in rows:
         await session.delete(r)
     await session.commit()

@@ -6,7 +6,7 @@ Azure Architect AI is a chat-driven assistant for Azure architects. This guide w
 
 Open `http://localhost:5173` (dev) or the deployed Front Door URL.
 
-- **Mode picker** (top of sidebar) — switch between the 34 modes
+- **Mode picker** (top of sidebar) — switch between the LLM-driven chat modes (defined in `backend/tools/tool_definitions.py:TOOLS_BY_MODE`)
 - **Conversation list** — persisted in the DB (`Conversation` model in `backend/db.py`)
 - **Chat pane** — streams typed SSE events; structured payloads render as cards (`frontend/src/components/chat/StructuredResultCard.tsx`)
 - **Settings panel** — provider + model picker, GitHub token entry, RAG toggle (`frontend/src/hooks/useSettings.ts`)
@@ -14,7 +14,7 @@ Open `http://localhost:5173` (dev) or the deployed Front Door URL.
 
 ## Modes
 
-The 34 modes are defined in `backend/tools/tool_definitions.py:34`. Each one binds a tool catalog (and most a system-prompt template) for that workflow.
+Chat modes are defined in `backend/tools/tool_definitions.py:TOOLS_BY_MODE`. Each one binds a tool catalog (and most a system-prompt template) for that workflow. The tables below cover the most-used modes; the canonical list lives in code.
 
 ### General / reference
 
@@ -74,6 +74,46 @@ The 34 modes are defined in `backend/tools/tool_definitions.py:34`. Each one bin
 | `situation` | Stakeholder situation analysis + plan |
 | `presentation` | Slide deck outline + review |
 | `codegen` | Generate boilerplate code files |
+| `intake` / `intakechat` | Pre-chat workload intake to capture requirements before designing |
+| `strategy` | High-level cloud strategy / roadmap |
+| `whatsnew` | Recent Azure release notes summary |
+| `rfpproposal` | Draft RFP / proposal sections |
+| `runbookstudio` | Operational runbook authoring |
+
+### Data + AI authoring
+
+| Mode | Use case |
+| --- | --- |
+| `fabricplanner` | Microsoft Fabric workload plan |
+| `adfpipeline` | Azure Data Factory pipeline design |
+| `medalliondesigner` | Bronze / silver / gold medallion lakehouse design |
+| `pipelineforge` | General data pipeline scaffolding |
+| `modellifecycle` | LLM model lifecycle / governance |
+| `modelmigration` | Model migration plan (e.g. v1 → v2 deployment) |
+| `namingstandards` | CAF naming standard authoring + validation |
+| `servicehealth` | Live Service Health + Resource Health roll-up |
+
+## Curated libraries
+
+Two side panels surface a curated catalog of Microsoft-authored content. Both panels are non-LLM — they read directly from local DB tables refreshed weekly by the ingest jobs.
+
+### Reference Architecture library (`refarch` panel)
+
+Sources entries from the Microsoft Learn ContentBrowser API. ~220 entries on a fresh ingest. Filter by category, tag, "featured", or free-text query. Toggle the **Featured** star to pin an entry; the toggle persists across weekly refreshes.
+
+### Demo Showcase (`showcase` panel)
+
+Sources entries from `Azure/awesome-azd` (msft-tagged templates only). ~214 entries on a fresh ingest. Same filter + featured-toggle UX as the refarch library.
+
+### Source-aware editing
+
+Both libraries enforce the same mutation rules at the API layer:
+
+- **`microsoft_official`** rows (ingested from Microsoft Learn / awesome-azd) — read-only except for the user-toggled `featured` flag. Edit and Delete buttons are hidden in the UI.
+- **`community`** rows — same read-only treatment as `microsoft_official`.
+- **`custom`** rows — fully editable / deletable. Use these to author your own entries.
+
+Operators with the `Metrics.Read` Entra app role can trigger an immediate refresh via `POST /api/refarch/ingest` or `POST /api/demos/ingest` (see [docs/API.md](API.md#reference-architecture-library)).
 
 ## Worked examples
 
@@ -167,5 +207,5 @@ Output card: `multicloud_comparison` (3-column equivalents table with key differ
 
 - The `multicloud` comparison is heuristic mappings; verify against vendor docs.
 - Cost estimates use cached SKU pricing — re-confirm with the Azure Pricing Calculator before contractual commitments.
-- The IaC emitters cover the 15 bundled reference archs (`backend/data/reference_archs.py`); arbitrary user descriptions go through the LLM and may need manual fix-up.
+- The deterministic IaC emitters cover the bundled reference archs (`backend/data/reference_archs.py`); arbitrary user descriptions go through the LLM and may need manual fix-up. The ingested Reference Architecture library is browsing-only and does not feed the IR pipeline.
 - Some modes (`qa`, `codegen`, `devops`, `finops`, `securityposture`, `multicloud`) currently have no dedicated system-prompt template — they fall through to the default (`backend/prompts/system_prompt.py`).

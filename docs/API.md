@@ -94,6 +94,38 @@ Additional SSE event kinds (beyond those in `/api/chat`):
 ### `GET /api/reference/archs`
 `backend/routes/reference.py`. Returns the bundled reference architectures from `backend/data/reference_archs.py`.
 
+## Reference Architecture library
+
+CRUD for the curated `RefArch` catalog. Rows whose `source` is `microsoft_official` (ingested weekly from Microsoft Learn) or `community` are read-only — `PATCH` accepts only the `featured` flag and `DELETE` returns 403. Rows with `source="custom"` are fully mutable.
+
+### `GET /api/refarch`
+List entries. Supports `?category=`, `?tag=`, `?featured=true`, `?q=` filters.
+
+### `POST /api/refarch`
+Create a `custom`-sourced entry.
+
+### `PATCH /api/refarch/{id}`
+Update an entry. Curated rows: `featured` only.
+
+### `DELETE /api/refarch/{id}`
+Delete. Curated rows return 403.
+
+### `POST /api/refarch/ingest` (admin)
+`backend/routes/refarch_admin.py`. Requires the `Metrics.Read` app role. Runs `services/refarch_ingest.run_ingest()` synchronously and returns `{ok, fetched, normalised, inserted, updated, unchanged, skipped, duration_s}`.
+
+## Demo Showcase
+
+CRUD for the curated `Demo` catalog. Source-aware mutation model is identical to RefArch: `microsoft_official` rows (ingested weekly from `Azure/awesome-azd`, msft-tagged only) and `community` rows are read-only except for `featured`; `custom` rows are mutable.
+
+### `GET /api/demos`
+List entries with the same filter set as `/api/refarch`.
+
+### `POST /api/demos` / `PATCH /api/demos/{id}` / `DELETE /api/demos/{id}`
+CRUD with the same source guards.
+
+### `POST /api/demos/ingest` (admin)
+`backend/routes/demos_admin.py`. Requires the `Metrics.Read` app role. Runs `services/demo_ingest.run_ingest()` synchronously and returns the same summary shape as the refarch ingest.
+
 ## Conversations
 
 ### `GET /api/conversations`

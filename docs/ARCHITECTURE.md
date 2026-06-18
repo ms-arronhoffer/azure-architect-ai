@@ -26,24 +26,27 @@ flowchart LR
 
 ```
 backend/
-  main.py                  FastAPI app, lifespan, CORS, 19 routers
+  main.py                  FastAPI app, lifespan, CORS, 28 routers
   config.py                Pydantic Settings (env-driven)
   db.py                    SQLAlchemy async engine + models
   observability.py         OTel + Azure Monitor + custom metrics
   models.py                Shared request models (ModelConfig)
   auth/
-    entra.py               JWT validation, require_user dependency
+    entra.py               JWT validation, require_user, require_metrics_role
   middleware/
     logging.py             structlog + RequestContextMiddleware
   prompts/
     system_prompt.py       MODE_TEMPLATES dict
-  routes/                  19 routers, all mounted under /api
-  services/                22 service modules
-    iac/                   ir.py + bicep/terraform/arm emitters
+  routes/                  28 routers, all mounted under /api
+  services/                38 service modules
+    iac/                   ir.py + bicep/terraform/arm emitters (4 files)
+    scheduler.py           APScheduler weekly cron registration
+    refarch_ingest.py      Microsoft Learn ContentBrowser ingest
+    demo_ingest.py         Azure/awesome-azd ingest (msft-tag filter)
   tools/
-    tool_definitions.py    TOOLS_BY_MODE (34 modes) + MCP merge
-    domains/               23 domain files defining 39 tools
-  tests/                   6 pytest files (23 tests)
+    tool_definitions.py    TOOLS_BY_MODE (84 modes) + MCP merge
+    domains/               25 domain files defining 41 tools
+  tests/                   12 pytest files (54 tests)
 ```
 
 ## Request flow — chat
@@ -118,7 +121,25 @@ erDiagram
     string kind
     text   ciphertext
   }
+  RefArch {
+    string id PK
+    string title
+    string source
+    bool   featured
+    string last_synced_at
+    json   tags
+  }
+  Demo {
+    string id PK
+    string title
+    string source
+    bool   featured
+    string last_synced_at
+    json   tags
+  }
 ```
+
+`RefArch` and `Demo` are curated catalogs refreshed weekly. The `source` column (`microsoft_official` | `community` | `custom`) drives the source-aware mutation guard in `routes/refarch.py` and `routes/demos.py`.
 
 - Async engine, async sessionmaker (`sqlalchemy.ext.asyncio`)
 - SQLite for dev (`aiosqlite`), Postgres for prod (`asyncpg`)
@@ -199,6 +220,37 @@ sequenceDiagram
 
 The whitelist (`_WHITELIST` in `services/mcp_service.py`) keeps the catalog focused; only informational/guidance MCP tools are merged in for `_MCP_ENABLED_MODES`.
 
+## Weekly content ingests
+
+```mermaid
+sequenceDiagram
+  participant Sched as APScheduler (lifespan)
+  participant RA as refarch_ingest.run_ingest
+  participant De as demo_ingest.run_ingest
+  participant Learn as learn.microsoft.com<br/>ContentBrowser API
+  participant AZD as raw.githubusercontent.com<br/>Azure/awesome-azd
+  participant DB as RefArch / Demo tables
+
+  Note over Sched: INGEST_ENABLED=true
+  Sched->>RA: cron Sun 04:17 UTC
+  RA->>Learn: paginated GET (top=30, cap=60 pages)
+  Learn-->>RA: ~220 architectures
+  RA->>DB: source-aware upsert (preserve featured + custom)
+  Sched->>De: cron Sun 04:42 UTC
+  De->>AZD: GET templates.json
+  AZD-->>De: full template list
+  De->>De: filter tags contains "msft"
+  De->>DB: source-aware upsert (preserve featured + custom)
+```
+
+Source-aware upsert rules (identical for both tables):
+
+- New entries → insert with `source="microsoft_official"`, `featured=False`.
+- Existing `microsoft_official` rows → update content fields, never touch `featured` or `created_at`; bump `last_synced_at`. No-diff updates count as `unchanged`.
+- Existing `custom` or `community` rows → skip entirely.
+
+Admins with the `Metrics.Read` app role can trigger the same flow synchronously via `POST /api/refarch/ingest` or `POST /api/demos/ingest`. The role gate is `auth.entra.require_metrics_role`.
+
 ## Observability
 
 `backend/observability.py:configure_telemetry` wires `azure-monitor-opentelemetry` when `APPLICATIONINSIGHTS_CONNECTION_STRING` is set.
@@ -240,14 +292,16 @@ The Bicep path is LLM-prompt-driven today; Terraform and ARM are template-driven
 ```
 frontend/
   src/
-    components/    31 components
+    components/    57 components
       chat/        message list, structured cards, citation chips
       architecture/ canvas + diagram embed
       iac/         tabs + copy buttons
       cost/        cost table
       auth/        AuthGate, AuthProvider, msalConfig
       settings/    SettingsPanel
-    hooks/         useChat, useSSE, useSettings, ...
+      RefArchPanel.tsx + RefArchCard.tsx          curated reference-arch library
+      DemoShowcasePanel.tsx + DemoCard.tsx        curated awesome-azd library
+    hooks/         useChat, useSSE, useSettings, useDemos, useRefArchs, ...
     utils/         16 helpers (exports, clipboard, parsing)
     pages/         routes
     main.tsx

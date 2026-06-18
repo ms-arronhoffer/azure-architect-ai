@@ -127,6 +127,15 @@ When `MCP_ENABLED=true`, `init_mcp` (`backend/services/mcp_service.py`) spawns `
 
 To disable: `MCP_ENABLED=false`.
 
+## 7a. Weekly content ingests (optional)
+
+When `INGEST_ENABLED=true`, `backend/services/scheduler.py` registers two APScheduler cron jobs at startup:
+
+- `refarch_ingest_weekly` — Sun 04:17 UTC, pulls Microsoft Learn ContentBrowser → `RefArch` table
+- `demo_ingest_weekly` — Sun 04:42 UTC, pulls `Azure/awesome-azd` (msft-tagged only) → `Demo` table
+
+Both ingests preserve user-toggled `featured` flags and any `custom`-sourced rows. To trigger on demand instead of waiting for the cron, hit `POST /api/refarch/ingest` or `POST /api/demos/ingest` with a token whose JWT carries the `Metrics.Read` app role. To disable entirely: `INGEST_ENABLED=false` (the default). The default User-Agent is `AzureArchitectAI-Ingest/1.0` (override via `INGEST_USER_AGENT`).
+
 ## 8. Tests
 
 Backend:
@@ -136,7 +145,7 @@ cd backend
 pytest -q
 ```
 
-Test files (6): `test_health.py`, `test_iac_emitters.py`, `test_naming_service.py`, `test_rag_service.py`, `test_token_budget.py`, `test_tool_registry.py` — 23 test functions in total.
+Test files (12): `test_health.py`, `test_iac_emitters.py`, `test_naming_service.py`, `test_rag_service.py`, `test_token_budget.py`, `test_tool_registry.py`, `test_refarch_ingest.py`, `test_demo_ingest.py`, `test_refarch_scheduler.py`, plus three more under `tests/` — 54 test functions in total.
 
 Frontend:
 

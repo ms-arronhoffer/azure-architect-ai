@@ -8,7 +8,9 @@ from slowapi.errors import RateLimitExceeded
 from config import settings
 from db import init_db
 from limiter import limiter
+from middleware.audit import AuditMiddleware
 from middleware.logging import RequestContextMiddleware, configure_logging
+from middleware.tenant import TenantContextMiddleware
 from services.mcp_service import init_mcp
 
 configure_logging()
@@ -76,6 +78,9 @@ app = FastAPI(title="Azure Architect AI", version="2.0.0", lifespan=lifespan)
 
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)  # type: ignore[arg-type]
+if settings.audit_log_enabled:
+    app.add_middleware(AuditMiddleware)
+app.add_middleware(TenantContextMiddleware)
 app.add_middleware(RequestContextMiddleware)
 _CORS_DEFAULTS = ["http://localhost:5173", "http://localhost:3000"]
 _extra = [o.strip() for o in settings.cors_origins.split(",") if o.strip()]

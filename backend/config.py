@@ -47,5 +47,17 @@ class Settings(BaseSettings):
     ingest_enabled: bool = False
     ingest_user_agent: str = "AzureArchitectAI-Ingest/1.0"
 
+    # Per-user daily OpenAI token budget (prompt + completion, rolling 24h).
+    # Set to 0 to disable. Default is intentionally generous so it never breaks
+    # legitimate multi-turn architecture runs; tune downward only after observing
+    # real usage in `aa_openai_tokens_used`.
+    daily_token_budget_per_user: int = 2_000_000
+
+    # Audit log behavior. When true, inbound request bodies are scanned and the
+    # would-be redactions are LOGGED only (shadow mode) — actual body content is
+    # not mutated. Flip to enforcing later after a week of clean shadow logs.
+    audit_log_enabled: bool = True
+    audit_redaction_shadow_mode: bool = True
+
 
 settings = Settings()

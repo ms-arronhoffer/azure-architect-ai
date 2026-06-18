@@ -174,8 +174,27 @@ These are direct REST endpoints — no model call involved. Useful as building b
 | RAG search | `GET /api/rag/search` | `services/rag_service.py` |
 | Conversations CRUD | `/api/conversations` | `db.py` (SQLAlchemy async) |
 | User GitHub token | `/api/auth/github-token` | `services/secret_store.py` (Fernet-encrypted) |
+| Reference Architecture library | `/api/refarch` (CRUD) + `POST /api/refarch/ingest` | `services/refarch_ingest.py` (Microsoft Learn ContentBrowser) |
+| Demo Showcase library | `/api/demos` (CRUD) + `POST /api/demos/ingest` | `services/demo_ingest.py` (`Azure/awesome-azd`) |
 | Diagram render | (via `services/diagram_service.py`) | drawpyo → draw.io XML |
 | PPTX export | (via `services/pptx_service.py`) | `python-pptx` |
+
+## Weekly content ingests
+
+When `INGEST_ENABLED=true`, `backend/services/scheduler.py` registers two APScheduler cron jobs at app startup (`backend/main.py` lifespan):
+
+| Job id | Cron (local) | Source | Backing service | Inserts into |
+| --- | --- | --- | --- | --- |
+| `refarch_ingest_weekly` | Sun 04:17 | `learn.microsoft.com/api/contentbrowser/search/architectures` (paginated, `$top=30`, cap 60 pages) | `services/refarch_ingest.py` | `RefArch` table |
+| `demo_ingest_weekly` | Sun 04:42 | `raw.githubusercontent.com/Azure/awesome-azd/main/website/static/templates.json` (msft-tagged only) | `services/demo_ingest.py` | `Demo` table |
+
+Both ingests apply the same source-aware upsert:
+
+- Insert new rows with `source="microsoft_official"`, `featured=False`, fresh `created_at` and `last_synced_at`.
+- Update existing `microsoft_official` rows in place — but never touch `featured` or `created_at`.
+- Skip rows whose `source` is `custom` or `community` (user-authored content is sacred).
+
+The same logic runs synchronously when an operator hits `POST /api/refarch/ingest` or `POST /api/demos/ingest` (both gated on the `Metrics.Read` Entra app role via `backend/auth/entra.py:require_metrics_role`). Both endpoints return `{ok, fetched, normalised, inserted, updated, unchanged, skipped, duration_s}`.
 
 ## Frontend feature inventory
 

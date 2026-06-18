@@ -6,7 +6,7 @@ Version: 2.0.0 (matches `backend/main.py:51`)
 
 ## 1. Purpose and scope
 
-Azure Architect AI is a multi-mode, chat-driven assistant that helps cloud architects design, document, deploy, operate, and optimize Azure workloads. The system combines an LLM (Azure OpenAI), tool-use (39 callable tools across 23 domains), a RAG corpus over Microsoft Learn, optional MCP tools (`@azure/mcp`), and direct Azure control-plane integrations (Resource Graph, Cost Management, Policy Insights, Defender for Cloud).
+Azure Architect AI is a multi-mode, chat-driven assistant that helps cloud architects design, document, deploy, operate, and optimize Azure workloads. The system combines an LLM (Azure OpenAI), tool-use (41 callable tools across 25 domains), a RAG corpus over Microsoft Learn, optional MCP tools (`@azure/mcp`), curated content libraries refreshed weekly (Microsoft Learn ContentBrowser + `Azure/awesome-azd`), and direct Azure control-plane integrations (Resource Graph, Cost Management, Policy Insights, Defender for Cloud).
 
 In scope:
 - Architecture design + IaC emission (Bicep / Terraform / ARM)
@@ -29,7 +29,7 @@ Out of scope:
 | ID | Requirement |
 | --- | --- |
 | FR-CHAT-01 | The system shall expose `POST /api/chat` accepting `{ mode, messages, llm_config }` and returning `text/event-stream`. |
-| FR-CHAT-02 | The system shall support 34 modes as defined in `backend/tools/tool_definitions.py:TOOLS_BY_MODE`. |
+| FR-CHAT-02 | The system shall support the chat modes defined in `backend/tools/tool_definitions.py:TOOLS_BY_MODE` (84 keys at version 2.0.0). |
 | FR-CHAT-03 | For each mode, the system shall pass only that mode's tool catalog to the LLM. |
 | FR-CHAT-04 | For modes in `_MCP_ENABLED_MODES`, the system shall additionally pass whitelisted MCP tools when `MCP_ENABLED=true`. |
 | FR-CHAT-05 | For modes in `PREFETCH_MODES` (landingzone, threatmodel, reliability, sizing, drbc, waf), the system shall pre-fetch ≤5 Microsoft Learn documents before the LLM call and inject them as citations. |
@@ -43,7 +43,7 @@ Out of scope:
 | FR-ARCH-02 | The architecture stream shall emit Bicep, Terraform, and ARM file bundles in a single response. |
 | FR-ARCH-03 | The architecture stream shall emit a draw.io XML diagram. |
 | FR-ARCH-04 | The architecture stream shall emit a cost estimate and an ADR. |
-| FR-ARCH-05 | IaC emission for the 15 bundled reference architectures shall use the IR (`services/iac/ir.py`) deterministically (no LLM in the loop). |
+| FR-ARCH-05 | IaC emission for the bundled reference architectures (`backend/data/reference_archs.py`) shall use the IR (`services/iac/ir.py`) deterministically (no LLM in the loop). The separately-ingested Reference Architecture library (FR-LIB) is browsing-only and does not feed the IR pipeline. |
 
 ### 2.3 IaC (FR-IAC)
 | ID | Requirement |
@@ -88,6 +88,17 @@ Out of scope:
 | FR-OBS-01 | When `APPLICATIONINSIGHTS_CONNECTION_STRING` is set, the system shall export traces, logs, and metrics via `azure-monitor-opentelemetry`. |
 | FR-OBS-02 | Custom counters `aa_tool_calls_total`, `aa_openai_tokens_used`, `aa_rag_cache_hit_latency_ms` shall be emitted. |
 | FR-OBS-03 | Every request shall be tagged with a `request_id` propagated through logs and traces. |
+
+### 2.9 Content libraries (FR-LIB)
+| ID | Requirement |
+| --- | --- |
+| FR-LIB-01 | The system shall maintain a `RefArch` table seeded weekly from the Microsoft Learn ContentBrowser API and a `Demo` table seeded weekly from `Azure/awesome-azd` (msft-tagged templates only). |
+| FR-LIB-02 | When `INGEST_ENABLED=true`, `services/scheduler.py` shall register two APScheduler cron jobs at startup: `refarch_ingest_weekly` (Sun 04:17 UTC) and `demo_ingest_weekly` (Sun 04:42 UTC). |
+| FR-LIB-03 | Both ingests shall apply a source-aware upsert: insert new rows as `source="microsoft_official"` with `featured=False`; update existing `microsoft_official` rows in place except for `featured` and `created_at`; skip `custom` and `community` rows entirely. |
+| FR-LIB-04 | `POST /api/refarch/ingest` and `POST /api/demos/ingest` shall trigger the same ingest synchronously, gated on the `Metrics.Read` Entra app role (`auth/entra.py:require_metrics_role`). |
+| FR-LIB-05 | `PATCH /api/refarch/{id}` and `PATCH /api/demos/{id}` against `microsoft_official` or `community` rows shall accept only the `featured` field and reject other field changes with HTTP 403. |
+| FR-LIB-06 | `DELETE /api/refarch/{id}` and `DELETE /api/demos/{id}` against non-`custom` rows shall return HTTP 403. |
+| FR-LIB-07 | Both ingest endpoints shall return `{ok, fetched, normalised, inserted, updated, unchanged, skipped, duration_s}`. |
 
 ## 3. Non-functional requirements
 
@@ -157,7 +168,7 @@ See [docs/API.md](docs/API.md) for the full enumeration. Key contract points:
 
 ```json
 {
-  "mode": "string (one of 34)",
+  "mode": "string (one of TOOLS_BY_MODE keys; 84 at v2.0.0)",
   "messages": [{"role": "user|assistant|system", "content": "string"}],
   "llm_config": {
     "provider": "azure|github-copilot|github-models",
@@ -196,8 +207,8 @@ See [docs/API.md](docs/API.md) for the full enumeration. Key contract points:
 
 A release is acceptable when:
 
-1. `pytest -q` passes for the 23 backend tests (`backend/tests/`).
-2. `npm test` passes for the 7 frontend tests (`frontend/src/**/__tests__/**`).
+1. `pytest -q` passes for the 54 backend tests across 12 files (`backend/tests/`).
+2. `npm test` passes for the 7 frontend tests across 4 files (`frontend/src/**/__tests__/**`).
 3. `npm run build` succeeds with no `tsc --noEmit` errors.
 4. `ruff check backend/` is clean.
 5. `az deployment sub what-if` against `infra/main.bicep` produces no destructive changes for the target environment.

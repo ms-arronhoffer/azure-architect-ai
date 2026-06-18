@@ -157,6 +157,23 @@ Jobs:
 - Custom counters: `aa_tool_calls_total`, `aa_openai_tokens_used`, `aa_rag_cache_hit_latency_ms`.
 - Alerts in `infra/modules/monitoring.bicep` page `oncallEmail`.
 
+## Weekly content ingests (prod)
+
+Two weekly APScheduler jobs (`backend/services/scheduler.py`) refresh the Reference Architecture and Demo Showcase libraries:
+
+- `refarch_ingest_weekly` — Sun 04:17, Microsoft Learn ContentBrowser
+- `demo_ingest_weekly` — Sun 04:42, `Azure/awesome-azd`
+
+To enable them in prod, set `INGEST_ENABLED=true` on the **backend** container app. Both jobs run inside the backend process — no separate worker. To seed immediately after a fresh deploy (without waiting for Sunday), hit the admin endpoints with a token whose JWT carries the `Metrics.Read` app role:
+
+```bash
+TOKEN=$(az account get-access-token --resource api://<API_APP_ID> --query accessToken -o tsv)
+curl -X POST https://<frontend-fqdn>/api/refarch/ingest -H "Authorization: Bearer $TOKEN"
+curl -X POST https://<frontend-fqdn>/api/demos/ingest   -H "Authorization: Bearer $TOKEN"
+```
+
+Both endpoints return summary counts (`inserted`, `updated`, `unchanged`, `skipped`) and the `Metrics.Read` role must be assigned to the calling user/principal on the API app registration. Curated rows are upserted by stable id; user-toggled `featured` flags and any `custom`-sourced rows are preserved across runs.
+
 ## Roll back
 
 Container Apps keeps prior revisions:

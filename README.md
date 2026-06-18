@@ -183,6 +183,8 @@ Defined in `backend/config.py`.
 | `AUTH_ENABLED` | `false` | When true, all `/api/*` requires bearer JWT |
 | `ENTRA_TENANT_ID` | unset | Required when `AUTH_ENABLED=true` |
 | `ENTRA_AUDIENCE` | unset | API app registration client ID / app ID URI |
+| `INGEST_ENABLED` | `false` | Register the APScheduler weekly ingest jobs at startup (`services/scheduler.py`) |
+| `INGEST_USER_AGENT` | `AzureArchitectAI-Ingest/1.0` | User-Agent header sent on outbound ingest fetches |
 | `APPLICATIONINSIGHTS_CONNECTION_STRING` | unset | Enables OTel export to Azure Monitor |
 
 ## Auth matrix
@@ -207,6 +209,10 @@ Defined in `backend/config.py`.
 - CI/CD emitter: GitHub Actions + Azure DevOps pipelines (`backend/services/cicd_emitter.py`)
 - Multicloud comparator (AWS / GCP equivalents) (`backend/services/multicloud_service.py`)
 - Export to PPTX (`backend/services/pptx_service.py`)
+- Curated Reference Architecture library ingested weekly from the Microsoft Learn ContentBrowser API (~220 entries) — `backend/services/refarch_ingest.py`, Sun 04:17 UTC
+- Demo Showcase ingested weekly from `Azure/awesome-azd` (msft-tagged templates only, ~214 entries) — `backend/services/demo_ingest.py`, Sun 04:42 UTC
+- Source-aware mutation model on both libraries: `microsoft_official` / `community` rows are read-only (except the user-toggled `featured` flag); `custom` rows remain fully editable. User toggles survive every weekly refresh.
+- On-demand admin ingest endpoints: `POST /api/refarch/ingest`, `POST /api/demos/ingest` (gated on the `Metrics.Read` app role)
 - 23 backend pytest functions across 6 test files, 7 frontend Vitest tests across 4 files
 
 ## Repository layout
@@ -244,6 +250,8 @@ azure-architect-ai/
 | RAG returns no results | Reindex not run | `POST /api/rag/reindex/reference-archs` |
 | Frontend 401s after `AUTH_ENABLED=true` | No bearer token | Sign in via MSAL; check `VITE_ENTRA_*` env vars |
 | Container Apps revision unhealthy | Image pull denied | Confirm UAMI has `AcrPull` on ACR (see `infra/modules/containerregistry.bicep`) |
+| Reference Architecture / Demo Showcase library is empty | `INGEST_ENABLED=false` or the weekly job hasn't fired yet | Set `INGEST_ENABLED=true` and either wait for Sun 04:17/04:42 UTC, or trigger manually: `POST /api/refarch/ingest` and `POST /api/demos/ingest` (caller needs the `Metrics.Read` app role) |
+| Edit / delete buttons hidden on a library entry | Row's `source` is `microsoft_official` or `community` | Expected — curated rows are read-only except the `featured` toggle. Use a `custom`-sourced entry to author your own. |
 
 ## License
 

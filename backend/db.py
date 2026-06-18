@@ -7,12 +7,23 @@ from __future__ import annotations
 
 import datetime as dt
 from collections.abc import AsyncIterator
+from contextvars import ContextVar
 
-from sqlalchemy import JSON, BigInteger, String, Text, select, text
+from sqlalchemy import JSON, BigInteger, String, Text, event, select, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, with_loader_criteria
 
 from config import settings
+
+
+# Per-request tenant scope. Populated by TenantContextMiddleware from the JWT
+# `tid` claim. Defaults to "default" so unauthenticated/dev requests still
+# operate against a single logical tenant.
+tenant_id_var: ContextVar[str] = ContextVar("tenant_id", default="default")
+
+
+def current_tenant_id() -> str:
+    return tenant_id_var.get()
 
 
 class Base(DeclarativeBase):
@@ -30,6 +41,9 @@ class Conversation(Base):
     messages: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
     structured_result: Mapped[str | None] = mapped_column(Text, nullable=True)
     user_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    tenant_id: Mapped[str] = mapped_column(
+        String(64), nullable=False, default=current_tenant_id, index=True
+    )
 
 
 class RagDocument(Base):
@@ -60,6 +74,9 @@ class UserSecret(Base):
     user_id: Mapped[str] = mapped_column(String(128), primary_key=True)
     name: Mapped[str] = mapped_column(String(64), primary_key=True)
     value_encrypted: Mapped[str] = mapped_column(Text, nullable=False)
+    tenant_id: Mapped[str] = mapped_column(
+        String(64), nullable=False, default=current_tenant_id, index=True
+    )
     updated_at: Mapped[dt.datetime] = mapped_column(
         nullable=False, default=lambda: dt.datetime.now(dt.UTC).replace(tzinfo=None)
     )
@@ -77,6 +94,35 @@ class TokenUsage(Base):
     prompt_tokens: Mapped[int] = mapped_column(nullable=False, default=0)
     completion_tokens: Mapped[int] = mapped_column(nullable=False, default=0)
     created_at: Mapped[int] = mapped_column(BigInteger, nullable=False, index=True)
+    tenant_id: Mapped[str] = mapped_column(
+        String(64), nullable=False, default=current_tenant_id, index=True
+    )
+
+
+class AuditEvent(Base):
+    """Append-only audit trail for API calls.
+
+    `secret_hit_kinds` records the categories of redaction patterns matched in
+    the inbound request body (e.g. ["jwt", "github_pat"]). When the system is
+    in `audit_redaction_shadow_mode=true`, hits are LOGGED but the body is not
+    actually mutated — used to validate redaction rules before enforcing them.
+    """
+
+    __tablename__ = "audit_events"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    user_id: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    request_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    method: Mapped[str] = mapped_column(String(8), nullable=False)
+    path: Mapped[str] = mapped_column(String(256), nullable=False, index=True)
+    status_code: Mapped[int] = mapped_column(nullable=False)
+    duration_ms: Mapped[int] = mapped_column(nullable=False, default=0)
+    secret_hit_kinds: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    client_ip: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    created_at: Mapped[int] = mapped_column(BigInteger, nullable=False, index=True)
+    tenant_id: Mapped[str] = mapped_column(
+        String(64), nullable=False, default=current_tenant_id, index=True
+    )
 
 
 class Demo(Base):
@@ -128,6 +174,39 @@ _engine = create_async_engine(settings.database_url, future=True, pool_pre_ping=
 _Session = async_sessionmaker(_engine, expire_on_commit=False)
 
 
+# Models that are partitioned per tenant. Global catalogs (RagDocument, Demo,
+# RefArch) are intentionally excluded — they are shared knowledge bases.
+_TENANT_SCOPED = (Conversation, UserSecret, TokenUsage, AuditEvent)
+
+
+@event.listens_for(Session, "do_orm_execute")
+def _apply_tenant_filter(execute_state) -> None:
+    """Inject `tenant_id = <current>` into every ORM read/update/delete
+    against a tenant-scoped model.
+
+    Opt out per query with `.execution_options(skip_tenant_filter=True)` —
+    used by admin/scheduler jobs that legitimately need cross-tenant reach.
+    Inserts auto-populate via the column's `default=current_tenant_id`.
+    """
+    if execute_state.execution_options.get("skip_tenant_filter"):
+        return
+    if not (
+        execute_state.is_select
+        or execute_state.is_update
+        or execute_state.is_delete
+    ):
+        return
+    tenant_id = current_tenant_id()
+    for entity in _TENANT_SCOPED:
+        execute_state.statement = execute_state.statement.options(
+            with_loader_criteria(
+                entity,
+                lambda cls: cls.tenant_id == tenant_id,
+                include_aliases=True,
+            )
+        )
+
+
 async def init_db() -> None:
     """Create tables if they do not exist. Idempotent."""
     async with _engine.begin() as conn:
@@ -139,6 +218,14 @@ async def init_db() -> None:
         await _ensure_column(conn, "demos", "source", "TEXT")
         await _ensure_column(conn, "demos", "last_synced_at", "TEXT")
         await _ensure_column(conn, "ref_archs", "last_synced_at", "TEXT")
+        # Tenant scoping (P1): add tenant_id to user-scoped tables and backfill
+        # legacy rows with "default" so existing single-tenant deployments keep
+        # working unchanged.
+        for table in ("conversations", "user_secrets", "token_usage", "audit_events"):
+            await _ensure_column(conn, table, "tenant_id", "VARCHAR(64)")
+            await conn.execute(
+                text(f"UPDATE {table} SET tenant_id = 'default' WHERE tenant_id IS NULL")
+            )
 
 
 async def _ensure_column(conn, table: str, column: str, ddl_type: str) -> None:
@@ -172,6 +259,7 @@ def session_scope() -> AsyncSession:
 
 
 __all__ = [
+    "AuditEvent",
     "Base",
     "Conversation",
     "Demo",
@@ -179,8 +267,10 @@ __all__ = [
     "RagDocument",
     "TokenUsage",
     "UserSecret",
+    "current_tenant_id",
     "get_session",
     "init_db",
     "select",
     "session_scope",
+    "tenant_id_var",
 ]
