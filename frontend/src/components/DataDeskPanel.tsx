@@ -44,11 +44,21 @@ const DATA_GROUPS = [
       { mode: "datacost" as Mode, label: "Data Cost Analyst" },
     ],
   },
+  {
+    group: "Pipelines & Fabric",
+    items: [
+      { mode: "datapipelineadvisor" as Mode, label: "Pipeline Advisor" },
+      { mode: "fabricplanner" as Mode, label: "Fabric Capacity Planner" },
+      { mode: "adfpipeline" as Mode, label: "ADF Pipeline Generator" },
+      { mode: "medalliondesigner" as Mode, label: "Medallion Designer" },
+    ],
+  },
 ];
 
 export const DATA_DESK_MODES: Mode[] = [
   "datalake", "datawarehouse", "datastream", "datalakehouse", "datagovernance",
   "datasecurity", "datamigration", "datacost", "dataquality", "dataiac",
+  "datapipelineadvisor", "fabricplanner", "adfpipeline", "medalliondesigner",
 ];
 
 const useStyles = makeStyles({

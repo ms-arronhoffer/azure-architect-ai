@@ -19,7 +19,6 @@ const ADVISOR_GROUPS = [
     items: [
       { mode: "governance" as Mode, label: "Governance" },
       { mode: "compliance" as Mode, label: "Compliance Mapping" },
-      { mode: "landingzone" as Mode, label: "Landing Zone" },
       { mode: "identity" as Mode, label: "Identity & Access" },
     ],
   },
@@ -27,24 +26,16 @@ const ADVISOR_GROUPS = [
     group: "Security",
     items: [
       { mode: "security" as Mode, label: "Security Advisor" },
-      { mode: "threatmodel" as Mode, label: "Threat Modeling" },
       { mode: "devsecops" as Mode, label: "DevSecOps" },
     ],
   },
   {
-    group: "Migration & Operations",
+    group: "Cross-Domain Operations",
     items: [
       { mode: "migration" as Mode, label: "Migration Assessment" },
       { mode: "cost" as Mode, label: "Cost Optimization" },
       { mode: "monitoring" as Mode, label: "Monitoring Config" },
       { mode: "ops" as Mode, label: "Observability & SRE" },
-      { mode: "reliability" as Mode, label: "Reliability & SLO" },
-    ],
-  },
-  {
-    group: "Data Engineering",
-    items: [
-      { mode: "datapipelineadvisor" as Mode, label: "Pipeline Advisor" },
     ],
   },
 ];
@@ -69,10 +60,9 @@ const useStyles = makeStyles({
 
 export const ADVISOR_MODES: Mode[] = [
   "qa", "situation", "certprep", "regional", "compare",
-  "governance", "compliance", "landingzone", "identity",
-  "security", "threatmodel", "devsecops",
-  "migration", "cost", "monitoring", "ops", "reliability",
-  "datapipelineadvisor",
+  "governance", "compliance", "identity",
+  "security", "devsecops",
+  "migration", "cost", "monitoring", "ops",
 ];
 
 interface AdvisorPanelProps {

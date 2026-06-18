@@ -34,10 +34,6 @@ import {
   DocumentBulletListRegular,
   TagRegular,
   DocumentRegular,
-  DatabaseRegular,
-  ScalesRegular,
-  PlugConnectedRegular,
-  TableRegular,
   PlayCircleRegular,
   GlobeRegular,
   ServerRegular,
@@ -55,9 +51,19 @@ interface NavItemDef {
   activeWhen?: Mode[];
 }
 
+interface NavSubheadingDef {
+  subheading: string;
+}
+
+type NavEntry = NavItemDef | NavSubheadingDef;
+
+function isSubheading(entry: NavEntry): entry is NavSubheadingDef {
+  return (entry as NavSubheadingDef).subheading !== undefined;
+}
+
 interface NavSectionDef {
   label: string;
-  items: NavItemDef[];
+  items: NavEntry[];
 }
 
 const ADVISOR_MODES: Mode[] = [
@@ -87,90 +93,68 @@ const AI_DESK_MODES: Mode[] = [
 const DATA_DESK_MODES: Mode[] = [
   "datalake", "datawarehouse", "datastream", "datalakehouse", "datagovernance",
   "datasecurity", "datamigration", "datacost", "dataquality", "dataiac",
+  "datapipelineadvisor", "fabricplanner", "adfpipeline", "medalliondesigner",
 ];
 
 const NAV_SECTIONS: NavSectionDef[] = [
   {
-    label: "Communications",
+    label: "Discover",
     items: [
       { mode: "whatsnew", label: "What's New", icon: <MegaphoneLoudRegular />, description: "Microsoft announcements & draft customer emails" },
       { mode: "servicehealth", label: "Service Health", icon: <HeartPulseRegular />, description: "Azure service incidents and health advisories" },
       { mode: "modellifecycle", label: "Model Lifecycle", icon: <CalendarRegular />, description: "Azure Foundry model retirement schedule" },
-      { mode: "modelmigration", label: "Migration Advisor", icon: <ArrowSwapRegular />, description: "Score model migrations and plan PTU capacity" },
       { mode: "showcase", label: "Demo Showcase", icon: <PlayCircleRegular />, description: "Browse and contribute to the demo catalog" },
     ],
   },
   {
-    label: "Advisory",
+    label: "Advise",
+    items: [
+      { mode: "qa", label: "Expert Advisor", icon: <ChatRegular />, description: "14 cross-domain advisors", activeWhen: ADVISOR_MODES },
+      { mode: "learningplan", label: "Learning Plan", icon: <BoardRegular />, description: "Build structured training plans with outcomes" },
+      { mode: "presentation", label: "Presentation Coach", icon: <SlideTextRegular />, description: "Structure Azure topics for any audience" },
+    ],
+  },
+  {
+    label: "Plan",
     items: [
       { mode: "intake", label: "Requirements Studio", icon: <FormRegular />, description: "Capture workload requirements — injected everywhere" },
       { mode: "analyze", label: "Workload Analysis", icon: <ChartMultipleRegular />, description: "Architecture + WAF + Security in one click" },
-      { mode: "qa", label: "Expert Advisor", icon: <ChatRegular />, description: "17 specialist advisor personas", activeWhen: ADVISOR_MODES },
-      { mode: "presentation", label: "Presentation Coach", icon: <SlideTextRegular />, description: "Structure Azure topics for any audience" },
-      { mode: "learningplan", label: "Learning Plan", icon: <BoardRegular />, description: "Build structured training plans with outcomes" },
+      { mode: "strategy", label: "Strategy Builder", icon: <TargetRegular />, description: "AI-generated Azure strategy document" },
       { mode: "rfpproposal", label: "RFP / Proposal Writer", icon: <DocumentRegular />, description: "Azure technical proposals and statements of work" },
+      { mode: "modelmigration", label: "Migration Advisor", icon: <ArrowSwapRegular />, description: "Score model migrations and plan PTU capacity" },
     ],
   },
   {
-    label: "Design & Build",
+    label: "Design",
     items: [
       { mode: "architecture", label: "Architecture Design", icon: <BuildingRegular />, description: "Architecture, Network, AI, Data Platform, APIM", activeWhen: ARCH_MODES },
-      { mode: "strategy", label: "Strategy Builder", icon: <TargetRegular />, description: "AI-generated Azure strategy document" },
-      { mode: "bootstrap", label: "Bootstrapper", icon: <RocketRegular />, description: "4-step guided wizard with ZIP download" },
       { mode: "landingzone", label: "Landing Zone", icon: <LayerRegular />, description: "Azure CAF landing zone design with management groups" },
-      { mode: "pipelineforge", label: "Pipeline Forge", icon: <BranchForkRegular />, description: "Generate GitHub Actions & Azure DevOps CI/CD pipelines" },
+      { mode: "bootstrap", label: "Bootstrapper", icon: <RocketRegular />, description: "4-step guided wizard with ZIP download" },
       { mode: "namingstandards", label: "Naming Standards", icon: <TagRegular />, description: "CAF naming conventions + Bicep/Terraform enforcement module" },
-    ],
-  },
-  {
-    label: "Networking",
-    items: [
+      { subheading: "Domain Desks" },
       { mode: "netvnet", label: "Network Desk", icon: <GlobeRegular />, description: "11 specialist advisors for Azure networking", activeWhen: NETWORK_DESK_MODES },
-    ],
-  },
-  {
-    label: "Compute",
-    items: [
       { mode: "compsku", label: "Compute Desk", icon: <ServerRegular />, description: "10 specialist advisors for Azure compute", activeWhen: COMPUTE_DESK_MODES },
-    ],
-  },
-  {
-    label: "AI",
-    items: [
+      { mode: "datalake", label: "Data Desk", icon: <DataBarVerticalRegular />, description: "Data platforms + pipelines & Fabric tooling", activeWhen: DATA_DESK_MODES },
       { mode: "aifoundry", label: "AI Desk", icon: <SparkleRegular />, description: "10 specialist advisors for Azure AI workloads", activeWhen: AI_DESK_MODES },
     ],
   },
   {
-    label: "Data",
-    items: [
-      { mode: "datalake", label: "Data Desk", icon: <DataBarVerticalRegular />, description: "10 specialist advisors for Azure data platforms", activeWhen: DATA_DESK_MODES },
-    ],
-  },
-  {
-    label: "Assessment",
+    label: "Assess",
     items: [
       { mode: "waf", label: "WAF Assessment", icon: <ShieldCheckmarkRegular />, description: "Score all 5 WAF pillars" },
       { mode: "review", label: "Architecture Review", icon: <ClipboardTaskRegular />, description: "Red team your architecture for gaps" },
       { mode: "threatmodel", label: "Threat Model", icon: <ShieldErrorRegular />, description: "STRIDE analysis, attack surface & security controls" },
-    ],
-  },
-  {
-    label: "Operations",
-    items: [
       { mode: "drbc", label: "DR/BC Design", icon: <ArrowSyncRegular />, description: "Recovery strategies and failover runbooks" },
       { mode: "reliability", label: "Reliability & SLO", icon: <HeartPulseRegular />, description: "SLO design, FMEA, chaos experiments & toil inventory" },
-      { mode: "troubleshoot", label: "Troubleshoot", icon: <WrenchScrewdriverRegular />, description: "Diagnose and resolve Azure issues" },
-      { mode: "codegen", label: "Code Generator", icon: <CodeRegular />, description: "Generate code with Copilot and push to GitHub" },
-      { mode: "runbookstudio", label: "Runbook Studio", icon: <DocumentBulletListRegular />, description: "Generate SRE runbooks for Azure failure scenarios" },
     ],
   },
   {
-    label: "Data Engineering",
+    label: "Build & Run",
     items: [
-      { mode: "datapipelineadvisor", label: "Pipeline Advisor", icon: <DatabaseRegular />, description: "Debug ADF, Fabric, Spark, and Synapse pipeline issues" },
-      { mode: "fabricplanner", label: "Fabric Capacity Planner", icon: <ScalesRegular />, description: "Right-size Microsoft Fabric F-SKU for your workload" },
-      { mode: "adfpipeline", label: "ADF Pipeline Generator", icon: <PlugConnectedRegular />, description: "Generate deployable ADF ARM templates from plain English" },
-      { mode: "medalliondesigner", label: "Medallion Designer", icon: <TableRegular />, description: "Design Bronze/Silver/Gold Delta Lake schemas from source DDL" },
+      { mode: "codegen", label: "Code Generator", icon: <CodeRegular />, description: "Generate code with Copilot and push to GitHub" },
+      { mode: "pipelineforge", label: "Pipeline Forge", icon: <BranchForkRegular />, description: "Generate GitHub Actions & Azure DevOps CI/CD pipelines" },
+      { mode: "runbookstudio", label: "Runbook Studio", icon: <DocumentBulletListRegular />, description: "Generate SRE runbooks for Azure failure scenarios" },
+      { mode: "troubleshoot", label: "Troubleshoot", icon: <WrenchScrewdriverRegular />, description: "Diagnose and resolve Azure issues" },
     ],
   },
 ];
@@ -228,6 +212,17 @@ const useStyles = makeStyles({
     height: "1px",
     background: "rgba(255,255,255,0.04)",
     margin: "6px 12px 0",
+  },
+  subheading: {
+    fontSize: "10px",
+    fontWeight: 600,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+    color: tokens.colorNeutralForeground4,
+    padding: "10px 16px 2px",
+    whiteSpace: "nowrap",
+    overflow: "hidden",
+    userSelect: "none",
   },
   navItem: {
     display: "flex",
@@ -364,6 +359,14 @@ export default function SideNav({ mode, onModeChange, collapsed, onToggleCollaps
               )}
 
               {!isSectionCollapsed && section.items.map((item) => {
+              if (isSubheading(item)) {
+                if (collapsed) return null;
+                return (
+                  <div key={`sub-${section.label}-${item.subheading}`} className={styles.subheading}>
+                    {item.subheading}
+                  </div>
+                );
+              }
               const isActive = item.activeWhen ? item.activeWhen.includes(mode) : mode === item.mode;
               const alertCount = badgeCounts[item.mode] ?? 0;
               const itemEl = (
