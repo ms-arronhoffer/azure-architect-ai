@@ -17,6 +17,12 @@ export function useConversationHistory() {
   const getTokenRef = useRef(getAccessToken);
   useEffect(() => { getTokenRef.current = getAccessToken; }, [getAccessToken]);
 
+  // Mirror conversations into a ref so upsert can stay stable (no dep on `conversations`).
+  // Without this, upsert is re-created on every save, which invalidates every downstream
+  // useEffect/useCallback that depends on it — causing a feedback loop of POSTs.
+  const conversationsRef = useRef<ConversationRecord[]>([]);
+  useEffect(() => { conversationsRef.current = conversations; }, [conversations]);
+
   async function authHeaders(extra: Record<string, string> = {}): Promise<Record<string, string>> {
     const token = await getTokenRef.current();
     return token ? { Authorization: `Bearer ${token}`, ...extra } : extra;
@@ -50,7 +56,7 @@ export function useConversationHistory() {
       if (messages.length === 0) return;
       const title = messages.find((m) => m.role === "user")?.content.slice(0, 60) ?? "Untitled";
       const now = Date.now();
-      const existing = conversations.find((c) => c.id === id);
+      const existing = conversationsRef.current.find((c) => c.id === id);
       const record: ConversationRecord = existing
         ? { ...existing, messages, updatedAt: now, ...(structuredResult !== undefined && { structuredResult }) }
         : { id, mode, title, createdAt: now, updatedAt: now, messages, ...(structuredResult !== undefined && { structuredResult }) };
@@ -80,7 +86,7 @@ export function useConversationHistory() {
       if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
       savedTimerRef.current = setTimeout(() => setSaveStatus("idle"), 2500);
     },
-    [conversations] // eslint-disable-line react-hooks/exhaustive-deps
+    [] // eslint-disable-line react-hooks/exhaustive-deps
   );
 
   const remove = useCallback(async (id: string) => {
