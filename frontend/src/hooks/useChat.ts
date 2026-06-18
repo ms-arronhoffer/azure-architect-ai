@@ -19,15 +19,22 @@ export function useChat(mode: Mode, _conversationId?: string, onSave?: (msgs: Ch
   const { stream, isStreaming, cancel } = useSSE();
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Keep onSave behind a stable ref so unstable inline-arrow callbacks from
+  // the parent don't cause this effect to refire on every parent render and
+  // schedule another debounced save. Without this, save → setConversations →
+  // parent re-render → new onSave reference → effect refires → save loop.
+  const onSaveRef = useRef(onSave);
+  useEffect(() => { onSaveRef.current = onSave; }, [onSave]);
+
   // Debounced save after message updates
   useEffect(() => {
-    if (!onSave || messages.length === 0) return;
+    if (messages.length === 0) return;
     if (saveTimer.current) clearTimeout(saveTimer.current);
-    saveTimer.current = setTimeout(() => onSave(messages), 500);
+    saveTimer.current = setTimeout(() => onSaveRef.current?.(messages), 500);
     return () => {
       if (saveTimer.current) clearTimeout(saveTimer.current);
     };
-  }, [messages, onSave]);
+  }, [messages]);
 
   const sendMessage = useCallback(
     async (content: string, attachments?: string[]) => {
