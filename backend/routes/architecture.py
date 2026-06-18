@@ -42,6 +42,7 @@ class ArchRequest(BaseModel):
     include_components: list[str] = []  # e.g. ["diagram","runbook","bicep","cost","adr"]; empty = all
     region: str = ""
     llm_config: ModelConfig | None = None
+    prior_messages: list[dict] = []  # iteration history: [{role: "user"|"assistant", content: "..."}]
 
 
 async def _stream_architecture(req: ArchRequest, provider: str = "azure", model: str = "", github_token: str = "", user_id: str = "default") -> AsyncGenerator[str, None]:
@@ -85,10 +86,14 @@ async def _stream_architecture(req: ArchRequest, provider: str = "azure", model:
         except Exception:
             pass
 
-    full_messages = [
-        {"role": "system", "content": enriched_system},
-        {"role": "user", "content": user_content},
-    ]
+    full_messages = [{"role": "system", "content": enriched_system}]
+    if req.prior_messages:
+        for m in req.prior_messages:
+            role = m.get("role")
+            content = m.get("content")
+            if role in ("user", "assistant") and isinstance(content, str) and content:
+                full_messages.append({"role": role, "content": content})
+    full_messages.append({"role": "user", "content": user_content})
 
     citations: list[dict] = []
     arch_data: dict = {}
@@ -448,11 +453,18 @@ async def _stream_waf_assessment(req: ArchRequest, client, deployment: str, syst
 
 
 def _build_prompt(req: ArchRequest, mode: str) -> str:
+    iteration_nudge = (
+        "This is a follow-up refinement to the architecture above. "
+        "Apply the user's request below and re-run the full tool pipeline "
+        "so every artifact (diagram, IaC, cost, runbook, WAF) stays consistent.\n\n"
+        if req.prior_messages else ""
+    )
     base = (
         f"**Requirements:** {req.requirements}\n"
         f"**Constraints:** {req.constraints or 'None specified'}\n"
         f"**Pattern:** {req.pattern}\n\n"
     )
+    base = iteration_nudge + base
     if mode == "network":
         return (
             "Design an Azure network topology for the following requirements:\n\n"

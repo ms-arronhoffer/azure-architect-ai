@@ -964,9 +964,10 @@ interface ChatPanelProps {
   onBuildDeck?: (conversationText: string) => void;
   onContinueIn?: (mode: Mode, seed: string) => void;
   onDiagram?: (xml: string) => void;
+  pendingSend?: { content: string; nonce: number };
 }
 
-export default function ChatPanel({ mode, conversationId: savedId, initialMessages, suggestedReplies, modelConfig, workloadContext, onOpenContext, onFork, onSave, onBuildDeck, onContinueIn, onDiagram }: ChatPanelProps) {
+export default function ChatPanel({ mode, conversationId: savedId, initialMessages, suggestedReplies, modelConfig, workloadContext, onOpenContext, onFork, onSave, onBuildDeck, onContinueIn, onDiagram, pendingSend }: ChatPanelProps) {
   const styles = useStyles();
   const convId = useRef(savedId ?? crypto.randomUUID()).current;
   const subtopics = GROUP_SUBTOPICS[mode];
@@ -992,6 +993,14 @@ export default function ChatPanel({ mode, conversationId: savedId, initialMessag
     if (isFirstTopicMount.current) { isFirstTopicMount.current = false; return; }
     reset();
   }, [activeTopic]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!pendingSend || !pendingSend.content || isStreaming) return;
+    const prefix = workloadContext ? toPromptPrefix(workloadContext) : toSpecPromptPrefix(spec);
+    const finalVal = messages.length === 0 && prefix ? prefix + pendingSend.content : pendingSend.content;
+    sendMessage(finalVal);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingSend?.nonce]);
 
   function handleSend() {
     const val = textareaRef.current?.value.trim();

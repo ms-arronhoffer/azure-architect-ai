@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { makeStyles, tokens, Button, Text } from "@fluentui/react-components";
-import { EditRegular, ArrowDownloadRegular, ArrowUndoRegular, ArrowRedoRegular } from "@fluentui/react-icons";
+import { EditRegular, ArrowDownloadRegular, ArrowUndoRegular, ArrowRedoRegular, ArrowSyncRegular } from "@fluentui/react-icons";
 import DiagramEditor from "./DiagramEditor";
 import type { DiagramState } from "../hooks/useDiagramState";
 
@@ -56,9 +56,10 @@ const useStyles = makeStyles({
 
 interface DeskDiagramPaneProps {
   diagram: DiagramState;
+  onRedraw?: () => void;
 }
 
-export default function DeskDiagramPane({ diagram }: DeskDiagramPaneProps) {
+export default function DeskDiagramPane({ diagram, onRedraw }: DeskDiagramPaneProps) {
   const styles = useStyles();
   const [editing, setEditing] = useState(false);
 
@@ -102,6 +103,17 @@ export default function DeskDiagramPane({ diagram }: DeskDiagramPaneProps) {
                   title="Redo"
                 />
               </>
+            )}
+            {onRedraw && (
+              <Button
+                appearance="subtle"
+                size="small"
+                icon={<ArrowSyncRegular />}
+                onClick={onRedraw}
+                title="Ask the specialist to regenerate the diagram"
+              >
+                Redraw
+              </Button>
             )}
             <Button
               appearance="subtle"

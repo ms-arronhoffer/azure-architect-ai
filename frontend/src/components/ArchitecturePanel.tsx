@@ -209,6 +209,63 @@ const useStyles = makeStyles({
     justifyContent: "center",
     pointerEvents: "none",
   },
+  iterationPanel: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "8px",
+    padding: "10px 12px",
+    borderRadius: "8px",
+    border: `1px solid ${tokens.colorNeutralStroke2}`,
+    background: tokens.colorNeutralBackground2,
+  },
+  iterationLog: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "6px",
+    maxHeight: "220px",
+    overflowY: "auto",
+    paddingRight: "4px",
+  },
+  iterUser: {
+    alignSelf: "flex-end",
+    maxWidth: "85%",
+    padding: "6px 10px",
+    borderRadius: "10px 10px 2px 10px",
+    background: tokens.colorBrandBackground2,
+    color: tokens.colorNeutralForeground1,
+    fontSize: "12.5px",
+    lineHeight: "1.4",
+    whiteSpace: "pre-wrap",
+  },
+  iterAsst: {
+    alignSelf: "flex-start",
+    maxWidth: "85%",
+    padding: "6px 10px",
+    borderRadius: "10px 10px 10px 2px",
+    background: tokens.colorNeutralBackground3,
+    color: tokens.colorNeutralForeground2,
+    fontSize: "12.5px",
+    lineHeight: "1.4",
+    whiteSpace: "pre-wrap",
+    fontStyle: "italic",
+  },
+  iterTextarea: {
+    display: "block",
+    width: "100%",
+    minHeight: "52px",
+    padding: "8px 10px",
+    borderRadius: "6px",
+    border: `1px solid ${tokens.colorNeutralStroke2}`,
+    background: tokens.colorNeutralBackground1,
+    outline: "none",
+    resize: "vertical",
+    fontFamily: "inherit",
+    fontSize: "12.5px",
+    lineHeight: "1.45",
+    color: tokens.colorNeutralForeground1,
+    boxSizing: "border-box",
+    "&:focus": { border: `1px solid ${tokens.colorBrandStroke1}` },
+  },
 });
 
 interface Attachment {
@@ -289,6 +346,8 @@ export default function ArchitecturePanel({ mode = "architecture", onRefine, onM
   const [ganttHtml, setGanttHtml] = useState<string | null>(null);
   const [networkHtml, setNetworkHtml] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [iterationMessages, setIterationMessages] = useState<ChatMessage[]>([]);
+  const [followupDraft, setFollowupDraft] = useState("");
 
   const sessionId = useRef(crypto.randomUUID()).current;
 
@@ -343,6 +402,9 @@ export default function ArchitecturePanel({ mode = "architecture", onRefine, onM
     if (sr.wafResults) setWafResults(sr.wafResults);
     if (sr.runbook) setRunbook(sr.runbook);
     if (sr.projectTimeline) setProjectTimeline(sr.projectTimeline);
+    if (initialSession.messages && initialSession.messages.length > 0) {
+      setIterationMessages(initialSession.messages);
+    }
   }, []);
 
   useEffect(() => {
@@ -584,11 +646,85 @@ window.mxBasePath = 'https://viewer.diagrams.net/';
     setStatusMsg("");
 
     if (onSave && localExplanation) {
-      const msgs: ChatMessage[] = [
+      const seedMsgs: ChatMessage[] = [
         { id: crypto.randomUUID(), role: "user", content: requirements },
-        { id: crypto.randomUUID(), role: "assistant", content: localExplanation },
+        { id: crypto.randomUUID(), role: "assistant", content: "Initial design generated. Tell me what to change." },
       ];
-      onSave(sessionId, mode, msgs, {
+      setIterationMessages(seedMsgs);
+      onSave(sessionId, mode, seedMsgs, {
+        explanation: localExplanation,
+        diagramXml: localDiagramXml,
+        bicepResult: localBicepResult,
+        bicepPreview: localBicepPreview,
+        terraformResult: localTerraformResult,
+        armResult: localArmResult,
+        costEstimate: localCostEstimate,
+        adrRecord: localAdrRecord,
+        networkTopology: localNetworkTopology,
+        wafResults: localWafResults,
+        projectTimeline: localProjectTimeline,
+      });
+    }
+  }
+
+  async function handleFollowup(text: string) {
+    if (!text.trim() || isStreaming || !explanation) return;
+    const userMsg: ChatMessage = { id: crypto.randomUUID(), role: "user", content: text };
+    const ackId = crypto.randomUUID();
+    const ackMsg: ChatMessage = { id: ackId, role: "assistant", content: "", isStreaming: true };
+    setIterationMessages((m) => [...m, userMsg, ackMsg]);
+
+    const priorForApi: { role: string; content: string }[] = [
+      { role: "user", content: requirements },
+      { role: "assistant", content: explanation },
+      ...iterationMessages.slice(2).map((m) => ({ role: m.role, content: m.content })),
+    ];
+
+    let localExplanation = "";
+    let localDiagramXml: string | null = diagramXml;
+    let localBicepResult: BicepResult | null = bicepResult;
+    let localBicepPreview: BicepPreview | null = bicepPreview;
+    let localTerraformResult: IacFilesResult | null = terraformResult;
+    let localArmResult: IacFilesResult | null = armResult;
+    let localCostEstimate: CostEstimate | null = costEstimate;
+    let localAdrRecord: AdrRecord | null = adrRecord;
+    let localNetworkTopology: NetworkTopology | null = networkTopology;
+    let localWafResults: Record<string, WafPillarResult> = { ...wafResults };
+    let localProjectTimeline: ProjectTimeline | null = projectTimeline;
+
+    setExplanation("");
+    setStatusMsg("");
+    setActiveTab("explanation");
+
+    await stream("/api/architecture", {
+      ...buildPayload([]),
+      requirements: text,
+      prior_messages: priorForApi,
+    }, (event: SseEvent) => {
+      if (event.type === "token") localExplanation += event.content;
+      if (event.type === "diagram") localDiagramXml = event.xml;
+      if (event.type === "bicep") localBicepResult = { bicep_code: event.code, param_file: event.param_file, deploy_commands: event.deploy_commands ?? [], notes: event.notes ?? [] };
+      if (event.type === "bicep_preview") localBicepPreview = event.preview;
+      if (event.type === "terraform_files") localTerraformResult = { files: event.files, pattern_name: event.pattern_name, notes: event.notes };
+      if (event.type === "arm_files") localArmResult = { files: event.files, pattern_name: event.pattern_name, notes: event.notes };
+      if (event.type === "cost_estimate") localCostEstimate = event.estimate;
+      if (event.type === "adr") localAdrRecord = event.data as AdrRecord;
+      if (event.type === "network_topology") localNetworkTopology = event.topology;
+      if (event.type === "waf_pillar") localWafResults = { ...localWafResults, [event.pillar.pillar]: event.pillar };
+      if (event.type === "project_timeline") localProjectTimeline = { phases: event.phases, total_weeks: event.total_weeks, notes: event.notes, diagramXml: event.xml };
+      applyEvent(event);
+    });
+    setStatusMsg("");
+
+    const finalMessages: ChatMessage[] = [
+      ...iterationMessages,
+      userMsg,
+      { id: ackId, role: "assistant", content: "Regenerated. Diagram, IaC, cost, and runbook updated.", isStreaming: false },
+    ];
+    setIterationMessages(finalMessages);
+
+    if (onSave) {
+      onSave(sessionId, mode, finalMessages, {
         explanation: localExplanation,
         diagramXml: localDiagramXml,
         bicepResult: localBicepResult,
@@ -882,6 +1018,48 @@ window.mxBasePath = 'https://viewer.diagrams.net/';
                     <li key={i}><a href={c.url} target="_blank" rel="noopener noreferrer" style={{ fontSize: "12px" }}>{c.title}</a></li>
                   ))}
                 </ul>
+              </div>
+            )}
+
+            {iterationMessages.length > 0 && (
+              <div className={styles.iterationPanel}>
+                <Text size={200} weight="semibold">Iterate</Text>
+                <div className={styles.iterationLog}>
+                  {iterationMessages.map((m) => (
+                    <div key={m.id} className={m.role === "user" ? styles.iterUser : styles.iterAsst}>
+                      {m.content || (m.isStreaming ? "Regenerating…" : "")}
+                    </div>
+                  ))}
+                </div>
+                <textarea
+                  className={styles.iterTextarea}
+                  value={followupDraft}
+                  onChange={(e) => setFollowupDraft(e.target.value)}
+                  placeholder="e.g. make this cheaper, add a second region…"
+                  disabled={isStreaming}
+                  rows={2}
+                />
+                <Button
+                  appearance="primary"
+                  size="small"
+                  disabled={!followupDraft.trim() || isStreaming}
+                  onClick={() => {
+                    const t = followupDraft.trim();
+                    setFollowupDraft("");
+                    handleFollowup(t);
+                  }}
+                >
+                  Send refinement
+                </Button>
+                <Button
+                  appearance="secondary"
+                  size="small"
+                  disabled={isStreaming || !requirements.trim()}
+                  onClick={() => handleFollowup("Re-run the full pipeline and update every artifact.")}
+                  title="Re-run the full pipeline with the current requirements"
+                >
+                  Regenerate
+                </Button>
               </div>
             )}
           </div>

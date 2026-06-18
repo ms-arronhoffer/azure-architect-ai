@@ -126,6 +126,7 @@ export default function AIDeskPanel({
 }: AIDeskPanelProps) {
   const styles = useStyles();
   const [selectedModel, setSelectedModel] = useState<string>("gpt-5.4-mini");
+  const [pendingSend, setPendingSend] = useState<{ content: string; nonce: number } | undefined>();
   const diagram = useDiagramState();
 
   useEffect(() => {
@@ -139,6 +140,8 @@ export default function AIDeskPanel({
   };
 
   const showDiagram = DIAGRAM_MODES.has(mode);
+  const handleRedraw = () =>
+    setPendingSend({ content: "Regenerate the diagram for the current design.", nonce: Date.now() });
   const chat = (
     <ChatPanel
       mode={mode}
@@ -152,6 +155,7 @@ export default function AIDeskPanel({
       onSave={onSave}
       onContinueIn={onContinueIn}
       onDiagram={diagram.setXml}
+      pendingSend={pendingSend}
     />
   );
 
@@ -199,7 +203,7 @@ export default function AIDeskPanel({
         <div className={styles.splitBody}>
           <div className={styles.chatSide}>{chat}</div>
           <div className={styles.diagramSide}>
-            <DeskDiagramPane diagram={diagram} />
+            <DeskDiagramPane diagram={diagram} onRedraw={handleRedraw} />
           </div>
         </div>
       ) : (
