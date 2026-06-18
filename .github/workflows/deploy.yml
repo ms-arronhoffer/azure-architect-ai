@@ -84,8 +84,18 @@ jobs:
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
       - id: outputs
         run: |
-          ACR_LOGIN=$(az deployment sub show -n ${{ env.DEPLOYMENT_NAME }} --query properties.outputs.acrLoginServer.value -o tsv)
-          RG=$(az deployment sub show -n ${{ env.DEPLOYMENT_NAME }} --query properties.outputs.resourceGroupName.value -o tsv)
+          # Try deployment outputs first; fall back to direct lookup so a
+          # transiently-failed sub-deployment doesn't block app rollouts.
+          ACR_LOGIN=$(az deployment sub show -n ${{ env.DEPLOYMENT_NAME }} --query properties.outputs.acrLoginServer.value -o tsv 2>/dev/null | tr -d '\r\n' || true)
+          RG=$(az deployment sub show -n ${{ env.DEPLOYMENT_NAME }} --query properties.outputs.resourceGroupName.value -o tsv 2>/dev/null | tr -d '\r\n' || true)
+          if [ -z "$RG" ]; then
+            RG="aarch-dev-rg"
+            echo "::warning::deployment outputs missing; falling back to RG=$RG"
+          fi
+          if [ -z "$ACR_LOGIN" ]; then
+            ACR_LOGIN=$(az acr list -g "$RG" --query "[0].loginServer" -o tsv | tr -d '\r\n')
+            echo "::warning::deployment outputs missing; falling back to ACR=$ACR_LOGIN"
+          fi
           FRONTEND_APP=$(az containerapp list -g $RG --query "[?contains(name, 'frontend')].name | [0]" -o tsv | tr -d '\r\n')
           BACKEND_APP=$(az containerapp list -g $RG --query "[?contains(name, 'backend')].name | [0]" -o tsv | tr -d '\r\n')
           CUSTOM_DOMAIN=$(az containerapp show -g $RG -n $FRONTEND_APP --query "properties.configuration.ingress.customDomains[0].name" -o tsv 2>/dev/null | tr -d '\r\n')
