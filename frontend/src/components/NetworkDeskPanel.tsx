@@ -66,8 +66,9 @@ const useStyles = makeStyles({
 });
 
 const MODEL_OPTIONS = [
-  { value: "gpt-5.4-mini", label: "GPT-5.4 Mini" },
-  { value: "gpt-5.4", label: "GPT-5.4" },
+  { value: "", label: "Auto (default)" },
+  { value: "gpt-4o-mini", label: "GPT-4o Mini" },
+  { value: "gpt-4.1", label: "GPT-4.1" },
 ];
 
 interface NetworkDeskPanelProps {
@@ -98,7 +99,7 @@ export default function NetworkDeskPanel({
   onContinueIn,
 }: NetworkDeskPanelProps) {
   const styles = useStyles();
-  const [selectedModel, setSelectedModel] = useState<string>("gpt-5.4-mini");
+  const [selectedModel, setSelectedModel] = useState<string>("");
 
   const effectiveModelConfig: ModelConfig = {
     provider: modelConfig?.provider ?? "azure",
