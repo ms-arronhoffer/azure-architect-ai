@@ -219,8 +219,8 @@ TOOLS_BY_MODE: dict[str, list] = {
 _MCP_ENABLED_MODES = {
     # Unified agents — MCP is useful across all five.
     "architect", "cost", "operations", "compliance", "engagement",
-    "qa", "architecture", "waf", "review", "compliance", "migration",
-    "regional", "cost", "drbc", "monitoring", "compare", "certprep", "reference",
+    "qa", "architecture", "waf", "review", "migration",
+    "regional", "drbc", "monitoring", "compare", "certprep", "reference",
     "aiarchitecture", "dataplatform", "apim", "network", "landingzone", "identity",
     "threatmodel", "devsecops", "reliability", "troubleshoot",
     "devops", "finops", "securityposture", "multicloud",

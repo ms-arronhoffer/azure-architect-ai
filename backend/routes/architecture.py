@@ -18,11 +18,11 @@ from limiter import limiter
 from models import ModelConfig
 from prompts.system_prompt import MODE_TEMPLATES
 from services.bicep_service import build_and_preview as build_bicep_preview
+from services.citation_service import enrich_recommendations
 from services.diagram_service import generate_diagram
 from services.docs_service import search_azure_docs
 from services.error_sanitizer import sanitize_openai_error
 from services.mcp_service import call_mcp_tool, is_mcp_tool
-from services.citation_service import enrich_recommendations
 from services.openai_service import resolve_client_and_model
 from services.pricing_service import estimate_architecture, get_regional_pricing_context
 from services.refarch_match import match_spec

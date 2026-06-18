@@ -15,7 +15,6 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, with
 
 from config import settings
 
-
 # Per-request tenant scope. Populated by TenantContextMiddleware from the JWT
 # `tid` claim. Defaults to "default" so unauthenticated/dev requests still
 # operate against a single logical tenant.
@@ -305,8 +304,8 @@ __all__ = [
     "Conversation",
     "Demo",
     "Engagement",
-    "RefArch",
     "RagDocument",
+    "RefArch",
     "TokenUsage",
     "UserSecret",
     "current_engagement_id",

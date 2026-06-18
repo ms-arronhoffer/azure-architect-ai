@@ -184,6 +184,10 @@ def shim_legacy_mode(mode: str) -> dict[str, Any] | None:
 # to the router. Routes are conservative: when in doubt, pick the architect
 # agent and skip the fragment.
 _LEGACY_MODE_SHIM: dict[str, tuple[str, tuple[str, ...]]] = {
+    # Self-routing for the 5 agent tokens so they skip the LLM classifier.
+    "architect": ("architect", ()),
+    "operations": ("operations", ()),
+    "engagement": ("engagement", ()),
     "architecture": ("architect", ()),
     "bicep": ("architect", ("iac_bicep",)),
     "terraform": ("architect", ("iac_terraform",)),

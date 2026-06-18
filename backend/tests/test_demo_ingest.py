@@ -15,7 +15,6 @@ import db as db_module
 from db import Demo
 from services import demo_ingest
 
-
 SAMPLE_MSFT_ENTRY = {
     "title": "WordPress with Azure Container Apps",
     "description": "A blueprint to easily and quickly create a WordPress site on ACA.",

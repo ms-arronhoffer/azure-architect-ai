@@ -177,4 +177,4 @@ async def run_ingest() -> dict[str, Any]:
     return summary
 
 
-__all__ = ["fetch_templates", "normalize", "upsert_demos", "run_ingest"]
+__all__ = ["fetch_templates", "normalize", "run_ingest", "upsert_demos"]

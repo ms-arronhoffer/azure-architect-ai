@@ -1,8 +1,6 @@
 """Secret scanner + redactor unit tests for services/audit_service.py."""
 from __future__ import annotations
 
-import pytest
-
 from services.audit_service import redact, scan_for_secrets
 
 

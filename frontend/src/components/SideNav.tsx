@@ -173,6 +173,27 @@ const NAV_SECTIONS: NavSectionDef[] = [
   },
 ];
 
+// Curated nav for unified-agents mode. The 5 agents absorb the 30+ desk/
+// specialist panels via chat-based flow; only a handful of standalone
+// browser/discovery surfaces are kept alongside (per the trusted-oracle plan).
+const UNIFIED_NAV_SECTIONS: NavSectionDef[] = [
+  NAV_SECTIONS.find((s) => s.label === "Agents")!,
+  {
+    label: "Library",
+    items: [
+      NAV_SECTIONS.find((s) => s.label === "Updates")!.items.find(
+        (i) => !isSubheading(i) && i.mode === "whatsnew",
+      )!,
+      NAV_SECTIONS.find((s) => s.label === "Design")!.items.find(
+        (i) => !isSubheading(i) && i.mode === "refarch",
+      )!,
+      NAV_SECTIONS.find((s) => s.label === "Design")!.items.find(
+        (i) => !isSubheading(i) && i.mode === "showcase",
+      )!,
+    ],
+  },
+];
+
 const useStyles = makeStyles({
   nav: {
     display: "flex",
@@ -358,7 +379,7 @@ export default function SideNav({ mode, onModeChange, collapsed, onToggleCollaps
 
       <div className={styles.sections}>
         {(import.meta.env.VITE_UNIFIED_AGENTS === "true"
-          ? NAV_SECTIONS.filter((s) => s.label === "Agents")
+          ? UNIFIED_NAV_SECTIONS
           : NAV_SECTIONS.filter((s) => s.label !== "Agents")
         ).map((section, si) => {
           const isSectionCollapsed = collapsedSections.has(section.label);

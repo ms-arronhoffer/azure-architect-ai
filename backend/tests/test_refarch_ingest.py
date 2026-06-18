@@ -18,7 +18,6 @@ import db as db_module
 from db import RefArch
 from services import refarch_ingest
 
-
 SAMPLE_API_ENTRY = {
     "title": "Multi-region web app",
     "summary": "Highly available web app across paired regions.",

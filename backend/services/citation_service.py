@@ -24,7 +24,8 @@ import datetime as dt
 import json
 import logging
 import re
-from typing import Any, Iterable
+from collections.abc import Iterable
+from typing import Any
 
 from db import session_scope
 from services.mcp_service import call_mcp_tool
@@ -59,7 +60,7 @@ def _extract_first_learn_url(payload: str) -> str | None:
 
     def _walk(node):
         if isinstance(node, dict):
-            for k, v in node.items():
+            for _k, v in node.items():
                 if isinstance(v, str) and "learn.microsoft.com" in v:
                     candidates.append(v)
                 else:

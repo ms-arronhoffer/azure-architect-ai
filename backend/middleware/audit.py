@@ -21,6 +21,7 @@ for all requests under `/api/*`.
 """
 from __future__ import annotations
 
+import contextlib
 import time
 from typing import Any
 
@@ -101,8 +102,8 @@ class AuditMiddleware:
             message = await receive()
             if message["type"] != "http.request":
                 # http.disconnect mid-read — pass it through and bail.
-                async def disconnected_receive() -> dict[str, Any]:
-                    return message
+                async def disconnected_receive(_msg: dict[str, Any] = message) -> dict[str, Any]:
+                    return _msg
                 await self.app(scope, disconnected_receive, send)
                 return
             body += message.get("body") or b""
@@ -148,7 +149,7 @@ class AuditMiddleware:
                     kinds=secret_hits,
                     shadow=settings.audit_redaction_shadow_mode,
                 )
-            try:
+            with contextlib.suppress(Exception):
                 schedule_audit(
                     user_id=_user_id_from_scope(scope),
                     request_id=request_id_var.get(),
@@ -159,5 +160,3 @@ class AuditMiddleware:
                     secret_hit_kinds=secret_hits,
                     client_ip=_client_ip_from_scope(scope),
                 )
-            except Exception:
-                pass

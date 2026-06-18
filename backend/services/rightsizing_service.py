@@ -29,7 +29,6 @@ except ImportError:  # optional dep; right-sizing degrades when SDK is missing
     MetricAggregationType = None  # type: ignore[assignment]
     MetricsQueryClient = None  # type: ignore[assignment]
 
-from config import settings
 from middleware.logging import get_logger
 from services import azure_scan_service
 

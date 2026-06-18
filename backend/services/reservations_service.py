@@ -85,7 +85,6 @@ def recommend_reservations(
             term = getattr(props, "term", "P1Y") or "P1Y"
             sku = getattr(props, "sku_name", None) or getattr(rec, "sku", "")
             region = getattr(props, "location", None) or ""
-            first_cost = float(getattr(props, "first_usage_date", 0) or 0)  # rarely populated
             monthly_savings = savings / 12 if term == "P1Y" else savings / 36
             upfront = float(getattr(props, "total_cost_with_reserved_instances", 0) or 0)
             payback = _break_even_months(upfront, monthly_savings)

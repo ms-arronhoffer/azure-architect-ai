@@ -85,4 +85,4 @@ async def shutdown_scheduler() -> None:
     _log.info("scheduler.stopped")
 
 
-__all__ = ["start_scheduler", "shutdown_scheduler"]
+__all__ = ["shutdown_scheduler", "start_scheduler"]

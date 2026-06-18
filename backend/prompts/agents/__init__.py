@@ -13,10 +13,10 @@ citations, JSON formatting, or tool calling — those live in the shared
 preamble that the chat route prepends.
 """
 from .architect import ARCHITECT_PROMPT
-from .cost import COST_PROMPT
-from .operations import OPERATIONS_PROMPT
 from .compliance import COMPLIANCE_PROMPT
+from .cost import COST_PROMPT
 from .engagement import ENGAGEMENT_PROMPT
+from .operations import OPERATIONS_PROMPT
 
 AGENTS: dict[str, str] = {
     "architect": ARCHITECT_PROMPT,

@@ -158,7 +158,7 @@ async def update_demo(
         raise HTTPException(status_code=404, detail="Demo not found")
     data = body.model_dump(exclude_unset=True)
     if row.source and row.source != "custom":
-        disallowed = [k for k in data.keys() if k != "featured"]
+        disallowed = [k for k in data if k != "featured"]
         if disallowed:
             raise HTTPException(
                 status_code=403,

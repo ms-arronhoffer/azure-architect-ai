@@ -252,7 +252,7 @@ async def update_refarch(
     data = body.model_dump(exclude_unset=True)
     if row.source != "custom":
         # Curated entries: only `featured` may be toggled.
-        disallowed = [k for k in data.keys() if k != "featured"]
+        disallowed = [k for k in data if k != "featured"]
         if disallowed:
             raise HTTPException(
                 status_code=403,

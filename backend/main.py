@@ -25,8 +25,6 @@ from routes.cost import router as cost_router  # noqa: E402
 from routes.demos import router as demos_router  # noqa: E402
 from routes.demos_admin import router as demos_admin_router  # noqa: E402
 from routes.engagements import router as engagements_router  # noqa: E402
-from routes.refarch import router as refarch_router  # noqa: E402
-from routes.refarch_admin import router as refarch_admin_router  # noqa: E402
 from routes.export import router as export_router  # noqa: E402
 from routes.health import router as health_router  # noqa: E402
 from routes.iac import router as iac_router  # noqa: E402
@@ -36,6 +34,8 @@ from routes.model_migration import router as model_migration_router  # noqa: E40
 from routes.parse import router as parse_router  # noqa: E402
 from routes.presentation import router as presentation_router  # noqa: E402
 from routes.rag import router as rag_router  # noqa: E402
+from routes.refarch import router as refarch_router  # noqa: E402
+from routes.refarch_admin import router as refarch_admin_router  # noqa: E402
 from routes.reference import router as reference_router  # noqa: E402
 from routes.report_analyzer import router as report_analyzer_router  # noqa: E402
 from routes.scan import router as scan_router  # noqa: E402

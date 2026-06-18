@@ -13,6 +13,7 @@ async def client_with_db():
     await init_db()
 
     import httpx
+
     from main import app
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as ac:
@@ -26,7 +27,7 @@ async def _drain_audit_tasks():
 
 @pytest.mark.asyncio
 async def test_audit_middleware_records_event(client_with_db):
-    from db import AuditEvent, session_scope, select
+    from db import AuditEvent, select, session_scope
 
     await client_with_db.post("/api/conversations", json={
         "id": "audit-rec-1", "mode": "chat", "title": "x",
@@ -45,7 +46,7 @@ async def test_audit_middleware_records_event(client_with_db):
 
 @pytest.mark.asyncio
 async def test_audit_middleware_detects_secret_in_body(client_with_db):
-    from db import AuditEvent, session_scope, select
+    from db import AuditEvent, select, session_scope
 
     leaky_token = "ghp_" + "a" * 36
     await client_with_db.post("/api/conversations", json={

@@ -20,7 +20,9 @@ ignore = [
 
 [tool.ruff.lint.per-file-ignores]
 "backend/tools/tool_definitions.py" = ["E501"]
-"backend/prompts/*.py" = ["E501"]
+"backend/prompts/*.py" = ["E501", "RUF001", "RUF002", "RUF003"]
+"backend/services/reservations_service.py" = ["RUF001"]
+"backend/services/carbon_service.py" = ["RUF003"]
 
 [tool.mypy]
 python_version = "3.11"
