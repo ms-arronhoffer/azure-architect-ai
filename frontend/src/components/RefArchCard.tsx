@@ -113,6 +113,16 @@ function formatMonthly(value: ReferenceArch["estimated_monthly"]): string | null
   return `~$${amount.toLocaleString()}/mo (${region})`;
 }
 
+function formatSynced(iso: string | null | undefined): string | null {
+  if (!iso) return null;
+  const parsed = Date.parse(iso);
+  if (Number.isNaN(parsed)) return null;
+  const days = Math.floor((Date.now() - parsed) / 86_400_000);
+  if (days <= 0) return "Synced today";
+  if (days === 1) return "Synced 1 day ago";
+  return `Synced ${days} days ago`;
+}
+
 interface RefArchCardProps {
   arch: ReferenceArch;
   onEdit?: (arch: ReferenceArch) => void;
@@ -128,6 +138,7 @@ export function RefArchCard({ arch, onEdit, onDelete, onUseAsStarting }: RefArch
   const tags = arch.tags ?? [];
   const wafEntries = Object.entries(arch.waf_score ?? {});
   const isCurated = arch.source && arch.source !== "custom";
+  const syncedLabel = arch.source === "microsoft_official" ? formatSynced(arch.last_synced_at) : null;
 
   return (
     <Card className={styles.card}>
@@ -209,6 +220,9 @@ export function RefArchCard({ arch, onEdit, onDelete, onUseAsStarting }: RefArch
                   <span className={styles.metaLabel}>AVM:</span>
                   <code style={{ fontSize: "11px" }}>{arch.bicep_avm_module}</code>
                 </div>
+              )}
+              {syncedLabel && (
+                <div className={styles.servicesText}>{syncedLabel}</div>
               )}
             </div>
           </div>

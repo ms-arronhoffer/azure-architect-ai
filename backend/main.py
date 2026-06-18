@@ -22,6 +22,7 @@ from routes.conversations import router as conversations_router  # noqa: E402
 from routes.cost import router as cost_router  # noqa: E402
 from routes.demos import router as demos_router  # noqa: E402
 from routes.refarch import router as refarch_router  # noqa: E402
+from routes.refarch_admin import router as refarch_admin_router  # noqa: E402
 from routes.export import router as export_router  # noqa: E402
 from routes.health import router as health_router  # noqa: E402
 from routes.iac import router as iac_router  # noqa: E402
@@ -60,6 +61,13 @@ async def lifespan(app: FastAPI):
             except Exception as exc:
                 from middleware.logging import get_logger
                 get_logger("startup").warning("rag.warmup_failed", error=str(exc))
+        try:
+            from services.scheduler import shutdown_scheduler, start_scheduler
+            start_scheduler()
+            stack.push_async_callback(shutdown_scheduler)
+        except Exception as exc:
+            from middleware.logging import get_logger
+            get_logger("startup").warning("scheduler.start_failed", error=str(exc))
         yield
 
 
@@ -99,6 +107,7 @@ app.include_router(iac_router, prefix="/api")
 app.include_router(cost_router, prefix="/api")
 app.include_router(demos_router, prefix="/api")
 app.include_router(refarch_router, prefix="/api")
+app.include_router(refarch_admin_router, prefix="/api")
 app.include_router(security_router, prefix="/api")
 app.include_router(model_migration_router, prefix="/api")
 app.include_router(report_analyzer_router, prefix="/api")

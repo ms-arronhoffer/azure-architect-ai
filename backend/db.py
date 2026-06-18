@@ -119,6 +119,7 @@ class RefArch(Base):
     source: Mapped[str] = mapped_column(String(32), nullable=False, default="custom", index=True)
     featured: Mapped[bool] = mapped_column(nullable=False, default=False)
     created_at: Mapped[str] = mapped_column(String(64), nullable=False)
+    last_synced_at: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
 
 _engine = create_async_engine(settings.database_url, future=True, pool_pre_ping=True)
@@ -133,6 +134,7 @@ async def init_db() -> None:
             text("UPDATE conversations SET user_id = 'default' WHERE user_id IS NULL")
         )
         await _ensure_column(conn, "demos", "live_url", "TEXT")
+        await _ensure_column(conn, "ref_archs", "last_synced_at", "TEXT")
 
 
 async def _ensure_column(conn, table: str, column: str, ddl_type: str) -> None:

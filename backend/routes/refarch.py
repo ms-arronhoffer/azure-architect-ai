@@ -104,6 +104,7 @@ def _serialize(row: RefArch) -> dict[str, Any]:
         "source": row.source,
         "featured": bool(row.featured),
         "created_at": row.created_at,
+        "last_synced_at": row.last_synced_at,
     }
 
 

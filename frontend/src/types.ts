@@ -420,6 +420,7 @@ export interface ReferenceArch {
   source?: "microsoft_official" | "community" | "custom";
   featured?: boolean;
   created_at?: string;
+  last_synced_at?: string | null;
 }
 
 // ── Learning plan types ───────────────────────────────────────────────────────

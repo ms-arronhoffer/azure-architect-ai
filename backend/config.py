@@ -42,5 +42,10 @@ class Settings(BaseSettings):
     # and metrics to App Insights via azure-monitor-opentelemetry.
     applicationinsights_connection_string: str | None = None
 
+    # Reference architecture ingest. When true, an APScheduler job pulls the Learn
+    # Architecture Center catalog weekly and upserts microsoft_official rows.
+    ingest_enabled: bool = False
+    ingest_user_agent: str = "AzureArchitectAI-Ingest/1.0"
+
 
 settings = Settings()
