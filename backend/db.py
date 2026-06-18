@@ -94,6 +94,8 @@ class Demo(Base):
     thumbnail_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     featured: Mapped[bool] = mapped_column(nullable=False, default=False)
     created_at: Mapped[str] = mapped_column(String(64), nullable=False)
+    source: Mapped[str] = mapped_column(String(32), nullable=False, default="custom", index=True)
+    last_synced_at: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
 
 class RefArch(Base):
@@ -134,6 +136,8 @@ async def init_db() -> None:
             text("UPDATE conversations SET user_id = 'default' WHERE user_id IS NULL")
         )
         await _ensure_column(conn, "demos", "live_url", "TEXT")
+        await _ensure_column(conn, "demos", "source", "TEXT")
+        await _ensure_column(conn, "demos", "last_synced_at", "TEXT")
         await _ensure_column(conn, "ref_archs", "last_synced_at", "TEXT")
 
 

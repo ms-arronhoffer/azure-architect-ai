@@ -36,6 +36,7 @@ _SEED_DEMOS: list[dict[str, Any]] = [
         "thumbnail_url": None,
         "featured": True,
         "created_at": "2026-05-01T00:00:00Z",
+        "source": "custom",
     },
     {
         "id": "demo-002",
@@ -51,6 +52,7 @@ _SEED_DEMOS: list[dict[str, Any]] = [
         "thumbnail_url": None,
         "featured": False,
         "created_at": "2026-04-15T00:00:00Z",
+        "source": "custom",
     },
 ]
 
@@ -89,6 +91,8 @@ def _serialize(row: Demo) -> dict[str, Any]:
         "thumbnail_url": row.thumbnail_url,
         "featured": bool(row.featured),
         "created_at": row.created_at,
+        "source": row.source,
+        "last_synced_at": row.last_synced_at,
     }
 
 
@@ -153,6 +157,13 @@ async def update_demo(
     if row is None:
         raise HTTPException(status_code=404, detail="Demo not found")
     data = body.model_dump(exclude_unset=True)
+    if row.source and row.source != "custom":
+        disallowed = [k for k in data.keys() if k != "featured"]
+        if disallowed:
+            raise HTTPException(
+                status_code=403,
+                detail=f"Cannot edit fields {disallowed} on a {row.source} entry; only `featured` is mutable.",
+            )
     for key, value in data.items():
         setattr(row, key, value)
     await session.commit()
@@ -164,6 +175,11 @@ async def delete_demo(demo_id: str, session: AsyncSession = Depends(get_session)
     row = await session.get(Demo, demo_id)
     if row is None:
         raise HTTPException(status_code=404, detail="Demo not found")
+    if row.source and row.source != "custom":
+        raise HTTPException(
+            status_code=403,
+            detail=f"Cannot delete a {row.source} entry; only custom entries can be removed.",
+        )
     await session.delete(row)
     await session.commit()
     return {"ok": True}

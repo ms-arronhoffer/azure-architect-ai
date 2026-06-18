@@ -104,6 +104,8 @@ export interface Demo {
   thumbnail_url: string | null;
   featured: boolean;
   created_at: string;
+  source?: "microsoft_official" | "community" | "custom";
+  last_synced_at?: string | null;
 }
 
 // ── Strategy Builder ─────────────────────────────────────────────────────────

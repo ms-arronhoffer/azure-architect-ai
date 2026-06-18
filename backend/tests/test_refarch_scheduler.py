@@ -37,18 +37,24 @@ async def test_start_scheduler_registers_weekly_cron(monkeypatch):
     scheduler_module.start_scheduler()
     assert scheduler_module._scheduler is not None
 
-    jobs = scheduler_module._scheduler.get_jobs()
-    assert len(jobs) == 1
-    job = jobs[0]
-    assert job.id == "refarch_ingest_weekly"
-    assert job.max_instances == 1
-    assert job.coalesce is True
+    jobs = {j.id: j for j in scheduler_module._scheduler.get_jobs()}
+    assert set(jobs.keys()) == {"refarch_ingest_weekly", "demo_ingest_weekly"}
 
-    # CronTrigger field values are stored as a tuple of BaseField objects.
-    fields = {f.name: str(f) for f in job.trigger.fields}
-    assert fields["day_of_week"] == "sun"
-    assert fields["hour"] == "4"
-    assert fields["minute"] == "17"
+    refarch = jobs["refarch_ingest_weekly"]
+    assert refarch.max_instances == 1
+    assert refarch.coalesce is True
+    refarch_fields = {f.name: str(f) for f in refarch.trigger.fields}
+    assert refarch_fields["day_of_week"] == "sun"
+    assert refarch_fields["hour"] == "4"
+    assert refarch_fields["minute"] == "17"
+
+    demo = jobs["demo_ingest_weekly"]
+    assert demo.max_instances == 1
+    assert demo.coalesce is True
+    demo_fields = {f.name: str(f) for f in demo.trigger.fields}
+    assert demo_fields["day_of_week"] == "sun"
+    assert demo_fields["hour"] == "4"
+    assert demo_fields["minute"] == "42"
 
 
 @pytest.mark.asyncio

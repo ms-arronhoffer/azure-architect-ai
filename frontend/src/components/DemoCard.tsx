@@ -56,6 +56,16 @@ function isNew(createdAt: string): boolean {
   return Date.now() - new Date(createdAt).getTime() < 30 * 24 * 60 * 60 * 1000;
 }
 
+function formatSynced(iso: string | null | undefined): string | null {
+  if (!iso) return null;
+  const parsed = Date.parse(iso);
+  if (Number.isNaN(parsed)) return null;
+  const days = Math.floor((Date.now() - parsed) / 86_400_000);
+  if (days <= 0) return "Synced today";
+  if (days === 1) return "Synced 1 day ago";
+  return `Synced ${days} days ago`;
+}
+
 const useStyles = makeStyles({
   card: {
     height: "100%",
@@ -129,6 +139,12 @@ const useStyles = makeStyles({
     alignItems: "center",
   },
   footerSpacer: { flex: 1 },
+  syncedLabel: {
+    fontSize: tokens.fontSizeBase200,
+    color: tokens.colorNeutralForeground3,
+    fontStyle: "italic",
+    marginTop: tokens.spacingVerticalXS,
+  },
 });
 
 interface DemoCardProps {
@@ -143,6 +159,8 @@ export function DemoCard({ demo, onEdit, onDelete }: DemoCardProps) {
   const [imgExpanded, setImgExpanded] = useState(false);
   const [descExpanded, setDescExpanded] = useState(false);
   const previewImg = demo.thumbnail_url ?? getVideoThumbnail(demo.video_url ?? null);
+  const isCurated = Boolean(demo.source && demo.source !== "custom");
+  const syncedLabel = demo.source === "microsoft_official" ? formatSynced(demo.last_synced_at) : null;
 
   useEffect(() => {
     if (!imgExpanded) return;
@@ -182,6 +200,21 @@ export function DemoCard({ demo, onEdit, onDelete }: DemoCardProps) {
                     </Badge>
                   </Tooltip>
                 )}
+                {demo.source === "microsoft_official" && (
+                  <Badge appearance="filled" color="informative">
+                    MS Official
+                  </Badge>
+                )}
+                {demo.source === "community" && (
+                  <Badge appearance="outline" color="informative">
+                    Community
+                  </Badge>
+                )}
+                {demo.source === "custom" && (
+                  <Badge appearance="outline" color="success">
+                    Custom
+                  </Badge>
+                )}
                 {isNew(demo.created_at) && (
                   <Badge appearance="filled" color="success" icon={<NewFilled />}>
                     New
@@ -209,6 +242,9 @@ export function DemoCard({ demo, onEdit, onDelete }: DemoCardProps) {
                 >
                   {descExpanded ? "Show less" : "Show more"}
                 </Button>
+              )}
+              {syncedLabel && (
+                <div className={styles.syncedLabel}>{syncedLabel}</div>
               )}
             </div>
           }
@@ -250,7 +286,10 @@ export function DemoCard({ demo, onEdit, onDelete }: DemoCardProps) {
           )}
           <div className={styles.footerSpacer} />
           {onEdit && (
-            <Tooltip content="Edit" relationship="label">
+            <Tooltip
+              content={isCurated ? "Curated entry — only `featured` is editable" : "Edit"}
+              relationship="label"
+            >
               <Button
                 appearance="subtle"
                 icon={<EditRegular />}
@@ -259,7 +298,7 @@ export function DemoCard({ demo, onEdit, onDelete }: DemoCardProps) {
               />
             </Tooltip>
           )}
-          {onDelete && (
+          {onDelete && !isCurated && (
             <Tooltip content="Delete" relationship="label">
               <Button
                 appearance="subtle"
