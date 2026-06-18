@@ -27,7 +27,7 @@ _log = get_logger("refarch_ingest")
 _BASE_URL = "https://learn.microsoft.com"
 _FIRST_PAGE = (
     "/api/contentbrowser/search/architectures"
-    "?locale=en-us&$top=100&$skip=0"
+    "?locale=en-us&$top=30&$skip=0"
 )
 
 
@@ -49,7 +49,7 @@ async def fetch_architectures() -> list[dict[str, Any]]:
             pages += 1
             next_link = payload.get("@nextLink")
             next_path = next_link if next_link else None
-            if pages > 20:
+            if pages > 60:
                 _log.warning("refarch_ingest.pagination_cap_hit", pages=pages)
                 break
     _log.info("refarch_ingest.fetched", pages=pages, entries=len(out))
