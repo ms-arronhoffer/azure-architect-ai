@@ -201,13 +201,14 @@ export default function App() {
     if (ARCH_MODES.includes(mode)) {
       return (
         <ArchitecturePanel
-          key={selectedPanelSession?.id ?? "arch"}
+          key={selectedPanelSession?.id ?? refinementSeed?.id ?? "arch"}
           mode={mode}
           onRefine={handleRefine}
           onModeChange={handleModeChange}
           workloadContext={workloadContext}
           onSave={(id, m, msgs, sr) => handlePanelSave(id, m, msgs, sr)}
           initialSession={ARCH_MODES.includes(selectedPanelSession?.mode ?? "" as Mode) ? selectedPanelSession ?? undefined : undefined}
+          initialMessages={initialMessages}
         />
       );
     }

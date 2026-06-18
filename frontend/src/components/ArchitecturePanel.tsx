@@ -290,16 +290,17 @@ interface ArchitecturePanelProps {
   workloadContext?: WorkloadContext;
   onSave?: (id: string, mode: Mode, messages: ChatMessage[], structuredResult: unknown) => void;
   initialSession?: ConversationRecord;
+  initialMessages?: ChatMessage[];
 }
 
-export default function ArchitecturePanel({ mode = "architecture", onRefine, onModeChange, workloadContext, onSave, initialSession }: ArchitecturePanelProps) {
+export default function ArchitecturePanel({ mode = "architecture", onRefine, onModeChange, workloadContext, onSave, initialSession, initialMessages }: ArchitecturePanelProps) {
   const styles = useStyles();
   const { stream, isStreaming, cancel } = useSSE();
   const { stream: deliverableStream, isStreaming: deliverableStreaming, cancel: cancelDeliverable } = useSSE();
   const { stream: streamService, cancel: cancelService } = useSSE();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const [requirements, setRequirements] = useState("");
+  const [requirements, setRequirements] = useState(() => initialMessages?.[0]?.content ?? "");
   const [constraints, setConstraints] = useState("");
   const [pattern, setPattern] = useState("custom");
   const [attachments, setAttachments] = useState<Attachment[]>([]);
