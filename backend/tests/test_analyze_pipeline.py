@@ -92,8 +92,6 @@ async def test_pipeline_runs_four_phases_in_order(monkeypatch):
     assert statuses == [
         ("architecture", "running"),
         ("architecture", "done"),
-        ("sizing", "running"),
-        ("sizing", "done"),
         ("security", "running"),
         ("security", "done"),
         ("waf", "running"),
@@ -113,9 +111,8 @@ async def test_pipeline_injects_prior_context(monkeypatch):
     await _drain(_stream_pipeline(req))
 
     by_mode = {r.mode: r for r in captured}
-    assert "## Prior Step — Architecture" in by_mode["sizing"].requirements
     assert "## Prior Step — Architecture" in by_mode["security"].requirements
-    assert "## Prior Step — Sizing" in by_mode["security"].requirements
+    assert "## Prior Step — Architecture" in by_mode["waf"].requirements
     assert "## Prior Step — Security" in by_mode["waf"].requirements
 
 
@@ -137,7 +134,6 @@ async def test_pipeline_emits_bundled_design(monkeypatch):
     assert b["architecture"]["text"].strip() == "Architecture text."
     assert "Runbook" in b["architecture"]["runbook"]
     assert "Microsoft.Storage" in b["architecture"]["bicep"]
-    assert b["sizing"]["text"].strip() == "Sizing text."
     assert b["security"]["text"].strip() == "Security text."
     assert isinstance(b["waf"]["pillars"], list)
     assert len(b["waf"]["pillars"]) == 2

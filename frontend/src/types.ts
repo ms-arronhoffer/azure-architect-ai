@@ -34,6 +34,7 @@ export type Mode =
   | "governance"
   | "ops"
   | "intake"
+  | "intakechat"
   | "analyze"
   | "troubleshoot"
   | "whatsnew"
@@ -46,6 +47,7 @@ export type Mode =
   | "medalliondesigner"
   | "modelmigration"
   | "showcase"
+  | "refarch"
   | "netvnet"
   | "netfirewall"
   | "netsecurity"
@@ -233,11 +235,18 @@ export interface ArchResult {
 
 // ── WAF types ────────────────────────────────────────────────────────────────
 
+export interface WafRecommendationCitation {
+  text: string;
+  learn_url?: string;
+  source?: string;
+  confidence?: number;
+}
+
 export interface WafPillarResult {
   pillar: string;
   score: number;
   findings: string[];
-  recommendations: string[];
+  recommendations: (string | WafRecommendationCitation)[];
 }
 
 export interface WafResult {
@@ -402,7 +411,15 @@ export interface ReferenceArch {
   patterns: string[];
   learn_url: string;
   complexity: "Low" | "Medium" | "High";
-  estimated_monthly: string;
+  estimated_monthly: string | Record<string, number>;
+  slug?: string;
+  summary?: string;
+  repo_url?: string | null;
+  bicep_avm_module?: string | null;
+  diagram_url?: string | null;
+  source?: "microsoft_official" | "community" | "custom";
+  featured?: boolean;
+  created_at?: string;
 }
 
 // ── Learning plan types ───────────────────────────────────────────────────────
@@ -1002,6 +1019,14 @@ export interface BundledDesign {
   sizing: { text: string };
   security: { text: string };
   waf: { pillars: WafPillarResult[] };
+  confidence?: ConfidenceItem[];
+}
+
+export interface ConfidenceItem {
+  dimension: string;
+  score: number;
+  rationale?: string;
+  suggested_question?: string;
 }
 
 // ── Fabric capacity planner types ─────────────────────────────────────────────

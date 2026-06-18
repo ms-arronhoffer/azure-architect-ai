@@ -544,7 +544,20 @@ export default function ArchitectureTabContent(props: ArchitectureTabContentProp
                   <div style={{ padding: "10px 14px" }}>
                     <Text size={200} weight="semibold" block style={{ marginBottom: "4px", color: tokens.colorNeutralForeground3 }}>RECOMMENDATIONS</Text>
                     <ul style={{ margin: 0, paddingLeft: "16px" }}>
-                      {pillar.recommendations.map((r, i) => <li key={i}><Text size={200}>{r}</Text></li>)}
+                      {pillar.recommendations.map((r, i) => {
+                        const text = typeof r === "string" ? r : r.text;
+                        const url = typeof r === "string" ? undefined : r.learn_url;
+                        return (
+                          <li key={i}>
+                            <Text size={200}>
+                              {text}
+                              {url && (
+                                <> — <a href={url} target="_blank" rel="noopener noreferrer">Microsoft Docs ↗</a></>
+                              )}
+                            </Text>
+                          </li>
+                        );
+                      })}
                     </ul>
                   </div>
                 )}

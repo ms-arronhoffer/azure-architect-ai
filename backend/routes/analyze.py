@@ -1,5 +1,6 @@
 import asyncio
 import json
+import re
 from collections.abc import AsyncGenerator
 from datetime import UTC, datetime
 from typing import Any
@@ -12,6 +13,8 @@ from limiter import limiter
 from routes.architecture import ArchRequest, _stream_architecture
 
 router = APIRouter()
+
+_CONFIDENCE_FENCE_RE = re.compile(r"```confidence\s*\n.*?\n```", re.DOTALL | re.IGNORECASE)
 
 
 class AnalyzeRequest(BaseModel):
@@ -39,6 +42,7 @@ async def _relay_sse(
         container.setdefault("text", "")
         container.setdefault("artifacts", {})
         container.setdefault("waf_pillars", [])
+        container.setdefault("confidence", [])
 
     async for chunk in gen:
         if not chunk.startswith("data: "):
@@ -73,6 +77,13 @@ async def _relay_sse(
                 pillar = obj.get("pillar")
                 if pillar:
                     container["waf_pillars"].append(pillar)
+            elif etype == "confidence":
+                items = obj.get("items") or []
+                if isinstance(items, list):
+                    container["confidence"].extend(items)
+                # Scrub the confidence fence from accumulated text so the
+                # tab markdown doesn't show a raw JSON block to the user.
+                container["text"] = _CONFIDENCE_FENCE_RE.sub("", container["text"]).rstrip() + "\n"
         tagged = f"data: {json.dumps(obj)}\n\n"
         if yield_individually:
             yield tagged
@@ -210,6 +221,9 @@ async def _stream_pipeline(req: AnalyzeRequest) -> AsyncGenerator[str, None]:
         "sizing": {"text": ""},
         "security": {"text": security_text},
         "waf": {"pillars": waf_state.get("waf_pillars", [])},
+        "confidence": (arch_state.get("confidence", []) or [])
+            + (security_state.get("confidence", []) or [])
+            + (waf_state.get("confidence", []) or []),
     }
     yield f"data: {json.dumps(bundled)}\n\n"
     yield "data: {\"type\": \"done\"}\n\n"

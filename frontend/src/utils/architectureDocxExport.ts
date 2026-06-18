@@ -183,7 +183,7 @@ export async function exportArchitectureToDocx(options: ArchitectureExportOption
       if (pillar.recommendations.length > 0) {
         children.push(
           new Paragraph({ children: [new TextRun({ text: "Recommendations", bold: true, size: 20 })], spacing: { before: 80, after: 40 } }),
-          ...pillar.recommendations.map(bulletParagraph),
+          ...pillar.recommendations.map((r) => bulletParagraph(typeof r === "string" ? r : (r.learn_url ? `${r.text} (${r.learn_url})` : r.text))),
         );
       }
     }

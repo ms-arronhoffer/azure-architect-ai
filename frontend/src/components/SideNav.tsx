@@ -39,6 +39,7 @@ import {
   ServerRegular,
   SparkleRegular,
   DataBarVerticalRegular,
+  BookRegular,
 } from "@fluentui/react-icons";
 import type { Mode } from "../types";
 import { useAuth } from "../auth/AuthProvider";
@@ -98,12 +99,11 @@ const DATA_DESK_MODES: Mode[] = [
 
 const NAV_SECTIONS: NavSectionDef[] = [
   {
-    label: "Discover",
+    label: "Updates",
     items: [
       { mode: "whatsnew", label: "What's New", icon: <MegaphoneLoudRegular />, description: "Microsoft announcements & draft customer emails" },
       { mode: "servicehealth", label: "Service Health", icon: <HeartPulseRegular />, description: "Azure service incidents and health advisories" },
       { mode: "modellifecycle", label: "Model Lifecycle", icon: <CalendarRegular />, description: "Azure Foundry model retirement schedule" },
-      { mode: "showcase", label: "Demo Showcase", icon: <PlayCircleRegular />, description: "Browse and contribute to the demo catalog" },
     ],
   },
   {
@@ -118,6 +118,7 @@ const NAV_SECTIONS: NavSectionDef[] = [
     label: "Plan",
     items: [
       { mode: "intake", label: "Requirements Studio", icon: <FormRegular />, description: "Capture workload requirements — injected everywhere" },
+      { mode: "intakechat", label: "Guided Discovery", icon: <FormRegular />, description: "Conversational intake driven by confidence gaps" },
       { mode: "analyze", label: "Workload Analysis", icon: <ChartMultipleRegular />, description: "Architecture + WAF + Security in one click" },
       { mode: "strategy", label: "Strategy Builder", icon: <TargetRegular />, description: "AI-generated Azure strategy document" },
       { mode: "rfpproposal", label: "RFP / Proposal Writer", icon: <DocumentRegular />, description: "Azure technical proposals and statements of work" },
@@ -131,6 +132,9 @@ const NAV_SECTIONS: NavSectionDef[] = [
       { mode: "landingzone", label: "Landing Zone", icon: <LayerRegular />, description: "Azure CAF landing zone design with management groups" },
       { mode: "bootstrap", label: "Bootstrapper", icon: <RocketRegular />, description: "4-step guided wizard with ZIP download" },
       { mode: "namingstandards", label: "Naming Standards", icon: <TagRegular />, description: "CAF naming conventions + Bicep/Terraform enforcement module" },
+      { subheading: "Library" },
+      { mode: "refarch", label: "Reference Architectures", icon: <BookRegular />, description: "Official MS reference architectures + custom entries" },
+      { mode: "showcase", label: "Demo Showcase", icon: <PlayCircleRegular />, description: "Browse and contribute to the demo catalog" },
       { subheading: "Domain Desks" },
       { mode: "netvnet", label: "Network Desk", icon: <GlobeRegular />, description: "11 specialist advisors for Azure networking", activeWhen: NETWORK_DESK_MODES },
       { mode: "compsku", label: "Compute Desk", icon: <ServerRegular />, description: "10 specialist advisors for Azure compute", activeWhen: COMPUTE_DESK_MODES },

@@ -86,7 +86,7 @@ function pillarText(d: SavedDesign, key: PillarKey): string {
   if (key === "security") return b.security.text || "";
   if (key === "waf") {
     return (b.waf.pillars || [])
-      .map((p) => `### ${p.pillar} — ${p.score}/5\n${(p.recommendations || []).map((r) => `- ${r}`).join("\n")}`)
+      .map((p) => `### ${p.pillar} — ${p.score}/5\n${(p.recommendations || []).map((r) => `- ${typeof r === "string" ? r : r.text}`).join("\n")}`)
       .join("\n\n");
   }
   return "";

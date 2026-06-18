@@ -312,7 +312,7 @@ For each phase, include: objectives, specific Azure services to add/configure, i
   function handleRefine() {
     if (!onRefine || pillars.length === 0) return;
     const summary = pillars.map((p) =>
-      `**${PILLAR_LABELS[p.pillar] ?? p.pillar}**: ${p.score}/5\n- Findings: ${p.findings.join("; ")}\n- Recommendations: ${p.recommendations.join("; ")}`
+      `**${PILLAR_LABELS[p.pillar] ?? p.pillar}**: ${p.score}/5\n- Findings: ${p.findings.join("; ")}\n- Recommendations: ${p.recommendations.map((r) => typeof r === "string" ? r : r.text).join("; ")}`
     ).join("\n\n");
     onRefine([{
       id: crypto.randomUUID(),
@@ -386,9 +386,20 @@ For each phase, include: objectives, specific Azure services to add/configure, i
             <div className={styles.divider} style={{ margin: "12px 0 8px" }} />
             <Text weight="semibold" size={300} block style={{ marginBottom: "8px" }}>Recommendations</Text>
             <ul style={{ marginTop: 0, paddingLeft: 16 }}>
-              {p.recommendations.map((r, i) => (
-                <li key={i}><Text size={300}>{r}</Text></li>
-              ))}
+              {p.recommendations.map((r, i) => {
+                const text = typeof r === "string" ? r : r.text;
+                const url = typeof r === "string" ? undefined : r.learn_url;
+                return (
+                  <li key={i}>
+                    <Text size={300}>
+                      {text}
+                      {url && (
+                        <> — <a href={url} target="_blank" rel="noopener noreferrer">Microsoft Docs ↗</a></>
+                      )}
+                    </Text>
+                  </li>
+                );
+              })}
             </ul>
           </>
         )}

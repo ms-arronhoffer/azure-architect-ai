@@ -74,6 +74,23 @@ interface JobStatus {
 type JobKey = "architecture" | "waf" | "security";
 type TabKey = JobKey | "bundled" | "drift";
 
+interface RefMatch {
+  slug: string;
+  title: string;
+  summary?: string;
+  learn_url?: string;
+  source?: string;
+  score: number;
+  signals?: Record<string, string[]>;
+}
+
+interface CostDelta {
+  service?: string;
+  sku?: string;
+  monthly?: number;
+  quantity?: number;
+}
+
 const PIPELINE_ORDER: JobKey[] = ["architecture", "security", "waf"];
 
 const JOB_META: Record<JobKey, { label: string; icon: JSX.Element }> = {
@@ -191,6 +208,26 @@ const useStyles = makeStyles({
     minWidth: "32px",
     textAlign: "right",
   },
+  recList: {
+    listStyle: "disc",
+    paddingLeft: "18px",
+    margin: "6px 0 0",
+    display: "flex",
+    flexDirection: "column",
+    gap: "4px",
+  },
+  recItem: {
+    fontSize: tokens.fontSizeBase200,
+    color: tokens.colorNeutralForeground2,
+    lineHeight: 1.45,
+  },
+  recCitation: {
+    color: tokens.colorBrandForeground1,
+    textDecoration: "none",
+    fontSize: tokens.fontSizeBase100,
+    marginLeft: "6px",
+    whiteSpace: "nowrap",
+  },
   footer: {
     padding: "16px 28px",
     borderTop: `1px solid ${tokens.colorNeutralStroke2}`,
@@ -217,6 +254,55 @@ const useStyles = makeStyles({
     background: tokens.colorBrandBackground,
     marginLeft: "5px",
     verticalAlign: "middle",
+  },
+  refMatchBar: {
+    display: "flex",
+    alignItems: "center",
+    gap: "10px",
+    padding: "8px 14px",
+    margin: "8px 8px 0",
+    borderRadius: tokens.borderRadiusMedium,
+    background: tokens.colorBrandBackground2,
+    border: `1px solid ${tokens.colorBrandStroke2}`,
+    fontSize: tokens.fontSizeBase200,
+    flexWrap: "wrap",
+  },
+  refMatchLabel: {
+    color: tokens.colorNeutralForeground3,
+    fontWeight: 600,
+  },
+  refMatchTitle: {
+    fontWeight: 600,
+    color: tokens.colorNeutralForeground1,
+  },
+  refMatchScore: {
+    color: tokens.colorNeutralForeground3,
+  },
+  refMatchLink: {
+    color: tokens.colorBrandForeground1,
+    textDecoration: "none",
+    fontSize: tokens.fontSizeBase200,
+  },
+  costBanner: {
+    display: "flex",
+    alignItems: "center",
+    gap: "12px",
+    padding: "8px 14px",
+    margin: "8px 8px 0",
+    borderRadius: tokens.borderRadiusMedium,
+    background: tokens.colorPaletteGreenBackground2,
+    border: `1px solid ${tokens.colorPaletteGreenBorderActive}`,
+    fontSize: tokens.fontSizeBase200,
+    flexWrap: "wrap",
+  },
+  costTotal: {
+    fontWeight: 700,
+    color: tokens.colorNeutralForeground1,
+    fontSize: tokens.fontSizeBase300,
+  },
+  costDelta: {
+    color: tokens.colorNeutralForeground3,
+    fontSize: tokens.fontSizeBase200,
   },
   savedRow: {
     display: "flex",
@@ -284,6 +370,10 @@ export default function AnalysisPanel({
   const [driftLoading, setDriftLoading] = useState(false);
   const [driftError, setDriftError] = useState<string | null>(null);
   const [driftReport, setDriftReport] = useState<DriftReport | null>(null);
+  const [refMatches, setRefMatches] = useState<RefMatch[]>([]);
+  const [seededSlug, setSeededSlug] = useState<string | null>(null);
+  const [costRunningTotal, setCostRunningTotal] = useState<number | null>(null);
+  const [costLastDelta, setCostLastDelta] = useState<CostDelta | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
   // Track text/artifacts for the current pipeline run so we can persist on each phase boundary.
@@ -388,6 +478,10 @@ export default function AnalysisPanel({
     setArchitectureText("");
     setWafPillars([]);
     setSecurityText("");
+    setRefMatches([]);
+    setSeededSlug(null);
+    setCostRunningTotal(null);
+    setCostLastDelta(null);
     setJobs({
       architecture: { status: "running", events: [] },
       waf: { status: "running", events: [] },
@@ -469,6 +563,12 @@ export default function AnalysisPanel({
             } else if (obj.type === "done") {
               setAllDone(true);
               setIsRunning(false);
+            } else if (obj.type === "reference_match") {
+              setRefMatches((obj.matches as RefMatch[]) || []);
+              setSeededSlug((obj.seeded_slug as string | null) ?? null);
+            } else if (obj.type === "cost_update") {
+              setCostRunningTotal(typeof obj.running_total_usd === "number" ? obj.running_total_usd : null);
+              setCostLastDelta(obj.delta as CostDelta | null);
             } else if (obj.type === "bundled_design") {
               const bundle: BundledDesign = {
                 workload_name: obj.workload_name,
@@ -561,7 +661,10 @@ export default function AnalysisPanel({
     const parts: string[] = [];
     if (architectureText) parts.push(`## Architecture Design\n\n${architectureText}`);
     if (wafPillars.length > 0) {
-      const wafSummary = wafPillars.map((p) => `- **${p.pillar}**: ${p.score}/5 — ${p.recommendations.slice(0, 2).join(", ")}`).join("\n");
+      const wafSummary = wafPillars.map((p) => {
+        const recTexts = p.recommendations.slice(0, 2).map((r) => typeof r === "string" ? r : r.text);
+        return `- **${p.pillar}**: ${p.score}/5 — ${recTexts.join(", ")}`;
+      }).join("\n");
       parts.push(`## WAF Assessment\n\n${wafSummary}`);
     }
     if (securityText) parts.push(`## Security & Identity\n\n${securityText}`);
@@ -857,6 +960,57 @@ export default function AnalysisPanel({
 
         {!compareKeys && (anyStarted || bundledDesign) && (
           <div className={styles.resultsArea}>
+            {refMatches.length > 0 && (() => {
+              const primary = refMatches.find((m) => m.slug === seededSlug) ?? refMatches[0];
+              const others = refMatches.filter((m) => m.slug !== primary.slug);
+              const pct = Math.round((primary.score || 0) * 100);
+              const seeded = !!seededSlug && primary.slug === seededSlug;
+              return (
+                <div className={styles.refMatchBar}>
+                  <span className={styles.refMatchLabel}>
+                    {seeded ? "Starting from:" : "Closest reference:"}
+                  </span>
+                  <span className={styles.refMatchTitle}>{primary.title}</span>
+                  <span className={styles.refMatchScore}>({pct}% match)</span>
+                  {primary.learn_url && (
+                    <a
+                      href={primary.learn_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className={styles.refMatchLink}
+                      title="Open on Microsoft Learn"
+                    >
+                      Microsoft Learn ↗
+                    </a>
+                  )}
+                  {others.length > 0 && (
+                    <span
+                      className={styles.refMatchScore}
+                      title={others.map((o) => `${o.title} (${Math.round((o.score || 0) * 100)}%)`).join("\n")}
+                    >
+                      +{others.length} alt{others.length === 1 ? "" : "s"}
+                    </span>
+                  )}
+                </div>
+              );
+            })()}
+            {costRunningTotal !== null && (
+              <div className={styles.costBanner}>
+                <span className={styles.refMatchLabel}>Running cost:</span>
+                <span className={styles.costTotal}>
+                  ${costRunningTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}/mo
+                </span>
+                {costLastDelta && (
+                  <span className={styles.costDelta}>
+                    +{costLastDelta.service || "component"}
+                    {costLastDelta.sku ? ` (${costLastDelta.sku})` : ""}
+                    {typeof costLastDelta.monthly === "number"
+                      ? ` · +$${costLastDelta.monthly.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}/mo`
+                      : ""}
+                  </span>
+                )}
+              </div>
+            )}
             <TabList selectedValue={activeTab} onTabSelect={(_, d) => setActiveTab(d.value as TabKey)} style={{ padding: "8px 8px 0" }}>
               <Tab value="architecture">Architecture{jobs.architecture.status === "done" && <span className={styles.tabDot} />}</Tab>
               <Tab value="waf">WAF Assessment{jobs.waf.status === "done" && <span className={styles.tabDot} />}</Tab>
@@ -883,21 +1037,39 @@ export default function AnalysisPanel({
               {activeTab === "waf" && (
                 wafPillars.length > 0 ? (
                   <div>
-                    {wafPillars.map((p, i) => (
-                      <div key={i} className={styles.pillarRow}>
-                        <span className={styles.pillarScore} style={{ color: p.score >= 4 ? tokens.colorStatusSuccessForeground1 : p.score >= 3 ? tokens.colorStatusWarningForeground1 : tokens.colorStatusDangerForeground1 }}>
-                          {p.score}/5
-                        </span>
-                        <div style={{ flex: 1 }}>
-                          <Text weight="semibold" size={300}>{p.pillar}</Text>
-                          <div style={{ display: "flex", flexWrap: "wrap", gap: "4px", marginTop: "4px" }}>
-                            {p.recommendations.slice(0, 3).map((r, j) => (
-                              <Badge key={j} appearance="tint" color={SCORE_COLOR(p.score)} size="small">{r}</Badge>
-                            ))}
+                    {wafPillars.map((p, i) => {
+                      const recItems = p.recommendations.map((r) =>
+                        typeof r === "string" ? { text: r } : r
+                      );
+                      return (
+                        <div key={i} className={styles.pillarRow}>
+                          <span className={styles.pillarScore} style={{ color: p.score >= 4 ? tokens.colorStatusSuccessForeground1 : p.score >= 3 ? tokens.colorStatusWarningForeground1 : tokens.colorStatusDangerForeground1 }}>
+                            {p.score}/5
+                          </span>
+                          <div style={{ flex: 1 }}>
+                            <Text weight="semibold" size={300}>{p.pillar}</Text>
+                            <ul className={styles.recList}>
+                              {recItems.slice(0, 5).map((r, j) => (
+                                <li key={j} className={styles.recItem}>
+                                  <span>{r.text}</span>
+                                  {r.learn_url && (
+                                    <a
+                                      href={r.learn_url}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className={styles.recCitation}
+                                      title="Open on Microsoft Learn"
+                                    >
+                                      [Microsoft Docs ↗]
+                                    </a>
+                                  )}
+                                </li>
+                              ))}
+                            </ul>
                           </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 ) : (
                   <div style={{ display: "flex", alignItems: "center", gap: "8px", padding: "12px" }}>
@@ -987,9 +1159,12 @@ export default function AnalysisPanel({
                               <div style={{ flex: 1 }}>
                                 <Text weight="semibold" size={300}>{p.pillar}</Text>
                                 <div style={{ display: "flex", flexWrap: "wrap", gap: "4px", marginTop: "4px" }}>
-                                  {p.recommendations.slice(0, 3).map((r, j) => (
-                                    <Badge key={j} appearance="tint" color={SCORE_COLOR(p.score)} size="small">{r}</Badge>
-                                  ))}
+                                  {p.recommendations.slice(0, 3).map((r, j) => {
+                                    const text = typeof r === "string" ? r : r.text;
+                                    return (
+                                      <Badge key={j} appearance="tint" color={SCORE_COLOR(p.score)} size="small">{text}</Badge>
+                                    );
+                                  })}
                                 </div>
                               </div>
                             </div>

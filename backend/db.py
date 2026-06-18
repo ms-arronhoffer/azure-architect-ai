@@ -96,6 +96,31 @@ class Demo(Base):
     created_at: Mapped[str] = mapped_column(String(64), nullable=False)
 
 
+class RefArch(Base):
+    """Reference architecture catalog entry — global library of MS-official + custom architectures."""
+
+    __tablename__ = "ref_archs"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    slug: Mapped[str] = mapped_column(String(128), nullable=False, unique=True, index=True)
+    title: Mapped[str] = mapped_column(Text, nullable=False)
+    summary: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    category: Mapped[str] = mapped_column(String(64), nullable=False, default="general", index=True)
+    tags: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    services: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    patterns: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    waf_score: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    estimated_monthly: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    complexity: Mapped[str] = mapped_column(String(16), nullable=False, default="Medium")
+    learn_url: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    repo_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    bicep_avm_module: Mapped[str | None] = mapped_column(Text, nullable=True)
+    diagram_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    source: Mapped[str] = mapped_column(String(32), nullable=False, default="custom", index=True)
+    featured: Mapped[bool] = mapped_column(nullable=False, default=False)
+    created_at: Mapped[str] = mapped_column(String(64), nullable=False)
+
+
 _engine = create_async_engine(settings.database_url, future=True, pool_pre_ping=True)
 _Session = async_sessionmaker(_engine, expire_on_commit=False)
 
@@ -144,6 +169,7 @@ __all__ = [
     "Base",
     "Conversation",
     "Demo",
+    "RefArch",
     "RagDocument",
     "TokenUsage",
     "UserSecret",

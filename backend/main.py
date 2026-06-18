@@ -21,6 +21,7 @@ from routes.codegen import router as codegen_router  # noqa: E402
 from routes.conversations import router as conversations_router  # noqa: E402
 from routes.cost import router as cost_router  # noqa: E402
 from routes.demos import router as demos_router  # noqa: E402
+from routes.refarch import router as refarch_router  # noqa: E402
 from routes.export import router as export_router  # noqa: E402
 from routes.health import router as health_router  # noqa: E402
 from routes.iac import router as iac_router  # noqa: E402
@@ -97,6 +98,7 @@ app.include_router(scan_router, prefix="/api")
 app.include_router(iac_router, prefix="/api")
 app.include_router(cost_router, prefix="/api")
 app.include_router(demos_router, prefix="/api")
+app.include_router(refarch_router, prefix="/api")
 app.include_router(security_router, prefix="/api")
 app.include_router(model_migration_router, prefix="/api")
 app.include_router(report_analyzer_router, prefix="/api")

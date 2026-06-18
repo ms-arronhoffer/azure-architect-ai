@@ -89,7 +89,10 @@ export function bundleAndSpecToMarkdown(
       if (p.recommendations && p.recommendations.length) {
         parts.push("");
         parts.push("**Recommendations:**");
-        for (const r of p.recommendations) parts.push(`- ${r}`);
+        for (const r of p.recommendations) {
+          if (typeof r === "string") parts.push(`- ${r}`);
+          else parts.push(r.learn_url ? `- ${r.text} ([Microsoft Docs](${r.learn_url}))` : `- ${r.text}`);
+        }
       }
       parts.push("");
     }

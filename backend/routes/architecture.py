@@ -4,6 +4,7 @@ Streams typed SSE events including diagram, runbook, Bicep, and cost estimate.
 """
 
 import json
+import re
 from collections.abc import AsyncGenerator
 
 from fastapi import APIRouter, Depends, Request
@@ -12,6 +13,7 @@ from openai import APIError, AuthenticationError, BadRequestError
 from pydantic import BaseModel
 
 from auth import require_user, user_id_from_claims
+from db import RefArch, select, session_scope
 from limiter import limiter
 from models import ModelConfig
 from prompts.system_prompt import MODE_TEMPLATES
@@ -20,8 +22,10 @@ from services.diagram_service import generate_diagram
 from services.docs_service import search_azure_docs
 from services.error_sanitizer import sanitize_openai_error
 from services.mcp_service import call_mcp_tool, is_mcp_tool
+from services.citation_service import enrich_recommendations
 from services.openai_service import resolve_client_and_model
 from services.pricing_service import estimate_architecture, get_regional_pricing_context
+from services.refarch_match import match_spec
 from services.runbook_service import build_runbook
 from services.settings_service import load_settings
 from services.token_service import schedule_record_usage
@@ -30,6 +34,164 @@ from tools.tool_definitions import get_tools_for_mode
 router = APIRouter()
 
 ARCHITECTURE_MODES = {"architecture", "waf", "review", "drbc", "network", "aiarchitecture", "dataplatform", "apim"}
+
+# Modes that get prior architecture text injected from the caller — re-matching
+# adds noise rather than signal, so skip the seed-prompt enrichment.
+_REFARCH_SKIP_MODES = {"waf", "review"}
+_REFARCH_INJECT_THRESHOLD = 0.4
+
+_CONFIDENCE_INSTRUCTION = (
+    "## Self-Rated Confidence (required)\n"
+    "After producing the main response, append a fenced block of the form:\n"
+    "```confidence\n"
+    "[{\"dimension\": \"throughput_requirements\", \"score\": 1, \"rationale\": \"No SLO given; assumed 100 RPS\", \"suggested_question\": \"Expected peak RPS?\"}, ...]\n"
+    "```\n"
+    "Rate 0-5 your certainty in each *input dimension you used* (e.g., throughput, data_residency, "
+    "compliance, budget, availability_target, recovery_targets, data_classes, identity_model). "
+    "For any score ≤ 2, include a concise `suggested_question` the customer could answer to raise your confidence. "
+    "Emit valid JSON inside the fence. Do not wrap in additional markdown."
+)
+
+
+_CONFIDENCE_FENCE_RE = re.compile(r"```confidence\s*\n(.*?)\n```", re.DOTALL | re.IGNORECASE)
+
+
+def _extract_confidence_block(text: str) -> list[dict]:
+    if not text:
+        return []
+    m = _CONFIDENCE_FENCE_RE.search(text)
+    if not m:
+        return []
+    try:
+        parsed = json.loads(m.group(1).strip())
+    except Exception:
+        return []
+    if not isinstance(parsed, list):
+        return []
+    out: list[dict] = []
+    for item in parsed:
+        if not isinstance(item, dict):
+            continue
+        dim = item.get("dimension")
+        score = item.get("score")
+        if not isinstance(dim, str) or not isinstance(score, (int, float)):
+            continue
+        entry = {
+            "dimension": dim,
+            "score": int(score),
+            "rationale": item.get("rationale") or "",
+        }
+        sq = item.get("suggested_question")
+        if isinstance(sq, str) and sq.strip():
+            entry["suggested_question"] = sq
+        out.append(entry)
+    return out
+
+
+def _spec_from_arch_request(req: "ArchRequest") -> dict:
+    """Build a loose spec dict for `match_spec` from the incoming ArchRequest."""
+    return {
+        "description": req.requirements,
+        "summary": req.constraints,
+        "patterns": [req.pattern] if req.pattern and req.pattern != "custom" else [],
+        "regions": [req.region] if req.region else [],
+        "category": req.mode if req.mode in ("network", "aiarchitecture", "dataplatform", "apim") else "",
+    }
+
+
+def _arch_to_dict(row: RefArch) -> dict:
+    return {
+        "slug": row.slug,
+        "title": row.title,
+        "summary": row.summary,
+        "category": row.category,
+        "tags": row.tags or [],
+        "services": row.services or [],
+        "patterns": row.patterns or [],
+        "waf_score": row.waf_score or {},
+        "estimated_monthly": row.estimated_monthly or {},
+        "complexity": row.complexity,
+        "learn_url": row.learn_url,
+        "source": row.source,
+    }
+
+
+def _refarch_seed_block(arch: dict) -> str:
+    """Render the matched arch as a system-prompt addendum."""
+    services = arch.get("services") or []
+    patterns = arch.get("patterns") or []
+    waf = arch.get("waf_score") or {}
+    waf_line = ", ".join(f"{k} {v}/5" for k, v in waf.items()) if waf else ""
+    parts = [
+        "## Reference starting point",
+        f"The closest Microsoft reference architecture for this workload is **{arch.get('title')}**.",
+    ]
+    if arch.get("learn_url"):
+        parts.append(f"Source: {arch['learn_url']}")
+    if arch.get("summary"):
+        parts.append(f"Summary: {arch['summary']}")
+    if patterns:
+        parts.append(f"Patterns: {', '.join(patterns)}.")
+    if services:
+        parts.append(f"Key services: {', '.join(services)}.")
+    if waf_line:
+        parts.append(f"Baseline WAF scores: {waf_line}.")
+    parts.append("Customise from this baseline rather than generating cold; preserve the WAF posture unless the requirements explicitly override it.")
+    return "\n".join(parts)
+
+
+async def _match_refarch_for_request(req: "ArchRequest") -> tuple[list[dict], dict | None]:
+    """Return (top_matches, seed_arch) for a request.
+
+    `top_matches` is a UI-friendly list (slug/title/score/signals); `seed_arch`
+    is the full dict to inject into the prompt when score crosses the threshold,
+    or None when no match is strong enough.
+    """
+    try:
+        async with session_scope() as session:
+            rows = (await session.execute(select(RefArch))).scalars().all()
+    except Exception:
+        return [], None
+    if not rows:
+        return [], None
+    corpus = [_arch_to_dict(r) for r in rows]
+    ranked = match_spec(_spec_from_arch_request(req), corpus, top_n=3)
+    top_matches: list[dict] = []
+    for r in ranked:
+        a = r["arch"]
+        top_matches.append({
+            "slug": a.get("slug"),
+            "title": a.get("title"),
+            "summary": a.get("summary"),
+            "learn_url": a.get("learn_url"),
+            "source": a.get("source"),
+            "score": r["score"],
+            "signals": r["signals"],
+        })
+    seed = ranked[0]["arch"] if ranked and ranked[0]["score"] >= _REFARCH_INJECT_THRESHOLD else None
+    return top_matches, seed
+
+
+async def _enrich_pillar_with_citations(pillar: dict, cache: dict[str, str | None]) -> dict:
+    """Replace `recommendations: [str, ...]` with `[{text, learn_url?}, ...]`
+    via the MCP `documentation` tool. Falls back silently to the original
+    list if enrichment fails or returns nothing useful.
+    """
+    if not isinstance(pillar, dict):
+        return pillar
+    recs = pillar.get("recommendations")
+    if not isinstance(recs, list) or not recs:
+        return pillar
+    if not all(isinstance(r, str) for r in recs):
+        # already enriched (or unexpected shape) — leave alone
+        return pillar
+    try:
+        enriched = await enrich_recommendations(recs, cache)
+    except Exception:
+        return pillar
+    if enriched:
+        pillar["recommendations"] = enriched
+    return pillar
 
 
 class ArchRequest(BaseModel):
@@ -55,6 +217,7 @@ async def _stream_architecture(req: ArchRequest, provider: str = "azure", model:
     system = MODE_TEMPLATES.get(mode, MODE_TEMPLATES["architecture"])
     tools = get_tools_for_mode(mode)
     usage_acc: dict[str, int] = {"prompt": 0, "completion": 0}
+    citation_cache: dict[str, str | None] = {}
 
     if mode == "waf":
         yield f"data: {json.dumps({'type': 'status', 'message': 'Running WAF assessment...'})}\n\n"
@@ -86,6 +249,19 @@ async def _stream_architecture(req: ArchRequest, provider: str = "azure", model:
         except Exception:
             pass
 
+    if mode not in _REFARCH_SKIP_MODES:
+        yield f"data: {json.dumps({'type': 'status', 'message': 'Matching reference architectures...'})}\n\n"
+        try:
+            top_matches, seed_arch = await _match_refarch_for_request(req)
+        except Exception:
+            top_matches, seed_arch = [], None
+        if top_matches:
+            yield f"data: {json.dumps({'type': 'reference_match', 'matches': top_matches, 'seeded_slug': seed_arch.get('slug') if seed_arch else None})}\n\n"
+        if seed_arch:
+            enriched_system = enriched_system + "\n\n" + _refarch_seed_block(seed_arch)
+
+    enriched_system = enriched_system + "\n\n" + _CONFIDENCE_INSTRUCTION
+
     full_messages = [{"role": "system", "content": enriched_system}]
     if req.prior_messages:
         for m in req.prior_messages:
@@ -97,8 +273,6 @@ async def _stream_architecture(req: ArchRequest, provider: str = "azure", model:
 
     citations: list[dict] = []
     arch_data: dict = {}
-
-    yield f"data: {json.dumps({'type': 'status', 'message': 'Searching reference architectures...'})}\n\n"
 
     while True:
         try:
@@ -216,6 +390,30 @@ async def _stream_architecture(req: ArchRequest, provider: str = "azure", model:
                     yield f"data: {json.dumps({'type': 'status', 'message': 'Fetching pricing data...'})}\n\n"
                     line_items = args.get("line_items", [])
                     try:
+                        # Stream per-line cost_update events with running totals so the
+                        # UI can show a live counter as items resolve, then emit the
+                        # final cost_estimate. Keeps a single source-of-truth for the
+                        # numbers (estimate_architecture aggregates the same per-item calls).
+                        running_total = 0.0
+                        per_item_results: list[dict] = []
+                        from services.pricing_service import estimate_line_item
+                        for item in line_items:
+                            try:
+                                est = await estimate_line_item(
+                                    service=item.get("service", ""),
+                                    sku=item.get("sku", ""),
+                                    quantity=item.get("quantity", 1),
+                                    hours_per_month=item.get("hours_per_month", 730),
+                                    region=item.get("region", req.region or "eastus"),
+                                )
+                            except Exception:
+                                continue
+                            monthly = est.get("monthly_estimate") or 0
+                            running_total += monthly
+                            per_item_results.append(est)
+                            yield f"data: {json.dumps({'type': 'cost_update', 'running_total_usd': round(running_total, 2), 'delta': {'service': est.get('service'), 'sku': est.get('sku'), 'monthly': monthly, 'quantity': est.get('quantity')}, 'region': est.get('region')})}\n\n"
+                        # Final bundled estimate — reuse the aggregated path so totals,
+                        # validation, and disclaimer stay identical to the non-streaming case.
                         estimate = await estimate_architecture(line_items)
                         estimate["optimization_tips"] = args.get("optimization_tips", [])
                         yield f"data: {json.dumps({'type': 'cost_estimate', 'estimate': estimate})}\n\n"
@@ -236,7 +434,7 @@ async def _stream_architecture(req: ArchRequest, provider: str = "azure", model:
                     result = {"status": "network_topology_received"}
 
                 elif name == "assess_waf_pillar":
-                    pillar_data = args
+                    pillar_data = await _enrich_pillar_with_citations(args, citation_cache)
                     yield f"data: {json.dumps({'type': 'waf_pillar', 'pillar': pillar_data})}\n\n"
                     result = {"status": "received"}
 
@@ -366,6 +564,10 @@ async def _stream_architecture(req: ArchRequest, provider: str = "azure", model:
     if citations:
         yield f"data: {json.dumps({'type': 'citations', 'citations': citations})}\n\n"
 
+    confidence_items = _extract_confidence_block(collected_content)
+    if confidence_items:
+        yield f"data: {json.dumps({'type': 'confidence', 'items': confidence_items})}\n\n"
+
     yield "data: [DONE]\n\n"
 
     schedule_record_usage(user_id, deployment, mode, usage_acc["prompt"], usage_acc["completion"])
@@ -376,6 +578,7 @@ async def _stream_waf_assessment(req: ArchRequest, client, deployment: str, syst
     pillars = ["reliability", "security", "cost", "operational-excellence", "performance"]
     tools = get_tools_for_mode("waf")
     pillar_results: list[dict] = []
+    citation_cache: dict[str, str | None] = {}
 
     for pillar in pillars:
         yield f"data: {json.dumps({'type': 'status', 'message': f'Assessing {pillar}...'})}\n\n"
@@ -439,6 +642,7 @@ async def _stream_waf_assessment(req: ArchRequest, client, deployment: str, syst
                 for tc in tool_calls_raw.values():
                     if tc["name"] == "assess_waf_pillar":
                         args = _safe_json(tc["arguments"])
+                        args = await _enrich_pillar_with_citations(args, citation_cache)
                         pillar_results.append(args)
                         yield f"data: {json.dumps({'type': 'waf_pillar', 'pillar': args})}\n\n"
                         result = {"status": "received"}

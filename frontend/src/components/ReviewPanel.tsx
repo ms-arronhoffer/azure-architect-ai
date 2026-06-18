@@ -852,7 +852,20 @@ export default function ReviewPanel({ onRefine, conversationId, onSave, initialS
                             </div>
                             <Text weight="semibold" size={300} style={{ marginTop: 8, display: "block" }}>Recommendations</Text>
                             <ul style={{ marginTop: 4, paddingLeft: 16 }}>
-                              {p.recommendations.map((r, i) => <li key={i}><Text size={300}>{r}</Text></li>)}
+                              {p.recommendations.map((r, i) => {
+                                const text = typeof r === "string" ? r : r.text;
+                                const url = typeof r === "string" ? undefined : r.learn_url;
+                                return (
+                                  <li key={i}>
+                                    <Text size={300}>
+                                      {text}
+                                      {url && (
+                                        <> — <a href={url} target="_blank" rel="noopener noreferrer">Microsoft Docs ↗</a></>
+                                      )}
+                                    </Text>
+                                  </li>
+                                );
+                              })}
                             </ul>
                           </AccordionPanel>
                         </AccordionItem>

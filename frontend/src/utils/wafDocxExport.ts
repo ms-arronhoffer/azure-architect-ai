@@ -110,7 +110,7 @@ export async function exportWAFToDocx(pillars: WafPillarResult[], options: WafEx
     if (p.recommendations.length > 0) {
       children.push(
         new Paragraph({ children: [new TextRun({ text: "Recommendations", bold: true, size: 22, underline: { type: UnderlineType.SINGLE } })], spacing: { before: 160, after: 60 } }),
-        ...p.recommendations.map(bulletParagraph),
+        ...p.recommendations.map((r) => bulletParagraph(typeof r === "string" ? r : (r.learn_url ? `${r.text} (${r.learn_url})` : r.text))),
       );
     }
   }

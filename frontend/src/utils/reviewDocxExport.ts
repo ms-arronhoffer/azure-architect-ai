@@ -115,7 +115,10 @@ function pillarSection(p: WafPillarResult): (Paragraph | Table)[] {
       children: [new TextRun({ text: "Recommendations", bold: true, size: 22, underline: { type: UnderlineType.SINGLE } })],
       spacing: { before: 160, after: 60 },
     }));
-    for (const r of p.recommendations) parts.push(bulletParagraph(r));
+    for (const r of p.recommendations) {
+      const text = typeof r === "string" ? r : (r.learn_url ? `${r.text} (${r.learn_url})` : r.text);
+      parts.push(bulletParagraph(text));
+    }
   }
 
   return parts;
