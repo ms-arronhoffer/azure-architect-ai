@@ -93,6 +93,20 @@ async def _prefetch_docs(mode: str, user_message: str) -> dict:
 
 
 async def _stream_chat(mode: str, messages: list[dict], provider: str = "azure", model: str = "", github_token: str = "", attachments: list[str] | None = None, user_id: str = "default") -> AsyncGenerator[str, None]:
+    # Emit a guaranteed first event so the client knows the stream is alive
+    # even if setup raises before the LLM call. Without this, any uncaught
+    # exception during routing / prefetch produces a 200 with empty body —
+    # the browser shows the request as "succeeded" but no data ever arrives.
+    yield f"data: {json.dumps({'type': 'stream_open', 'mode': mode})}\n\n"
+    try:
+        async for chunk in _stream_chat_impl(mode, messages, provider, model, github_token, attachments, user_id):
+            yield chunk
+    except Exception as exc:
+        log.exception("chat.stream_failed", mode=mode, error=str(exc))
+        yield f"data: {json.dumps({'type': 'error', 'message': f'stream failed: {type(exc).__name__}: {exc}'})}\n\n"
+
+
+async def _stream_chat_impl(mode: str, messages: list[dict], provider: str = "azure", model: str = "", github_token: str = "", attachments: list[str] | None = None, user_id: str = "default") -> AsyncGenerator[str, None]:
     try:
         client, deployment = resolve_client_and_model(mode, provider, model, github_token)
     except ValueError as e:

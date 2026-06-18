@@ -168,7 +168,8 @@ export default function RefArchPanel({ onContinueIn }: RefArchPanelProps) {
 
   function handleUseAsStarting(arch: ReferenceArch) {
     if (!onContinueIn) return;
-    onContinueIn("architecture", seedFromArch(arch));
+    const target: Mode = import.meta.env.VITE_UNIFIED_AGENTS === "true" ? "architect" : "architecture";
+    onContinueIn(target, seedFromArch(arch));
   }
 
   return (

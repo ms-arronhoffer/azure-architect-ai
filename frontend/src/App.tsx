@@ -79,10 +79,22 @@ const useStyles = makeStyles({
 const ARCH_MODES: Mode[] = ["architecture", "network", "aiarchitecture", "dataplatform", "apim"];
 const PANEL_MODES: Mode[] = [...ARCH_MODES, "waf", "review", "drbc", "threatmodel", "reliability", "landingzone", "troubleshoot", "strategy", "pipelineforge", "runbookstudio", "namingstandards", "rfpproposal"];
 
+const UNIFIED_AGENTS = import.meta.env.VITE_UNIFIED_AGENTS === "true";
+const DEFAULT_MODE: Mode = UNIFIED_AGENTS ? "architect" : "qa";
+const LAST_MODE_KEY = "azure_last_mode";
+
+function loadInitialMode(): Mode {
+  try {
+    const saved = localStorage.getItem(LAST_MODE_KEY) as Mode | null;
+    if (saved) return saved;
+  } catch { /* ignore */ }
+  return DEFAULT_MODE;
+}
+
 export default function App() {
   const styles = useStyles();
   const [darkMode, setDarkMode] = useState(true);
-  const [mode, setMode] = useState<Mode>("qa");
+  const [mode, setMode] = useState<Mode>(loadInitialMode);
   const [navCollapsed, setNavCollapsed] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -128,6 +140,7 @@ export default function App() {
 
   function handleModeChange(m: Mode) {
     setMode(m);
+    try { localStorage.setItem(LAST_MODE_KEY, m); } catch { /* ignore */ }
     setSelectedConversation(null);
     setSelectedPanelSession(null);
     setRefinementSeed(null);
