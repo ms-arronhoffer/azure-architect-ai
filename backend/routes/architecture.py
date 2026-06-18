@@ -416,6 +416,18 @@ async def _stream_architecture(req: ArchRequest, provider: str = "azure", model:
                         # validation, and disclaimer stay identical to the non-streaming case.
                         estimate = await estimate_architecture(line_items)
                         estimate["optimization_tips"] = args.get("optimization_tips", [])
+                        # Apply engagement-scope reservation discounts when the
+                        # active engagement declares existing commits.
+                        try:
+                            from services.engagement_context import load_active
+                            from services.reservations_service import apply_reservation_discounts
+                            eng = await load_active()
+                            if eng and getattr(eng, "reservation_commitments", None):
+                                estimate = apply_reservation_discounts(
+                                    estimate, dict(eng.reservation_commitments or {})
+                                )
+                        except Exception:
+                            pass
                         yield f"data: {json.dumps({'type': 'cost_estimate', 'estimate': estimate})}\n\n"
                         result = {"status": "cost_estimated", "total": estimate["total_monthly_estimate"]}
                     except Exception as e:

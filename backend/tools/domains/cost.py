@@ -108,4 +108,119 @@ TOOLS = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "live_price_lookup",
+            "description": (
+                "Resolve the live Azure Retail price for one SKU right now. "
+                "Use when the user asks 'what does X cost today?' rather than for full architecture costing."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "service": {"type": "string", "description": "Azure service name, e.g. 'Virtual Machines'."},
+                    "sku": {"type": "string", "description": "SKU/tier, e.g. 'D8s_v5'."},
+                    "region": {"type": "string", "description": "Azure region, e.g. 'eastus'."},
+                    "quantity": {"type": "number", "description": "Number of units, default 1."},
+                    "hours_per_month": {"type": "number", "description": "Running hours/month, default 730."},
+                },
+                "required": ["service"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "analyze_reservations",
+            "description": (
+                "Pull live RI / savings-plan recommendations from Azure Consumption for the engagement "
+                "subscription and rank them by payback. Use for 'should we reserve?' questions."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "subscription_id": {"type": "string", "description": "Subscription GUID; falls back to default when omitted."},
+                    "scope": {"type": "string", "enum": ["Single", "Shared"], "description": "RI scope: Single subscription or Shared billing account."},
+                    "lookback_days": {"type": "integer", "enum": [7, 30, 60], "description": "Usage history window for the recommendation."},
+                },
+                "required": [],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "recommend_rightsizing",
+            "description": (
+                "Walk every VM in the subscription, pull last-N-day P95 CPU from Azure Monitor, "
+                "and recommend a smaller SKU when sustained utilisation is below the threshold."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "subscription_id": {"type": "string", "description": "Subscription GUID; falls back to default."},
+                    "window_days": {"type": "integer", "description": "Lookback window in days (default 14)."},
+                    "threshold_pct": {"type": "number", "description": "P95 CPU% threshold below which to recommend a downsize (default 40)."},
+                },
+                "required": [],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "estimate_carbon",
+            "description": (
+                "Order-of-magnitude monthly kg CO2e for a list of compute line items. "
+                "Optionally compare against other candidate regions to pick the greenest."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "line_items": {
+                        "type": "array",
+                        "description": "Compute line items: service, sku, region, quantity, hours_per_month.",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "service": {"type": "string"},
+                                "sku": {"type": "string"},
+                                "region": {"type": "string"},
+                                "quantity": {"type": "number"},
+                                "hours_per_month": {"type": "number"},
+                            },
+                            "required": ["service"],
+                        },
+                    },
+                    "compare_regions": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Optional regions to re-evaluate the same workload against.",
+                    },
+                },
+                "required": ["line_items"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "compare_payg_vs_ri",
+            "description": (
+                "Pure-math comparator: given PAYG monthly, reserved monthly, optional upfront, and term, "
+                "return break-even months, total term savings, and a Reserve/PAYG recommendation."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "payg_monthly": {"type": "number", "description": "Pay-as-you-go monthly cost in USD."},
+                    "reserved_monthly": {"type": "number", "description": "Effective monthly cost under the reservation."},
+                    "upfront_cost": {"type": "number", "description": "Upfront payment, default 0 for monthly billing."},
+                    "term_years": {"type": "integer", "enum": [1, 3], "description": "Reservation term in years."},
+                },
+                "required": ["payg_monthly", "reserved_monthly"],
+            },
+        },
+    },
 ]

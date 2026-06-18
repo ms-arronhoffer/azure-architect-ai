@@ -17,8 +17,10 @@ import {
 import type { Mode } from "../types";
 import type { WorkloadContext } from "../types";
 import type { SaveStatus } from "../hooks/useConversationHistory";
+import type { Engagement } from "../hooks/useEngagements";
 import { hasContext } from "../hooks/useWorkloadContext";
 import { useAuth } from "../auth/AuthProvider";
+import EngagementSelector from "./EngagementSelector";
 
 const MODE_LABELS: Record<Mode, string> = {
   qa: "Expert Q&A",
@@ -112,6 +114,9 @@ const MODE_LABELS: Record<Mode, string> = {
   datacost: "Data Cost Analyst",
   dataquality: "Data Quality",
   dataiac: "Data Platform IaC",
+  architect: "Architect",
+  operations: "Operations",
+  engagement: "Engagement Hub",
 };
 
 const MODE_SECTION: Partial<Record<Mode, string>> = {
@@ -317,9 +322,13 @@ interface HeaderProps {
   onOpenContext: () => void;
   workloadContext?: WorkloadContext;
   saveStatus?: SaveStatus;
+  engagements?: Engagement[];
+  activeEngagement?: Engagement | null;
+  onSelectEngagement?: (id: string | null) => void;
+  onOpenEngagements?: () => void;
 }
 
-export default function Header({ mode, darkMode, onToggleDark, onOpenHistory, onOpenSettings, onOpenContext, workloadContext, saveStatus }: HeaderProps) {
+export default function Header({ mode, darkMode, onToggleDark, onOpenHistory, onOpenSettings, onOpenContext, workloadContext, saveStatus, engagements, activeEngagement, onSelectEngagement, onOpenEngagements }: HeaderProps) {
   const styles = useStyles();
   const section = MODE_SECTION[mode];
   const { account, logout, enabled: authEnabled } = useAuth();
@@ -342,6 +351,14 @@ export default function Header({ mode, darkMode, onToggleDark, onOpenHistory, on
         <Text className={styles.modeLabel}>{MODE_LABELS[mode]}</Text>
       </div>
       <div className={styles.actions}>
+        {engagements !== undefined && onSelectEngagement && onOpenEngagements && (
+          <EngagementSelector
+            engagements={engagements}
+            active={activeEngagement ?? null}
+            onSelect={onSelectEngagement}
+            onManage={onOpenEngagements}
+          />
+        )}
         {saveStatus === "saving" && (
           <Text className={styles.saveIndicator} style={{ color: tokens.colorNeutralForeground3 }}>Saving…</Text>
         )}

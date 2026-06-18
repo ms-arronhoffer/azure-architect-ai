@@ -761,6 +761,42 @@ const MODE_CONFIG: Partial<Record<Mode, ModeConfig>> = {
       "Terraform for Azure SQL DB elastic pool with auto-failover group",
     ],
   },
+  architect: {
+    icon: <BookRegular />,
+    placeholder: "Design, IaC, diagrams, WAF, landing zones, AVM, AI, network, identity, data…",
+    emptyHeading: "Architect",
+    emptySubtitle: "Design Azure workloads end-to-end. The router picks the right domain context for you.",
+    examples: [
+      "Design a hub-and-spoke landing zone for a healthcare ISV across two regions",
+      "Recommend the right AVM module for AKS with private clusters",
+      "Generate Bicep for an event-driven microservices architecture on ACA",
+      "Architect a RAG application on Azure OpenAI + AI Search with private networking",
+    ],
+  },
+  operations: {
+    icon: <HeartPulseRegular />,
+    placeholder: "Reliability, troubleshooting, DRBC, runbooks, monitoring, service health…",
+    emptyHeading: "Operations",
+    emptySubtitle: "Run and recover workloads. Ask about incidents, SLOs, alerts, and recovery design.",
+    examples: [
+      "Build a DRBC plan for an AKS workload with RPO 15 min and RTO 1 h",
+      "Diagnose intermittent 503s from an App Service behind Front Door",
+      "Draft an SRE runbook for SQL MI failover and post-incident review",
+      "Recommend an alert + workbook set for an event-driven Function App",
+    ],
+  },
+  engagement: {
+    icon: <PersonChatRegular />,
+    placeholder: "Intake, RFPs, exec decks, learning plans, what's new, customer comms…",
+    emptyHeading: "Engagement Hub",
+    emptySubtitle: "Customer-facing artifacts and discovery. Scope to an Engagement to pre-load context.",
+    examples: [
+      "Run a guided intake for a new Azure modernization engagement",
+      "Draft an RFP response for a regulated financial services migration",
+      "Build an executive deck on our recommended landing zone",
+      "Summarize this month's Azure updates relevant to a healthcare ISV",
+    ],
+  },
 };
 
 const GROUP_SUBTOPICS: Partial<Record<Mode, Array<{ mode: Mode; label: string }>>> = {

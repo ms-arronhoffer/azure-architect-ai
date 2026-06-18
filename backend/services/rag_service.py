@@ -29,6 +29,12 @@ log = get_logger("rag_service")
 
 CORPUS_REFERENCE_ARCHS = "reference_archs"
 CORPUS_LEARN = "learn"
+CORPUS_AZURE_UPDATES = "azure_updates"
+CORPUS_AVM = "avm"
+
+# Corpora that the chat citation flow searches in addition to the live Learn
+# fallback. Ordered for documentation; the merger sorts by cosine score.
+CITATION_CORPORA = (CORPUS_LEARN, CORPUS_AZURE_UPDATES, CORPUS_AVM, CORPUS_REFERENCE_ARCHS)
 
 
 def _cosine(a: list[float], b: list[float]) -> float:
@@ -172,38 +178,243 @@ async def search(
         return result
 
 
-async def cached_learn_search(query: str, top: int = 5) -> list[dict]:
-    """Search the Learn corpus. On miss, fall through to the live API and
-    cache the results so subsequent identical queries are local.
+# Reciprocal Rank Fusion constant: keeps top-of-list dominance modest so a
+# strong-but-not-#1 lexical hit can still beat a marginal cosine winner.
+_RRF_K = 60
+# When the merged top hit's RRF score sits below this, treat as "no good
+# match" -- caller decides whether to swap in honesty mode.
+_DEFAULT_CONFIDENCE_FLOOR = 0.02
+
+
+async def hybrid_search(
+    session: AsyncSession,
+    query: str,
+    corpora: list[str] | None = None,
+    top_k: int = 30,
+    confidence_floor: float | None = None,
+) -> dict:
+    """RRF-merge cosine + rapidfuzz token-set lexical scoring.
+
+    Returns ``{"hits": list[dict], "unknown": bool, "top_score": float}``.
+    Each hit carries the merged ``score`` (RRF) plus the constituent
+    ``cosine``/``lexical`` scores for debugging. ``unknown`` is True when
+    the strongest hit's RRF score is below ``confidence_floor``.
     """
+    from rapidfuzz import fuzz
+
+    floor = _DEFAULT_CONFIDENCE_FLOOR if confidence_floor is None else confidence_floor
+    if not query.strip():
+        return {"hits": [], "unknown": True, "top_score": 0.0}
+
+    try:
+        q_vec = embed_text(query)
+    except Exception as e:
+        log.warning("rag.hybrid_embed_failed", error=str(e))
+        q_vec = []
+
+    stmt = select(RagDocument)
+    if corpora:
+        stmt = stmt.where(RagDocument.corpus.in_(corpora))
+    rows = (await session.execute(stmt)).scalars().all()
+    if not rows:
+        return {"hits": [], "unknown": True, "top_score": 0.0}
+
+    cosine_scored = [
+        (_cosine(q_vec, row.embedding) if q_vec else 0.0, row)
+        for row in rows
+    ]
+    cosine_scored.sort(key=lambda x: x[0], reverse=True)
+    cosine_rank = {id(row): rank for rank, (_, row) in enumerate(cosine_scored, start=1)}
+
+    q_lower = query.lower()
+    lexical_scored = [
+        (
+            fuzz.token_set_ratio(
+                q_lower,
+                ((row.title or "") + " " + (row.content or "")[:2000]).lower(),
+            )
+            / 100.0,
+            row,
+        )
+        for row in rows
+    ]
+    lexical_scored.sort(key=lambda x: x[0], reverse=True)
+    lexical_rank = {id(row): rank for rank, (_, row) in enumerate(lexical_scored, start=1)}
+
+    cosine_by_id = {id(row): score for score, row in cosine_scored}
+    lexical_by_id = {id(row): score for score, row in lexical_scored}
+
+    rrf: list[tuple[float, RagDocument]] = []
+    for row in rows:
+        rid = id(row)
+        rrf_score = 1.0 / (_RRF_K + cosine_rank[rid]) + 1.0 / (_RRF_K + lexical_rank[rid])
+        rrf.append((rrf_score, row))
+    rrf.sort(key=lambda x: x[0], reverse=True)
+
+    hits = [
+        {
+            "score": round(score, 6),
+            "cosine": round(cosine_by_id[id(row)], 4),
+            "lexical": round(lexical_by_id[id(row)], 4),
+            "corpus": row.corpus,
+            "source_id": row.source_id,
+            "title": row.title,
+            "url": row.url,
+            "content": row.content,
+            "metadata": row.doc_metadata,
+        }
+        for score, row in rrf[:top_k]
+    ]
+    top_score = hits[0]["score"] if hits else 0.0
+    return {
+        "hits": hits,
+        "unknown": top_score < floor,
+        "top_score": top_score,
+    }
+
+
+async def cached_learn_search(query: str, top: int = 5) -> list[dict]:
+    """Hybrid retrieval + LLM rerank with live Learn fallback.
+
+    Backward-compatible: still returns ``list[dict]`` shaped for the chat
+    SSE ``citations`` event. For the richer ``{citations, unknown,
+    top_confidence}`` envelope (needed by the honesty-mode path in the chat
+    route), call :func:`cached_learn_search_full` instead.
+    """
+    bundle = await cached_learn_search_full(query, top=top)
+    return bundle["citations"]
+
+
+async def cached_learn_search_full(
+    query: str,
+    top: int = 5,
+    confidence_floor: float | None = None,
+) -> dict:
+    """Hybrid retrieval (cosine + lexical RRF) → LLM rerank → citation
+    envelope. Falls back to live Learn search when local corpora are dry.
+
+    Returns ``{"citations": list[dict], "unknown": bool,
+    "top_confidence": float, "source": str}``. ``source`` is ``"rag"`` when
+    local corpora answered, ``"learn_live"`` for the fallback path, or
+    ``"empty"`` when neither produced anything.
+    """
+    from services.rag_reranker import best_confidence, rerank
+
+    if not query.strip():
+        return {"citations": [], "unknown": True, "top_confidence": 0.0, "source": "empty"}
+
     async with session_scope() as session:
-        hits = await search(session, query, corpora=[CORPUS_LEARN], top_k=top)
+        bundle = await hybrid_search(
+            session,
+            query,
+            corpora=list(CITATION_CORPORA),
+            top_k=30,
+            confidence_floor=confidence_floor,
+        )
+        hits = bundle["hits"]
         if hits:
-            return [{"title": h["title"], "url": h["url"], "description": h["content"][:300]} for h in hits]
+            reranked = await rerank(query, hits, top_k=top)
+            top_confidence = best_confidence(reranked) or float(bundle.get("top_score") or 0.0)
+            citations = [_hit_to_citation(h) for h in reranked]
+            # Honesty floor: when the reranker's top pick is weak, surface
+            # the "unknown" flag so callers can swap in low-confidence prose.
+            unknown = top_confidence < 0.35
+            return {
+                "citations": citations,
+                "unknown": unknown,
+                "top_confidence": round(top_confidence, 3),
+                "source": "rag",
+            }
 
         live = await search_azure_docs(query, top=top)
         if not live:
-            return []
+            return {"citations": [], "unknown": True, "top_confidence": 0.0, "source": "empty"}
         docs = [
             {
                 "source_id": item["url"],
                 "title": item["title"],
                 "url": item["url"],
                 "content": item.get("description", "") or item["title"],
-                "metadata": {"query": query},
+                "metadata": {"query": query, "corpus_type": "learn_live"},
             }
             for item in live
             if item.get("url")
         ]
         if docs:
             await index_documents(session, CORPUS_LEARN, docs)
-        return live
+        live_citations = [
+            {
+                "title": item["title"],
+                "url": item["url"],
+                "description": item.get("description", ""),
+                "corpus": "learn_live",
+                "corpus_type": "learn_live",
+            }
+            for item in live
+        ]
+        # Live Learn fallback has no freshness/confidence signal; mark as
+        # known (we did find something) but flag low confidence implicitly
+        # via the missing confidence field.
+        return {
+            "citations": live_citations,
+            "unknown": False,
+            "top_confidence": 0.0,
+            "source": "learn_live",
+        }
+
+
+def _hit_to_citation(hit: dict) -> dict:
+    """Project a rag_service.search() hit onto the chat citation shape."""
+    meta = hit.get("metadata") or {}
+    content = hit.get("content") or ""
+    published_at = meta.get("published_at") or meta.get("synced_at")
+    # Prefer the reranker's score when present -- it's a focused judgement
+    # rather than the raw RRF/cosine signal. Fall back to the retrieval
+    # score otherwise.
+    raw_score = hit.get("rerank_score")
+    if raw_score is None:
+        raw_score = hit.get("score") or 0.0
+    citation: dict = {
+        "title": hit.get("title"),
+        "url": hit.get("url"),
+        "description": content[:300],
+        "corpus": hit.get("corpus"),
+        "corpus_type": meta.get("corpus_type") or hit.get("corpus"),
+        "published_at": published_at,
+        "freshness_days": _freshness_days(published_at),
+        "confidence": round(float(raw_score or 0.0), 3),
+    }
+    if hit.get("rerank_reason"):
+        citation["reason"] = hit["rerank_reason"]
+    if meta.get("latest_version"):
+        citation["version"] = meta["latest_version"]
+    if meta.get("module_path"):
+        citation["module_path"] = meta["module_path"]
+    return {k: v for k, v in citation.items() if v is not None}
+
+
+def _freshness_days(published_iso: str | None) -> int | None:
+    if not published_iso:
+        return None
+    try:
+        parsed = dt.datetime.fromisoformat(published_iso.replace("Z", "+00:00"))
+    except (TypeError, ValueError):
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=dt.UTC)
+    delta = dt.datetime.now(dt.UTC) - parsed
+    return max(delta.days, 0)
 
 
 __all__ = [
+    "CITATION_CORPORA",
+    "CORPUS_AVM",
+    "CORPUS_AZURE_UPDATES",
     "CORPUS_LEARN",
     "CORPUS_REFERENCE_ARCHS",
     "cached_learn_search",
+    "cached_learn_search_full",
+    "hybrid_search",
     "index_documents",
     "reindex_reference_archs",
     "search",

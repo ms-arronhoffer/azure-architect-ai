@@ -5,6 +5,7 @@ Tool calls are dispatched and their structured results emitted as typed SSE even
 
 import contextlib
 import json
+import os
 from collections.abc import AsyncGenerator
 
 from fastapi import APIRouter, Depends, Request
@@ -14,9 +15,13 @@ from pydantic import BaseModel
 
 from auth import require_user, user_id_from_claims
 from limiter import limiter
+from middleware.logging import get_logger
 from models import ModelConfig
 from observability import tool_calls_counter
+from prompts.agents import DEFAULT_AGENT, get_agent_prompt
+from prompts.domain_fragments import get_fragments
 from prompts.system_prompt import get_system_prompt
+from services import agent_router, engagement_context
 from services.error_sanitizer import sanitize_openai_error
 from services.mcp_service import call_mcp_tool, is_mcp_tool
 from services.openai_service import (
@@ -24,12 +29,17 @@ from services.openai_service import (
     resolve_client_and_model,
 )
 from services.pricing_service import estimate_architecture, validate_sku
-from services.rag_service import cached_learn_search
+from services.rag_service import cached_learn_search, cached_learn_search_full
 from services.settings_service import load_settings
 from services.token_service import schedule_record_usage
 from tools.tool_definitions import get_tools_for_mode
 
 router = APIRouter()
+log = get_logger("chat")
+
+
+def _unified_agents_enabled() -> bool:
+    return os.getenv("UNIFIED_AGENTS", "").strip().lower() in {"1", "true", "yes", "on"}
 
 # Modes that use the architecture route instead (handled by architecture.py)
 ARCH_ROUTE_MODES = {"architecture", "waf", "review", "drbc"}
@@ -67,14 +77,19 @@ PREFETCH_MODES: dict[str, str] = {
 }
 
 
-async def _prefetch_docs(mode: str, user_message: str) -> list[dict]:
-    """Fetch Learn docs before the LLM call for structured-output modes."""
+async def _prefetch_docs(mode: str, user_message: str) -> dict:
+    """Fetch Learn docs before the LLM call for structured-output modes.
+
+    Returns ``{"citations": list[dict], "unknown": bool,
+    "top_confidence": float, "source": str}`` so the caller can swap in
+    honesty-mode prose when retrieval is weak.
+    """
     base = PREFETCH_MODES.get(mode)
     if not base:
-        return []
+        return {"citations": [], "unknown": False, "top_confidence": 0.0, "source": "skipped"}
     snippet = user_message[:150].strip()
     query = f"{base} {snippet}".strip()
-    return await cached_learn_search(query=query, top=5)
+    return await cached_learn_search_full(query=query, top=5)
 
 
 async def _stream_chat(mode: str, messages: list[dict], provider: str = "azure", model: str = "", github_token: str = "", attachments: list[str] | None = None, user_id: str = "default") -> AsyncGenerator[str, None]:
@@ -83,8 +98,59 @@ async def _stream_chat(mode: str, messages: list[dict], provider: str = "azure",
     except ValueError as e:
         yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
         return
-    system = get_system_prompt(mode)
-    tools = [] if model in TOOL_INCOMPATIBLE_MODELS else get_tools_for_mode(mode)
+
+    # Unified-agents path: replace mode-keyed system prompt with
+    # engagement preamble + agent prompt + selected domain fragments.
+    # Legacy modes flow through `shim_legacy_mode` so old `?mode=netvnet`
+    # URLs continue to land on the right agent during the deprecation window.
+    routing: dict | None = None
+    preamble = ""
+    if _unified_agents_enabled():
+        last_user = ""
+        for m in reversed(messages):
+            if m.get("role") == "user":
+                content = m.get("content", "")
+                if isinstance(content, str):
+                    last_user = content
+                elif isinstance(content, list):
+                    last_user = next(
+                        (p.get("text", "") for p in content if isinstance(p, dict) and p.get("type") == "text"),
+                        "",
+                    )
+                break
+
+        routing = agent_router.shim_legacy_mode(mode)
+        if routing is None:
+            history_hint_parts: list[str] = []
+            for m in messages[-4:-1]:
+                c = m.get("content", "")
+                if isinstance(c, str) and c:
+                    history_hint_parts.append(c[:120])
+            history_hint = " | ".join(history_hint_parts)
+            try:
+                routing = agent_router.route(last_user, history_hint=history_hint)
+            except Exception as exc:
+                log.warning("agent_router.unavailable", error=str(exc))
+                routing = {"agent": DEFAULT_AGENT, "domain_fragments": [], "suggested_tools": [], "reason": "router_unavailable"}
+
+        with contextlib.suppress(Exception):
+            preamble = await engagement_context.preamble_for_active()
+
+        agent_name = routing.get("agent", DEFAULT_AGENT)
+        agent_prompt = get_agent_prompt(agent_name)
+        fragments_block = get_fragments(routing.get("domain_fragments", []) or [])
+        system_parts = [p for p in (preamble, agent_prompt, fragments_block) if p]
+        system = "\n\n".join(system_parts)
+        tools = [] if model in TOOL_INCOMPATIBLE_MODELS else get_tools_for_mode(agent_name)
+        if not tools and model not in TOOL_INCOMPATIBLE_MODELS:
+            # Tool buckets for the 5 agents aren't collapsed yet — fall back
+            # to the legacy mode mapping so the assistant still has tools.
+            tools = get_tools_for_mode(mode)
+        with contextlib.suppress(Exception):
+            yield f"data: {json.dumps({'type': 'agent_route', 'agent': agent_name, 'domain_fragments': routing.get('domain_fragments', []), 'reason': routing.get('reason', ''), 'engagement_scoped': bool(preamble)})}\n\n"
+    else:
+        system = get_system_prompt(mode)
+        tools = [] if model in TOOL_INCOMPATIBLE_MODELS else get_tools_for_mode(mode)
 
     # Apply attachments to the last user message as a content array
     if attachments and messages:
@@ -105,7 +171,8 @@ async def _stream_chat(mode: str, messages: list[dict], provider: str = "azure",
     # Mandatory pre-retrieval for structured output modes — inject into system message
     # so every response is anchored to real Learn articles, not just training knowledge.
     user_content = messages[-1].get("content", "") if messages else ""
-    prefetched = await _prefetch_docs(mode, user_content)
+    prefetch_bundle = await _prefetch_docs(mode, user_content)
+    prefetched = prefetch_bundle["citations"]
     prompt_tokens = 0
     completion_tokens = 0
     if prefetched:
@@ -117,6 +184,21 @@ async def _stream_chat(mode: str, messages: list[dict], provider: str = "azure",
         full_messages[0]["content"] += (
             f"\n\n## Retrieved Documentation (cite these URLs in your response)\n{doc_block}"
         )
+        # Honesty mode: when reranker confidence is low, instruct the model
+        # to lead with an "I'm not confident" caveat instead of presenting
+        # the response as authoritative. Better for an architect to hear
+        # "this is the closest match I found" than a hallucinated answer.
+        if prefetch_bundle.get("unknown"):
+            full_messages[0]["content"] += (
+                "\n\n## Confidence Note\n"
+                "Retrieval confidence is LOW for this question. "
+                "Begin your response with a brief caveat such as "
+                "\"I'm not confident this is fully current — the closest matches I found are:\" "
+                "and explicitly suggest the user double-check against the cited sources. "
+                "Do not invent specifics that aren't in the retrieved docs."
+            )
+            with contextlib.suppress(Exception):
+                yield f"data: {json.dumps({'type': 'rag_unknown', 'top_confidence': prefetch_bundle.get('top_confidence', 0.0)})}\n\n"
 
     while True:
         kwargs: dict = {
@@ -334,8 +416,107 @@ async def _dispatch_tool(name: str, args: dict) -> tuple[object, dict | None]:
             estimate["optimization_tips"] = args.get("optimization_tips", [])
             if sku_warnings:
                 estimate["sku_warnings"] = sku_warnings
+            try:
+                from services.engagement_context import load_active
+                from services.reservations_service import apply_reservation_discounts
+                eng = await load_active()
+                if eng and getattr(eng, "reservation_commitments", None):
+                    estimate = apply_reservation_discounts(
+                        estimate, dict(eng.reservation_commitments or {})
+                    )
+            except Exception:
+                pass
             event = {"type": "cost_estimate", "estimate": estimate}
             return {"status": "cost_estimated", "total": estimate["total_monthly_estimate"]}, event
+        except Exception as e:
+            return {"status": "error", "message": str(e)}, None
+
+    if name == "live_price_lookup":
+        from services import retail_pricing_service
+        try:
+            result = await retail_pricing_service.lookup(
+                service=args.get("service", ""),
+                sku=args.get("sku", ""),
+                region=args.get("region", "eastus"),
+                quantity=float(args.get("quantity", 1)),
+                hours_per_month=float(args.get("hours_per_month", 730.0)),
+            )
+            return {"status": "priced", "monthly_estimate": result.get("monthly_estimate")}, {
+                "type": "live_price",
+                "result": result,
+            }
+        except Exception as e:
+            return {"status": "error", "message": str(e)}, None
+
+    if name == "analyze_reservations":
+        import asyncio as _asyncio
+
+        from services import reservations_service
+        try:
+            data = await _asyncio.to_thread(
+                reservations_service.recommend_reservations,
+                args.get("subscription_id"),
+                args.get("scope", "Single"),
+                int(args.get("lookback_days", 30)),
+            )
+            return {
+                "status": "ri_analyzed",
+                "recommendation_count": len(data.get("recommendations", [])),
+            }, {"type": "reservation_recommendations", "data": data}
+        except ValueError as e:
+            return {"status": "error", "message": str(e)}, None
+        except Exception as e:
+            return {"status": "error", "message": str(e)}, None
+
+    if name == "recommend_rightsizing":
+        import asyncio as _asyncio
+
+        from services import rightsizing_service
+        try:
+            data = await _asyncio.to_thread(
+                rightsizing_service.assess_vms,
+                args.get("subscription_id"),
+                int(args.get("window_days", 14)),
+                float(args.get("threshold_pct", rightsizing_service.UNDERUTIL_THRESHOLD)),
+            )
+            return {
+                "status": "rightsizing_assessed",
+                "underutilised_count": data.get("underutilised_count", 0),
+            }, {"type": "rightsizing_findings", "data": data}
+        except ValueError as e:
+            return {"status": "error", "message": str(e)}, None
+        except Exception as e:
+            return {"status": "error", "message": str(e)}, None
+
+    if name == "estimate_carbon":
+        from services import carbon_service
+        try:
+            items = args.get("line_items", []) or []
+            base = carbon_service.estimate_for_line_items(items)
+            payload: dict = {"estimate": base}
+            regions = args.get("compare_regions") or []
+            if regions:
+                payload["region_comparison"] = carbon_service.compare_regions(regions, items)
+            return {
+                "status": "carbon_estimated",
+                "total_kgco2e_per_month": base.get("total_kgco2e_per_month"),
+            }, {"type": "carbon_estimate", "data": payload}
+        except Exception as e:
+            return {"status": "error", "message": str(e)}, None
+
+    if name == "compare_payg_vs_ri":
+        from services import reservations_service
+        try:
+            data = reservations_service.break_even(
+                payg_monthly=float(args.get("payg_monthly", 0)),
+                reserved_monthly=float(args.get("reserved_monthly", 0)),
+                upfront_cost=float(args.get("upfront_cost", 0)),
+                term_years=int(args.get("term_years", 1)),
+            )
+            return {"status": "ri_compared", "recommendation": data["recommendation"]}, {
+                "type": "ri_break_even",
+                "data": data,
+            }
         except Exception as e:
             return {"status": "error", "message": str(e)}, None
 

@@ -26,12 +26,28 @@ export function setErrorNotifier(notifier: ErrorNotifier | null): void {
   _errorNotifier = notifier;
 }
 
+// Active engagement ID — propagated as X-Engagement-Id on every API call so cost
+// + scan endpoints auto-scope to the customer's subscriptions and chat picks up
+// the engagement preamble. Registered by App from localStorage.
+type EngagementProvider = () => string | null;
+let _engagementProvider: EngagementProvider | null = null;
+export function setEngagementProvider(provider: EngagementProvider | null): void {
+  _engagementProvider = provider;
+}
+export function currentEngagementId(): string | null {
+  return _engagementProvider?.() ?? null;
+}
+
 export async function apiFetch(path: string, init: RequestInit = {}): Promise<Response> {
   const headers = new Headers(init.headers);
   const callerSetAuth = headers.has("Authorization");
   if (_tokenProvider && !callerSetAuth) {
     const token = await _tokenProvider();
     if (token) headers.set("Authorization", `Bearer ${token}`);
+  }
+  if (_engagementProvider && !headers.has("X-Engagement-Id")) {
+    const eid = _engagementProvider();
+    if (eid) headers.set("X-Engagement-Id", eid);
   }
   let resp: Response;
   try {

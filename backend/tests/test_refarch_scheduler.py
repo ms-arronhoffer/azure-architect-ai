@@ -38,7 +38,7 @@ async def test_start_scheduler_registers_weekly_cron(monkeypatch):
     assert scheduler_module._scheduler is not None
 
     jobs = {j.id: j for j in scheduler_module._scheduler.get_jobs()}
-    assert set(jobs.keys()) == {"refarch_ingest_weekly", "demo_ingest_weekly"}
+    assert {"refarch_ingest_weekly", "demo_ingest_weekly"}.issubset(jobs.keys())
 
     refarch = jobs["refarch_ingest_weekly"]
     assert refarch.max_instances == 1

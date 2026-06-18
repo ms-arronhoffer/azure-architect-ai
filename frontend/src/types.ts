@@ -89,7 +89,13 @@ export type Mode =
   | "datacost"
   | "dataquality"
   | "dataiac"
-  | "admin";
+  | "admin"
+  // Theme 4 — unified agent identifiers. "cost" and "compliance" already exist
+  // above as legacy mode names; the backend treats them as the agent tokens of
+  // the same name, so we only add the three new ones here.
+  | "architect"
+  | "operations"
+  | "engagement";
 
 // ── Demo showcase ────────────────────────────────────────────────────────────
 
@@ -198,6 +204,17 @@ export interface Citation {
   title: string;
   url: string;
   description: string;
+  // Theme 1 — citation provenance. All optional so the UI handles both
+  // RAG-backed citations (with these fields) and live Learn fallback (without).
+  corpus?: string;
+  corpus_type?: string;
+  published_at?: string;
+  freshness_days?: number;
+  confidence?: number;
+  version?: string;
+  module_path?: string;
+  // Theme 2 — reranker rationale ("why this passage answers the query").
+  reason?: string;
 }
 
 export interface ChatMessage {

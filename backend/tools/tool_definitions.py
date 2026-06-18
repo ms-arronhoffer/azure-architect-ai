@@ -34,6 +34,42 @@ def get_tools(*names: str) -> list:
     return [_BY_NAME[n] for n in names if n in _BY_NAME]
 
 TOOLS_BY_MODE: dict[str, list] = {
+    # ── Unified agents (UNIFIED_AGENTS=true path) ──
+    # Each agent gets a generous bucket — the model picks, the legacy
+    # mode catalogue stays below until panels are deleted.
+    "architect":  get_tools(
+        "search_azure_docs", "design_architecture", "assess_waf_pillar",
+        "generate_bicep", "generate_terraform", "generate_arm",
+        "estimate_costs", "generate_adr", "generate_project_timeline",
+        "validate_resource_naming", "suggest_resource_name",
+        "design_network_topology", "design_landing_zone", "design_rbac_model",
+        "generate_threat_register", "design_pipeline",
+        "compare_regions", "compare_services", "recommend_service",
+        "design_medallion_schema", "generate_adf_pipeline",
+        "plan_fabric_capacity", "design_dr_strategy",
+    ),
+    "cost":         get_tools(
+        "search_azure_docs", "estimate_costs", "generate_tco_report",
+        "design_cost_alerts", "live_price_lookup", "analyze_reservations",
+        "recommend_rightsizing", "estimate_carbon", "compare_payg_vs_ri",
+        "compare_regions",
+    ),
+    "operations":   get_tools(
+        "search_azure_docs", "generate_monitoring_config", "define_slo_framework",
+        "diagnose_issue", "generate_kql_queries", "generate_remediation_runbook",
+        "design_dr_strategy", "assess_waf_pillar", "generate_project_timeline",
+    ),
+    "compliance":   get_tools(
+        "search_azure_docs", "assess_security_posture", "assess_waf_pillar",
+        "map_compliance", "generate_threat_register", "design_rbac_model",
+        "design_pipeline",
+    ),
+    "engagement":   get_tools(
+        "search_azure_docs", "generate_learning_plan", "generate_practice_exam",
+        "create_stakeholder_plan", "generate_deck_outline", "review_deck_outline",
+        "generate_tco_report", "estimate_costs",
+    ),
+    # ── Legacy modes (deprecation window — UNIFIED_AGENTS=false path) ──
     "qa":           get_tools("search_azure_docs", "compare_services", "recommend_service"),
     "architecture": get_tools("search_azure_docs", "design_architecture", "assess_waf_pillar",
                               "generate_bicep", "generate_terraform", "generate_arm",
@@ -44,10 +80,8 @@ TOOLS_BY_MODE: dict[str, list] = {
     "compare":      get_tools("search_azure_docs", "compare_services"),
     "waf":          get_tools("search_azure_docs", "assess_waf_pillar"),
     "review":       get_tools("search_azure_docs", "assess_waf_pillar"),
-    "compliance":   get_tools("search_azure_docs", "map_compliance"),
     "migration":    get_tools("search_azure_docs", "assess_migration", "generate_project_timeline"),
     "regional":     get_tools("search_azure_docs", "compare_regions"),
-    "cost":         get_tools("search_azure_docs", "estimate_costs"),
     "drbc":         get_tools("search_azure_docs", "design_dr_strategy", "generate_project_timeline"),
     "monitoring":   get_tools("search_azure_docs", "generate_monitoring_config"),
     "situation":    get_tools("create_stakeholder_plan"),
@@ -183,6 +217,8 @@ TOOLS_BY_MODE: dict[str, list] = {
 
 # Modes that benefit from MCP tools (informational/guidance, not subscription-bound actions)
 _MCP_ENABLED_MODES = {
+    # Unified agents — MCP is useful across all five.
+    "architect", "cost", "operations", "compliance", "engagement",
     "qa", "architecture", "waf", "review", "compliance", "migration",
     "regional", "cost", "drbc", "monitoring", "compare", "certprep", "reference",
     "aiarchitecture", "dataplatform", "apim", "network", "landingzone", "identity",

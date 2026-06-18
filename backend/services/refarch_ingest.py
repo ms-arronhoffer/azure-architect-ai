@@ -21,6 +21,7 @@ from sqlalchemy import select
 from config import settings
 from db import RefArch, session_scope
 from middleware.logging import get_logger
+from services.rag_service import CORPUS_REFERENCE_ARCHS, index_documents
 
 _log = get_logger("refarch_ingest")
 
@@ -169,6 +170,48 @@ async def upsert_architectures(entries: list[dict[str, Any]]) -> dict[str, int]:
     return {"inserted": inserted, "updated": updated, "unchanged": unchanged, "skipped": skipped}
 
 
+def _arch_to_rag_content(entry: dict[str, Any]) -> str:
+    parts = [
+        entry["title"],
+        entry.get("summary", ""),
+        "Category: " + (entry.get("category") or "general"),
+        "Tags: " + ", ".join(entry.get("tags") or []),
+        "Services: " + ", ".join(entry.get("services") or []),
+    ]
+    return "\n".join(p for p in parts if p)
+
+
+async def index_into_rag(entries: list[dict[str, Any]]) -> int:
+    """Mirror upserted entries into the RAG ``reference_archs`` corpus so the
+    Architect agent can cite Microsoft-official architectures alongside the
+    hand-curated `data.reference_archs` set.
+    """
+    if not entries:
+        return 0
+    now_iso = dt.datetime.now(dt.UTC).isoformat().replace("+00:00", "Z")
+    docs = [
+        {
+            "source_id": entry["slug"],
+            "title": entry["title"],
+            "url": entry.get("learn_url"),
+            "content": _arch_to_rag_content(entry),
+            "metadata": {
+                "corpus_type": "reference_arch",
+                "slug": entry["slug"],
+                "category": entry.get("category"),
+                "tags": entry.get("tags") or [],
+                "services": entry.get("services") or [],
+                "diagram_url": entry.get("diagram_url"),
+                "source": entry.get("source") or "microsoft_official",
+                "synced_at": now_iso,
+            },
+        }
+        for entry in entries
+    ]
+    async with session_scope() as session:
+        return await index_documents(session, CORPUS_REFERENCE_ARCHS, docs, replace=False)
+
+
 async def run_ingest() -> dict[str, Any]:
     """Top-level entry point — fetch, normalise, upsert, log."""
     started = dt.datetime.now(dt.UTC)
@@ -190,11 +233,21 @@ async def run_ingest() -> dict[str, Any]:
         _log.exception("refarch_ingest.upsert_failed", error=str(exc))
         return {"ok": False, "stage": "upsert", "error": str(exc)}
 
+    rag_indexed = 0
+    try:
+        rag_indexed = await index_into_rag(normalised)
+    except Exception as exc:
+        # RAG mirror is best-effort — the canonical RefArch table is the
+        # source of truth for the library UI, so a failed mirror should not
+        # fail the whole ingest.
+        _log.exception("refarch_ingest.rag_mirror_failed", error=str(exc))
+
     duration_s = (dt.datetime.now(dt.UTC) - started).total_seconds()
     summary = {
         "ok": True,
         "fetched": len(raw),
         "normalised": len(normalised),
+        "rag_indexed": rag_indexed,
         "duration_s": round(duration_s, 2),
         **counts,
     }
@@ -202,4 +255,4 @@ async def run_ingest() -> dict[str, Any]:
     return summary
 
 
-__all__ = ["fetch_architectures", "normalize", "upsert_architectures", "run_ingest"]
+__all__ = ["fetch_architectures", "index_into_rag", "normalize", "run_ingest", "upsert_architectures"]

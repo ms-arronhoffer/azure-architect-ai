@@ -6,6 +6,16 @@ Virtual Azure Solutions Architect web app. FastAPI + React (Vite + TypeScript + 
 
 **Deep context**: invoke `/aaai` skill at `.claude/skills/aaai/SKILL.md` for SSE conventions, pipeline architecture, persistence layers, and the recipe for adding a new pipeline phase.
 
+## Trusted-oracle stack (Themes 1–4)
+
+- **5-agent surface** behind feature flag `VITE_UNIFIED_AGENTS=true` (frontend) and `UNIFIED_AGENTS=true` (backend router). When true, SideNav collapses to: `architect`, `cost`, `operations`, `compliance`, `engagement`. Flag-off path still serves all 84 legacy modes — both routes remain wired during the migration window.
+- **AgentPanel** (`frontend/src/components/AgentPanel.tsx`) is a thin wrapper that forwards an agent token through `ChatPanel`. `isAgentToken()` type guard gates the dispatch in `App.tsx::renderMode()`.
+- **Engagement scope**: `Engagement` model (`backend/db.py`) carries `subscription_ids`, `compliance_frameworks`, `region_preference`, and `reservation_commitments`. Active engagement is propagated via `engagement_id_var` ContextVar (mirrors `tenant_id_var`) and the `X-Engagement-Id` request header. Frontend `apiFetch` injects the header automatically when an engagement is selected.
+- **Cost emitter is RI-aware**: `services/reservations_service.apply_reservation_discounts()` adjusts `cost_estimate` SSE payloads when the active engagement declares `reservation_commitments`. Applied in both `routes/architecture.py` and `routes/chat.py`.
+- **Citations**: every chip carries `corpus` (learn / azure_updates / avm / reference_archs / sdk_releases), `published_at`, `freshness_days`, and reranker `confidence`. When retrieval confidence falls below floor, `routes/chat.py` swaps to honesty mode and prefixes the answer with "I'm not confident…".
+- **Reranker cache**: `services/rag_reranker.py` keys by `hash(query + doc_ids)` with 24 h TTL.
+- **Scheduled ingests** (`services/scheduler.py`): `azure_updates_ingest_daily`, `avm_ingest_weekly`, `refarch_ingest_weekly`, `demo_ingest_weekly`. Tests should use `issubset` rather than strict equality when asserting job IDs.
+
 ## Quirks that will bite you
 
 - `useWorkloadSpec()` returns `{ spec, setSpec }` — **not** `updateSpec`.

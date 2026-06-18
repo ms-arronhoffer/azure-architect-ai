@@ -1,4 +1,5 @@
-"""Cost governance endpoints — actuals, budget emit, anomaly KQL."""
+"""Cost governance endpoints — actuals, budget emit, anomaly KQL,
+plus live retail / reservation / right-sizing / carbon endpoints."""
 from __future__ import annotations
 
 import asyncio
@@ -7,7 +8,13 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from auth import require_user
-from services import cost_service
+from services import (
+    carbon_service,
+    cost_service,
+    reservations_service,
+    retail_pricing_service,
+    rightsizing_service,
+)
 
 router = APIRouter(prefix="/cost", tags=["cost"])
 
@@ -53,3 +60,108 @@ async def anomaly_kql(
     _=Depends(require_user),
 ) -> dict:
     return {"kql": cost_service.anomaly_detection_kql(lookback_days, sigma)}
+
+
+@router.get("/retail")
+async def retail_price(
+    service: str = Query(..., min_length=1),
+    sku: str = Query(""),
+    region: str = Query("eastus"),
+    quantity: float = Query(1.0, gt=0),
+    hours_per_month: float = Query(730.0, gt=0),
+    _=Depends(require_user),
+) -> dict:
+    try:
+        return await retail_pricing_service.lookup(
+            service=service,
+            sku=sku,
+            region=region,
+            quantity=quantity,
+            hours_per_month=hours_per_month,
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
+@router.get("/reservations")
+async def reservations(
+    subscription_id: str | None = Query(default=None),
+    scope: str = Query("Single", pattern="^(Single|Shared)$"),
+    lookback_days: int = Query(30),
+    _=Depends(require_user),
+) -> dict:
+    if lookback_days not in (7, 30, 60):
+        raise HTTPException(status_code=400, detail="lookback_days must be one of 7, 30, 60")
+    try:
+        return await asyncio.to_thread(
+            reservations_service.recommend_reservations,
+            subscription_id,
+            scope,
+            lookback_days,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
+class BreakEvenRequest(BaseModel):
+    payg_monthly: float = Field(ge=0)
+    reserved_monthly: float = Field(ge=0)
+    upfront_cost: float = Field(default=0.0, ge=0)
+    term_years: int = Field(default=1)
+
+
+@router.post("/break-even")
+async def break_even(req: BreakEvenRequest, _=Depends(require_user)) -> dict:
+    if req.term_years not in (1, 3):
+        raise HTTPException(status_code=400, detail="term_years must be 1 or 3")
+    return reservations_service.break_even(
+        payg_monthly=req.payg_monthly,
+        reserved_monthly=req.reserved_monthly,
+        upfront_cost=req.upfront_cost,
+        term_years=req.term_years,
+    )
+
+
+@router.get("/rightsizing")
+async def rightsizing(
+    subscription_id: str | None = Query(default=None),
+    window_days: int = Query(14, ge=3, le=60),
+    threshold_pct: float = Query(40.0, ge=5.0, le=100.0),
+    _=Depends(require_user),
+) -> dict:
+    try:
+        return await asyncio.to_thread(
+            rightsizing_service.assess_vms,
+            subscription_id,
+            window_days,
+            threshold_pct,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
+class CarbonLineItem(BaseModel):
+    service: str
+    sku: str = ""
+    region: str = "eastus"
+    quantity: float = 1.0
+    hours_per_month: float = 730.0
+
+
+class CarbonRequest(BaseModel):
+    line_items: list[CarbonLineItem]
+    compare_regions: list[str] = Field(default_factory=list)
+
+
+@router.post("/carbon")
+async def carbon(req: CarbonRequest, _=Depends(require_user)) -> dict:
+    items = [li.model_dump() for li in req.line_items]
+    out: dict = {"estimate": carbon_service.estimate_for_line_items(items)}
+    if req.compare_regions:
+        out["region_comparison"] = carbon_service.compare_regions(req.compare_regions, items)
+    return out
+

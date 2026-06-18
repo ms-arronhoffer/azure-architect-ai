@@ -21,9 +21,19 @@ from config import settings
 # operate against a single logical tenant.
 tenant_id_var: ContextVar[str] = ContextVar("tenant_id", default="default")
 
+# Per-request engagement scope. Populated by EngagementContextMiddleware from
+# the `X-Engagement-Id` header. None when the caller has no active engagement.
+# Cost + scan routes read this to auto-scope to the engagement's subscriptions;
+# chat prepends the engagement preamble to the system prompt when set.
+engagement_id_var: ContextVar[str | None] = ContextVar("engagement_id", default=None)
+
 
 def current_tenant_id() -> str:
     return tenant_id_var.get()
+
+
+def current_engagement_id() -> str | None:
+    return engagement_id_var.get()
 
 
 class Base(DeclarativeBase):
@@ -41,9 +51,37 @@ class Conversation(Base):
     messages: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
     structured_result: Mapped[str | None] = mapped_column(Text, nullable=True)
     user_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    engagement_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     tenant_id: Mapped[str] = mapped_column(
         String(64), nullable=False, default=current_tenant_id, index=True
     )
+
+
+class Engagement(Base):
+    """Customer engagement scope. Holds the few facts the model needs to
+    answer cost/scan questions without re-typing them every chat: which
+    subscriptions, what industry, what compliance frameworks apply, and the
+    preferred deployment region. Soft-deleted by status='archived'.
+    """
+
+    __tablename__ = "engagements"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    name: Mapped[str] = mapped_column(String(256), nullable=False)
+    customer_name: Mapped[str] = mapped_column(String(256), nullable=False, default="")
+    industry: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    compliance_frameworks: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    subscription_ids: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    region_preference: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    notes: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    reservation_commitments: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="active", index=True)
+    user_id: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    tenant_id: Mapped[str] = mapped_column(
+        String(64), nullable=False, default=current_tenant_id, index=True
+    )
+    created_at: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    updated_at: Mapped[int] = mapped_column(BigInteger, nullable=False, index=True)
 
 
 class RagDocument(Base):
@@ -176,7 +214,7 @@ _Session = async_sessionmaker(_engine, expire_on_commit=False)
 
 # Models that are partitioned per tenant. Global catalogs (RagDocument, Demo,
 # RefArch) are intentionally excluded — they are shared knowledge bases.
-_TENANT_SCOPED = (Conversation, UserSecret, TokenUsage, AuditEvent)
+_TENANT_SCOPED = (Conversation, Engagement, UserSecret, TokenUsage, AuditEvent)
 
 
 @event.listens_for(Session, "do_orm_execute")
@@ -226,6 +264,9 @@ async def init_db() -> None:
             await conn.execute(
                 text(f"UPDATE {table} SET tenant_id = 'default' WHERE tenant_id IS NULL")
             )
+        # Engagement linkage on conversations (Theme 4): nullable so legacy
+        # rows and "no engagement selected" requests both keep working.
+        await _ensure_column(conn, "conversations", "engagement_id", "VARCHAR(64)")
 
 
 async def _ensure_column(conn, table: str, column: str, ddl_type: str) -> None:
@@ -263,11 +304,14 @@ __all__ = [
     "Base",
     "Conversation",
     "Demo",
+    "Engagement",
     "RefArch",
     "RagDocument",
     "TokenUsage",
     "UserSecret",
+    "current_engagement_id",
     "current_tenant_id",
+    "engagement_id_var",
     "get_session",
     "init_db",
     "select",

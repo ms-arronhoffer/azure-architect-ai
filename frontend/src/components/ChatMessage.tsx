@@ -11,12 +11,31 @@ import {
   AccordionPanel,
   Link,
   Button,
+  Tooltip,
 } from "@fluentui/react-components";
 import { CopyRegular, CheckmarkRegular, BotRegular, PersonRegular, BranchRegular, DocumentRegular } from "@fluentui/react-icons";
 import { useState } from "react";
 import { exportMessageToDocx } from "../utils/docxExport";
 import StructuredResultCard from "./chat/StructuredResultCard";
-import type { ChatMessage as ChatMessageType, Mode } from "../types";
+import type { ChatMessage as ChatMessageType, Citation, Mode } from "../types";
+
+// Maps a citation corpus to a human label + tint colour. Keep in lock-step
+// with backend `services/rag_service.py:CITATION_CORPORA`. Unknown corpora
+// render as a neutral grey chip so we degrade gracefully.
+const CORPUS_DISPLAY: Record<string, { label: string; color: "brand" | "informative" | "success" | "warning" | "severe" | "important" | "subtle" }> = {
+  learn: { label: "Learn", color: "informative" },
+  learn_live: { label: "Learn (live)", color: "subtle" },
+  azure_updates: { label: "Azure Update", color: "brand" },
+  avm: { label: "AVM Module", color: "success" },
+  reference_archs: { label: "Reference Arch", color: "important" },
+};
+
+function freshnessTone(days?: number): { label: string; color: "success" | "warning" | "severe" | "subtle" } {
+  if (days === undefined || days === null) return { label: "freshness unknown", color: "subtle" };
+  if (days <= 30) return { label: `${days}d old`, color: "success" };
+  if (days <= 180) return { label: `${days}d old`, color: "warning" };
+  return { label: `${days}d old`, color: "severe" };
+}
 
 const useStyles = makeStyles({
   rowUser: {
@@ -139,6 +158,46 @@ const useStyles = makeStyles({
   citations: { maxWidth: "100%", width: "100%" },
 });
 
+function CitationChips({ citation }: { citation: Citation }) {
+  const corpusKey = citation.corpus_type || citation.corpus;
+  const corpus = corpusKey ? CORPUS_DISPLAY[corpusKey] : undefined;
+  const fresh = freshnessTone(citation.freshness_days);
+  const showFresh = citation.freshness_days !== undefined && citation.freshness_days !== null;
+  const confidencePct =
+    citation.confidence !== undefined && citation.confidence !== null
+      ? Math.round(citation.confidence * 100)
+      : undefined;
+  const publishedTip = citation.published_at ? ` · published ${citation.published_at.slice(0, 10)}` : "";
+  const reasonTip = citation.reason ? ` · why: ${citation.reason}` : "";
+
+  return (
+    <span style={{ display: "inline-flex", gap: "4px", flexWrap: "wrap", marginLeft: "6px", verticalAlign: "middle" }}>
+      {corpus && (
+        <Tooltip content={`Source type: ${corpus.label}${publishedTip}${reasonTip}`} relationship="label">
+          <Badge appearance="tint" color={corpus.color} size="small">{corpus.label}</Badge>
+        </Tooltip>
+      )}
+      {showFresh && (
+        <Tooltip content={`Source last updated ${citation.freshness_days} day${citation.freshness_days === 1 ? "" : "s"} ago`} relationship="label">
+          <Badge appearance="tint" color={fresh.color} size="small">{fresh.label}</Badge>
+        </Tooltip>
+      )}
+      {citation.version && (
+        <Tooltip content={`Module version ${citation.version}`} relationship="label">
+          <Badge appearance="outline" color="informative" size="small">v{citation.version}</Badge>
+        </Tooltip>
+      )}
+      {confidencePct !== undefined && (
+        <Tooltip content={`Retrieval confidence ${confidencePct}%`} relationship="label">
+          <Badge appearance="ghost" color={confidencePct >= 60 ? "success" : confidencePct >= 35 ? "warning" : "severe"} size="small">
+            {confidencePct}% match
+          </Badge>
+        </Tooltip>
+      )}
+    </span>
+  );
+}
+
 interface Props { message: ChatMessageType; onFork?: () => void; onContinueIn?: (mode: Mode, seed: string) => void; }
 
 export default function ChatMessage({ message, onFork, onContinueIn }: Props) {
@@ -227,8 +286,9 @@ export default function ChatMessage({ message, onFork, onContinueIn }: Props) {
               <AccordionPanel>
                 <ul style={{ margin: 0, paddingLeft: "18px" }}>
                   {message.citations.map((c, i) => (
-                    <li key={i} style={{ marginBottom: "6px" }}>
+                    <li key={i} style={{ marginBottom: "8px" }}>
                       <Link href={c.url} target="_blank" rel="noopener noreferrer">{c.title}</Link>
+                      <CitationChips citation={c} />
                       {c.description && (
                         <Text size={200} block style={{ color: tokens.colorNeutralForeground3, marginTop: "2px" }}>
                           {c.description.slice(0, 120)}{c.description.length > 120 ? "…" : ""}

@@ -99,6 +99,16 @@ const DATA_DESK_MODES: Mode[] = [
 
 const NAV_SECTIONS: NavSectionDef[] = [
   {
+    label: "Agents",
+    items: [
+      { mode: "architect", label: "Architect", icon: <BuildingRegular />, description: "Design, IaC, diagrams, WAF, landing zone, AVM, AI, network, identity, data" },
+      { mode: "cost", label: "Cost & FinOps", icon: <DataUsageRegular />, description: "Pricing, reservations, right-sizing, carbon, anomaly detection" },
+      { mode: "operations", label: "Operations", icon: <WrenchScrewdriverRegular />, description: "Reliability, troubleshoot, DRBC, runbooks, monitoring, service health" },
+      { mode: "compliance", label: "Compliance & Security", icon: <ShieldCheckmarkRegular />, description: "Security posture, threat model, DevSecOps, compliance mapping" },
+      { mode: "engagement", label: "Engagement Hub", icon: <FormRegular />, description: "Intake, RFPs, exec content, what's new, learning plans" },
+    ],
+  },
+  {
     label: "Updates",
     items: [
       { mode: "whatsnew", label: "What's New", icon: <MegaphoneLoudRegular />, description: "Microsoft announcements & draft customer emails" },
@@ -322,7 +332,7 @@ export default function SideNav({ mode, onModeChange, collapsed, onToggleCollaps
   const { roles } = useAuth();
   const isMetricsAdmin = roles.includes("Metrics.Read");
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(
-    () => new Set(NAV_SECTIONS.map((s) => s.label))
+    () => new Set(NAV_SECTIONS.map((s) => s.label).filter((l) => l !== "Agents"))
   );
 
   function toggleSection(label: string) {
@@ -347,7 +357,10 @@ export default function SideNav({ mode, onModeChange, collapsed, onToggleCollaps
       </div>
 
       <div className={styles.sections}>
-        {NAV_SECTIONS.map((section, si) => {
+        {(import.meta.env.VITE_UNIFIED_AGENTS === "true"
+          ? NAV_SECTIONS.filter((s) => s.label === "Agents")
+          : NAV_SECTIONS.filter((s) => s.label !== "Agents")
+        ).map((section, si) => {
           const isSectionCollapsed = collapsedSections.has(section.label);
           return (
             <div key={section.label}>

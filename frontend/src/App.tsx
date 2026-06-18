@@ -43,10 +43,13 @@ import AdfPipelinePanel from "./components/AdfPipelinePanel";
 import MedallionDesignerPanel from "./components/MedallionDesignerPanel";
 import DemoShowcasePanel from "./components/DemoShowcasePanel";
 import RefArchPanel from "./components/RefArchPanel";
+import AgentPanel, { isAgentToken } from "./components/AgentPanel";
 import { useConversationHistory } from "./hooks/useConversationHistory";
 import { useWorkloadContext } from "./hooks/useWorkloadContext";
 import { useSettings } from "./hooks/useSettings";
 import { useServiceHealth } from "./hooks/useServiceHealth";
+import { useEngagements } from "./hooks/useEngagements";
+import EngagementDrawer from "./components/EngagementDrawer";
 import { track } from "./utils/telemetry";
 import { setErrorNotifier } from "./config/api";
 import type { Mode, ConversationRecord, ChatMessage } from "./types";
@@ -84,6 +87,7 @@ export default function App() {
   const [historyOpen, setHistoryOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [contextOpen, setContextOpen] = useState(false);
+  const [engagementsOpen, setEngagementsOpen] = useState(false);
   const [telemetryOpen, setTelemetryOpen] = useState(false);
   const [selectedConversation, setSelectedConversation] = useState<ConversationRecord | null>(null);
   const [refinementSeed, setRefinementSeed] = useState<{ id: string; messages: ChatMessage[]; suggestedReplies?: string[] } | null>(null);
@@ -92,6 +96,7 @@ export default function App() {
   const { context: workloadContext, setContext: setWorkloadContext, clearContext } = useWorkloadContext();
   const { settings, saveSettings, githubTokenConfigured, setGithubToken, clearGithubToken } = useSettings();
   const { incidents: healthIncidents, incidentCount, loading: healthLoading, error: healthError, lastChecked: healthLastChecked, refresh: refreshHealth } = useServiceHealth();
+  const engagementsApi = useEngagements();
 
   const TOASTER_ID = "app-toaster";
   const { dispatchToast } = useToastController(TOASTER_ID);
@@ -192,6 +197,23 @@ export default function App() {
   const initialMessages = selectedConversation?.messages ?? refinementSeed?.messages;
 
   function renderMode() {
+    if (isAgentToken(mode)) {
+      return (
+        <AgentPanel
+          key={chatKey}
+          agent={mode}
+          conversationId={selectedConversation?.id}
+          initialMessages={initialMessages}
+          suggestedReplies={refinementSeed?.suggestedReplies}
+          modelConfig={settings.mode_models[mode]}
+          workloadContext={workloadContext}
+          onOpenContext={() => setContextOpen(true)}
+          onFork={handleFork}
+          onSave={(id, m, msgs) => upsert(id, m, msgs)}
+          onContinueIn={handleContinueIn}
+        />
+      );
+    }
     if (mode === "intake") {
       return <IntakePanel key="intake" onContinueIn={handleContinueIn} />;
     }
@@ -373,6 +395,10 @@ export default function App() {
             onOpenContext={() => setContextOpen(true)}
             workloadContext={workloadContext}
             saveStatus={saveStatus}
+            engagements={engagementsApi.engagements}
+            activeEngagement={engagementsApi.active}
+            onSelectEngagement={engagementsApi.setActiveId}
+            onOpenEngagements={() => setEngagementsOpen(true)}
           />
           <div className={styles.content}>{renderMode()}</div>
         </div>
@@ -393,6 +419,16 @@ export default function App() {
         githubTokenConfigured={githubTokenConfigured}
         onSaveGithubToken={setGithubToken}
         onClearGithubToken={clearGithubToken}
+      />
+      <EngagementDrawer
+        open={engagementsOpen}
+        onClose={() => setEngagementsOpen(false)}
+        engagements={engagementsApi.engagements}
+        active={engagementsApi.active}
+        onSelect={engagementsApi.setActiveId}
+        onCreate={engagementsApi.create}
+        onUpdate={engagementsApi.update}
+        onDelete={engagementsApi.remove}
       />
       <WorkloadContextPanel
         open={contextOpen}

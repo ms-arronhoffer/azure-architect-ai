@@ -12,6 +12,8 @@ from apscheduler.triggers.cron import CronTrigger
 
 from config import settings
 from middleware.logging import get_logger
+from services.avm_ingest import run_ingest as avm_run_ingest
+from services.azure_updates_ingest import run_ingest as azure_updates_run_ingest
 from services.demo_ingest import run_ingest as demo_run_ingest
 from services.refarch_ingest import run_ingest
 
@@ -44,6 +46,26 @@ def start_scheduler() -> None:
         trigger=CronTrigger(day_of_week="sun", hour=4, minute=42),
         id="demo_ingest_weekly",
         name="Weekly awesome-azd ingest",
+        replace_existing=True,
+        coalesce=True,
+        max_instances=1,
+        misfire_grace_time=3600,
+    )
+    sched.add_job(
+        azure_updates_run_ingest,
+        trigger=CronTrigger(hour=3, minute=23),
+        id="azure_updates_ingest_daily",
+        name="Daily Azure Updates RAG ingest",
+        replace_existing=True,
+        coalesce=True,
+        max_instances=1,
+        misfire_grace_time=3600,
+    )
+    sched.add_job(
+        avm_run_ingest,
+        trigger=CronTrigger(day_of_week="mon", hour=5, minute=11),
+        id="avm_ingest_weekly",
+        name="Weekly Azure Verified Modules catalog ingest",
         replace_existing=True,
         coalesce=True,
         max_instances=1,

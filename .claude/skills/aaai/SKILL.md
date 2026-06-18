@@ -51,6 +51,43 @@ FastAPI + React + Azure OpenAI + draw.io. Local Docker Compose. Stack: Python 3.
 - Type check: `cd frontend && npx tsc --noEmit`
 - Dev stack: `docker compose up` (prod: `docker-compose.prod.yml`)
 
+## Trusted-oracle stack (Themes 1–4)
+
+### Knowledge corpus (Theme 1)
+- `services/azure_updates_ingest.py` — daily RSS poll, writes `RagDocument(corpus="azure_updates", published_at=…)`.
+- `services/avm_ingest.py` — weekly Azure/bicep-registry-modules pull, writes `corpus="avm"` with `module_path` + `version` metadata.
+- `services/refarch_ingest.py` — also writes to `RagDocument(corpus="reference_archs")`; no longer needs the standalone `refarch_match.py`.
+- All registered in `services/scheduler.py`: `azure_updates_ingest_daily`, `avm_ingest_weekly`, `refarch_ingest_weekly`, `demo_ingest_weekly`. Tests assert with `issubset`, never strict equality.
+
+### Retrieval + citations (Theme 2)
+- `services/rag_service.hybrid_search()` — rapidfuzz BM25 + cosine, RRF-merged top-30.
+- `services/rag_reranker.py` — gpt-4o-mini reranker, top-30 → top-5 with score + reason. Cache key: `hash(query + doc_ids)`, 24 h TTL.
+- `services/citation_service.py` — every citation carries `{url, title, corpus, published_at, freshness_days, confidence}`. Emitted via the existing SSE `citations` event payload (extended, not new).
+- `services/rag_service` exposes `confidence_floor`; below floor → `unknown` flag → `routes/chat.py` swaps to honesty mode ("I'm not confident — closest matches are…").
+- `frontend/src/components/ChatMessage.tsx` renders freshness badges + corpus chip + confidence ring.
+
+### Cost truth (Theme 3)
+- `services/retail_pricing_service.py` — layered over `pricing_service.py`, 1 h cache, prefers `azure-pricing-mcp` when available.
+- `services/reservations_service.py` — Consumption API RI/SP recommendations + `break_even()` + `apply_reservation_discounts(estimate, commitments)`.
+- `services/rightsizing_service.py` — Azure Monitor P95 CPU pulls. **`azure.monitor.query` is an optional import**: wrap usage in try/except and raise RuntimeError lazily; tests run without the SDK installed.
+- `services/carbon_service.py` — region-keyed carbon-intensity × compute hours.
+- `tools/domains/cost.py` — `live_price_lookup`, `analyze_reservations`, `recommend_rightsizing`, `estimate_carbon`, `compare_payg_vs_ri`.
+- `routes/architecture.py` and `routes/chat.py` `estimate_costs` paths apply `apply_reservation_discounts` after `estimate_architecture` when the active engagement declares `reservation_commitments`. Adds `reservation_adjustments` + `reservation_monthly_savings` to the `cost_estimate` SSE payload.
+
+### 5-agent surface + Engagement scope (Theme 4)
+- Feature flag: `VITE_UNIFIED_AGENTS=true` (frontend) and `UNIFIED_AGENTS=true` (backend). Both must match; legacy 84-mode path still wired during the migration window.
+- Agents: `architect`, `cost`, `operations`, `compliance`, `engagement`. Defined in `frontend/src/components/AgentPanel.tsx` (`AGENT_TOKENS`, `isAgentToken`). `App.tsx::renderMode()` dispatches via `isAgentToken(mode)` before any legacy panel branches.
+- `SideNav.tsx` filters NAV_SECTIONS by flag; default-expands only the `Agents` section.
+- `Header.tsx::MODE_LABELS` includes labels for the 5 agent tokens.
+- `services/agent_router.py` — gpt-4o-mini classifier → `{agent, domain_fragments[], suggested_tools[]}`. 24 h cache.
+- Prompts: `prompts/agents/{architect,cost,operations,compliance,engagement}.py` + `prompts/domain_fragments.py` (lazy-selected). `prompts/system_prompt.py` shrunk to ~20 KB.
+- `tools/tool_definitions.TOOLS_BY_MODE` collapsed to the 5 agents; the 39 LLM tools themselves are unchanged.
+- **Engagement scope**: `Engagement` model in `backend/db.py` with `subscription_ids`, `compliance_frameworks`, `region_preference`, `reservation_commitments`. Propagated via `engagement_id_var` ContextVar (mirrors `tenant_id_var`) and the `X-Engagement-Id` request header. Frontend `apiFetch` injects the header when an engagement is selected.
+- `services/engagement_context.py` — `preamble_for_active()` returns the ~400-token Markdown block prefixed to the system prompt for any chat in that engagement's scope.
+- `routes/engagements.py` — CRUD + `GET /api/engagements/{id}/context`.
+- UI: `EngagementSelector.tsx` in `Header.tsx`; `EngagementDrawer.tsx` for CRUD. `WorkloadContextPanel` still serves the per-chat workload context (region, compliance framework, budget) and remains separate from Engagement.
+- Audit events: `engagement.*`, plus new `rag.unknown_response` and `cost.reservation_recommended`.
+
 ## When extending the pipeline
 
 1. Add a new mode to `ArchRequest.mode` and to `_stream_architecture` in `routes/architecture.py`.
