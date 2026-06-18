@@ -6,6 +6,9 @@ import Header from "./components/Header";
 import HistoryDrawer from "./components/HistoryDrawer";
 import AdvisorPanel, { ADVISOR_MODES } from "./components/AdvisorPanel";
 import NetworkDeskPanel, { NETWORK_DESK_MODES } from "./components/NetworkDeskPanel";
+import ComputeDeskPanel, { COMPUTE_DESK_MODES } from "./components/ComputeDeskPanel";
+import AIDeskPanel, { AI_DESK_MODES } from "./components/AIDeskPanel";
+import DataDeskPanel, { DATA_DESK_MODES } from "./components/DataDeskPanel";
 import ArchitecturePanel from "./components/ArchitecturePanel";
 import WAFPanel from "./components/WAFPanel";
 import ReviewPanel from "./components/ReviewPanel";
@@ -255,6 +258,60 @@ export default function App() {
     if (NETWORK_DESK_MODES.includes(mode)) {
       return (
         <NetworkDeskPanel
+          key={chatKey}
+          mode={mode}
+          onModeChange={handleModeChange}
+          conversationId={selectedConversation?.id}
+          initialMessages={initialMessages}
+          suggestedReplies={refinementSeed?.suggestedReplies}
+          modelConfig={settings.mode_models[mode]}
+          workloadContext={workloadContext}
+          onOpenContext={() => setContextOpen(true)}
+          onFork={handleFork}
+          onSave={(id, m, msgs) => upsert(id, m, msgs)}
+          onContinueIn={handleContinueIn}
+        />
+      );
+    }
+    if (COMPUTE_DESK_MODES.includes(mode)) {
+      return (
+        <ComputeDeskPanel
+          key={chatKey}
+          mode={mode}
+          onModeChange={handleModeChange}
+          conversationId={selectedConversation?.id}
+          initialMessages={initialMessages}
+          suggestedReplies={refinementSeed?.suggestedReplies}
+          modelConfig={settings.mode_models[mode]}
+          workloadContext={workloadContext}
+          onOpenContext={() => setContextOpen(true)}
+          onFork={handleFork}
+          onSave={(id, m, msgs) => upsert(id, m, msgs)}
+          onContinueIn={handleContinueIn}
+        />
+      );
+    }
+    if (AI_DESK_MODES.includes(mode)) {
+      return (
+        <AIDeskPanel
+          key={chatKey}
+          mode={mode}
+          onModeChange={handleModeChange}
+          conversationId={selectedConversation?.id}
+          initialMessages={initialMessages}
+          suggestedReplies={refinementSeed?.suggestedReplies}
+          modelConfig={settings.mode_models[mode]}
+          workloadContext={workloadContext}
+          onOpenContext={() => setContextOpen(true)}
+          onFork={handleFork}
+          onSave={(id, m, msgs) => upsert(id, m, msgs)}
+          onContinueIn={handleContinueIn}
+        />
+      );
+    }
+    if (DATA_DESK_MODES.includes(mode)) {
+      return (
+        <DataDeskPanel
           key={chatKey}
           mode={mode}
           onModeChange={handleModeChange}

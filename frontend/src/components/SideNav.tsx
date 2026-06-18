@@ -40,6 +40,9 @@ import {
   TableRegular,
   PlayCircleRegular,
   GlobeRegular,
+  ServerRegular,
+  SparkleRegular,
+  DataBarVerticalRegular,
 } from "@fluentui/react-icons";
 import type { Mode } from "../types";
 import { useAuth } from "../auth/AuthProvider";
@@ -69,6 +72,21 @@ const ARCH_MODES: Mode[] = ["architecture", "network", "aiarchitecture", "datapl
 const NETWORK_DESK_MODES: Mode[] = [
   "netvnet", "netfirewall", "netsecurity", "nethybrid", "netprivatelink",
   "netvwan", "netdns", "netmonitor", "nettroubleshoot", "netiac", "netpricing",
+];
+
+const COMPUTE_DESK_MODES: Mode[] = [
+  "compsku", "compscale", "compdisk", "compha", "compdr",
+  "compperf", "compmonitor", "comptroubleshoot", "compsecurity", "compcost",
+];
+
+const AI_DESK_MODES: Mode[] = [
+  "aifoundry", "aimodel", "airag", "aiagents", "aifinetune",
+  "aimlops", "aieval", "aisafety", "aicost", "aiiac",
+];
+
+const DATA_DESK_MODES: Mode[] = [
+  "datalake", "datawarehouse", "datastream", "datalakehouse", "datagovernance",
+  "datasecurity", "datamigration", "datacost", "dataquality", "dataiac",
 ];
 
 const NAV_SECTIONS: NavSectionDef[] = [
@@ -108,6 +126,24 @@ const NAV_SECTIONS: NavSectionDef[] = [
     label: "Networking",
     items: [
       { mode: "netvnet", label: "Network Desk", icon: <GlobeRegular />, description: "11 specialist advisors for Azure networking", activeWhen: NETWORK_DESK_MODES },
+    ],
+  },
+  {
+    label: "Compute",
+    items: [
+      { mode: "compsku", label: "Compute Desk", icon: <ServerRegular />, description: "10 specialist advisors for Azure compute", activeWhen: COMPUTE_DESK_MODES },
+    ],
+  },
+  {
+    label: "AI",
+    items: [
+      { mode: "aifoundry", label: "AI Desk", icon: <SparkleRegular />, description: "10 specialist advisors for Azure AI workloads", activeWhen: AI_DESK_MODES },
+    ],
+  },
+  {
+    label: "Data",
+    items: [
+      { mode: "datalake", label: "Data Desk", icon: <DataBarVerticalRegular />, description: "10 specialist advisors for Azure data platforms", activeWhen: DATA_DESK_MODES },
     ],
   },
   {
