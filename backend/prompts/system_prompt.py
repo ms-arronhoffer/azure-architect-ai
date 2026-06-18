@@ -989,10 +989,10 @@ TOOL USE:
 
 _NETDESK_VALIDATION_NOTE = """\
 VALIDATION DISCIPLINE:
-- When the search_azure_docs (Microsoft Learn MCP) tool is available, ALWAYS cite Microsoft Learn URLs
-  for any concrete claim about quotas, SKU limits, default behaviour, or feature availability.
-- If MCP is not available or returns nothing for the query, prefix the claim with "⚠️ unverified:"
-  and recommend the user re-run with MCP enabled before relying on the answer.
+- ALWAYS call search_azure_docs (Microsoft Learn) before stating concrete claims about quotas,
+  SKU limits, default behaviour, or feature availability — and cite the returned URLs.
+- If search_azure_docs returns nothing relevant, prefix the claim with "⚠️ unverified:" and
+  suggest the user double-check at https://learn.microsoft.com — do NOT tell them to "re-run with MCP enabled".
 - Do NOT invent CIDRs, SKU names, or pricing — say "I don't know, check the Azure pricing page" instead.
 """
 
@@ -1220,10 +1220,10 @@ TOOL USE:
 
 _COMPDESK_VALIDATION_NOTE = """\
 VALIDATION DISCIPLINE:
-- When the search_azure_docs (Microsoft Learn MCP) tool is available, ALWAYS cite Microsoft Learn URLs
-  for any concrete claim about VM SKU specs, quotas, regional availability, or feature support.
-- If MCP is not available or returns nothing for the query, prefix the claim with "⚠️ unverified:"
-  and recommend the user re-run with MCP enabled before relying on the answer.
+- ALWAYS call search_azure_docs (Microsoft Learn) before stating concrete claims about VM SKU
+  specs, quotas, regional availability, or feature support — and cite the returned URLs.
+- If search_azure_docs returns nothing relevant, prefix the claim with "⚠️ unverified:" and
+  suggest the user double-check at https://learn.microsoft.com — do NOT tell them to "re-run with MCP enabled".
 - Do NOT invent VM family names, vCPU counts, or pricing — say "I don't know, check the Azure pricing page" instead.
 """
 
@@ -1435,10 +1435,11 @@ TOOL USE:
 
 _AIDESK_VALIDATION_NOTE = """\
 VALIDATION DISCIPLINE:
-- When the search_azure_docs (Microsoft Learn MCP) tool is available, ALWAYS cite Microsoft Learn URLs
-  for any concrete claim about model availability, regional support, quotas, or feature parity.
-- If MCP is not available or returns nothing for the query, prefix the claim with "⚠️ unverified:"
-  and recommend the user re-run with MCP enabled before relying on the answer.
+- ALWAYS call search_azure_docs (Microsoft Learn) before stating concrete claims about model
+  availability, regional support, quotas, or feature parity — and cite the returned URLs.
+- If search_azure_docs returns nothing relevant, prefix the claim with "⚠️ unverified:" and
+  suggest the user double-check at https://learn.microsoft.com or in Azure AI Foundry —
+  do NOT tell them to "re-run with MCP enabled".
 - Do NOT invent model deployment names, PTU pricing, or context window sizes — say "I don't know, check Azure AI Foundry" instead.
 """
 
@@ -1636,10 +1637,10 @@ TOOL USE:
 
 _DATADESK_VALIDATION_NOTE = """\
 VALIDATION DISCIPLINE:
-- When the search_azure_docs (Microsoft Learn MCP) tool is available, ALWAYS cite Microsoft Learn URLs
-  for any concrete claim about service limits, SKU specs, regional availability, or feature parity.
-- If MCP is not available or returns nothing for the query, prefix the claim with "⚠️ unverified:"
-  and recommend the user re-run with MCP enabled before relying on the answer.
+- ALWAYS call search_azure_docs (Microsoft Learn) before stating concrete claims about service
+  limits, SKU specs, regional availability, or feature parity — and cite the returned URLs.
+- If search_azure_docs returns nothing relevant, prefix the claim with "⚠️ unverified:" and
+  suggest the user double-check at https://learn.microsoft.com — do NOT tell them to "re-run with MCP enabled".
 - Do NOT invent SKU specs, RU/s, or DTU pricing — say "I don't know, check the Azure pricing page" instead.
 """
 
