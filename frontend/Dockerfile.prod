@@ -24,6 +24,11 @@ ENV VITE_ENTRA_TENANT_ID=$VITE_ENTRA_TENANT_ID
 ENV VITE_ENTRA_CLIENT_ID=$VITE_ENTRA_CLIENT_ID
 ENV VITE_ENTRA_API_SCOPE=$VITE_ENTRA_API_SCOPE
 
+# Trusted-oracle feature flag — collapses the 84-mode SideNav to 5 agents.
+# Must match the backend UNIFIED_AGENTS env so the router and UI stay aligned.
+ARG VITE_UNIFIED_AGENTS=""
+ENV VITE_UNIFIED_AGENTS=$VITE_UNIFIED_AGENTS
+
 RUN npm run build
 
 

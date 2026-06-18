@@ -235,6 +235,7 @@ module backendApp 'modules/containerapp.bicep' = {
       { name: 'AZURE_OPENAI_DEPLOYMENT_EMBEDDING', value: 'text-embedding-ada-002' }
       { name: 'ENABLE_MCP', value: 'true' }
       { name: 'AUTH_ENABLED', value: 'true' }
+      { name: 'UNIFIED_AGENTS', value: 'true' }
       { name: 'ENTRA_TENANT_ID', value: entraTenantId }
       { name: 'ENTRA_AUDIENCE', value: entraAudience }
       { name: 'SESSION_COOKIE_SECURE', value: 'true' }

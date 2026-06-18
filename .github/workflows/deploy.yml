@@ -156,6 +156,7 @@ jobs:
             --build-arg VITE_ENTRA_TENANT_ID=${{ vars.VITE_ENTRA_TENANT_ID }} \
             --build-arg VITE_ENTRA_CLIENT_ID=${{ vars.VITE_ENTRA_CLIENT_ID }} \
             --build-arg VITE_ENTRA_API_SCOPE=${{ vars.VITE_ENTRA_API_SCOPE }} \
+            --build-arg VITE_UNIFIED_AGENTS=${{ vars.VITE_UNIFIED_AGENTS }} \
             ./frontend
       - name: Update container app revision
         run: |
