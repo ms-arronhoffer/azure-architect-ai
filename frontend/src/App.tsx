@@ -210,6 +210,24 @@ export default function App() {
   const initialMessages = selectedConversation?.messages ?? refinementSeed?.messages;
 
   function renderMode() {
+    // Route the unified "architect" agent through ArchitecturePanel so it
+    // gets the full multi-artifact pipeline (diagram + runbook + bicep +
+    // cost + adr + gantt + waf) and the split-pane layout. Other unified
+    // agents stay on the lighter AgentPanel surface.
+    if (mode === "architect") {
+      return (
+        <ArchitecturePanel
+          key={selectedPanelSession?.id ?? refinementSeed?.id ?? "architect"}
+          mode="architecture"
+          onRefine={handleRefine}
+          onModeChange={handleModeChange}
+          workloadContext={workloadContext}
+          onSave={(id, m, msgs, sr) => handlePanelSave(id, m, msgs, sr)}
+          initialSession={selectedPanelSession ?? undefined}
+          initialMessages={initialMessages}
+        />
+      );
+    }
     if (isAgentToken(mode)) {
       return (
         <AgentPanel

@@ -53,6 +53,9 @@ DIAGRAM_ENABLED_MODES = frozenset({
     "compsku", "compha", "compdr",
     "aifoundry", "airag", "aiagents", "aimlops", "aiiac",
     "datalake", "datawarehouse", "datalakehouse", "datastream", "dataiac",
+    # Unified-agent tokens (UNIFIED_AGENTS=true). Defense-in-depth so any
+    # agent that calls design_architecture emits the diagram SSE event.
+    "architect", "cost", "operations", "compliance", "engagement",
 })
 
 
