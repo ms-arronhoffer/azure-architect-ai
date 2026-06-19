@@ -1,5 +1,15 @@
 """
 Generate draw.io XML diagrams with local Azure SVG icons from icons/azure.xml.
+
+Two layout modes:
+  - **Flat** (no `group` field on any component) — legacy barycenter-sorted
+    tier layout. Unchanged behavior.
+  - **Clustered** (any component carries `group`) — within each tier, nodes
+    are bucketed by group (external / edge / compute / data / observability)
+    and drawn inside a dashed cluster rectangle. Inter-cluster edges either
+    (a) share a channel between cluster boundaries with per-edge Y tracks,
+    or (b) when ≥HUB_BUNDLE_MIN edges from the same source cluster converge
+    on one sink, get bundled through a shared approach trunk near the sink.
 """
 
 import xml.etree.ElementTree as ET
@@ -12,6 +22,36 @@ X_GAP = 260      # center-to-center horizontal spacing (was 200 — labels overl
 Y_GAP = 300      # center-to-center vertical spacing (was 220 — needed for label + edge channel)
 Y_START = 140    # y of first tier row center
 JETTY = 28       # explicit orthogonal jetty in px so parallel edges separate visibly
+
+# ── Cluster layout ────────────────────────────────────────────────────────────
+GROUP_ORDER = ["external", "edge", "compute", "data", "observability"]
+_GROUP_RANK = {g: i for i, g in enumerate(GROUP_ORDER)}
+CLUSTER_COLORS = {
+    "external":      "#9aa0a6",
+    "edge":          "#1976d2",
+    "compute":       "#388e3c",
+    "data":          "#f57c00",
+    "observability": "#7b1fa2",
+}
+CLUSTER_LABELS = {
+    "external":      "External",
+    "edge":          "Edge / Ingress",
+    "compute":       "Compute",
+    "data":          "Data",
+    "observability": "Observability",
+}
+CLUSTER_PAD_X = 24
+CLUSTER_PAD_Y = 36   # extra room at top for the cluster label
+CLUSTER_GAP_X = 60   # horizontal space between adjacent cluster boxes
+
+# Hub bundling: when a sink has at least this many inbound edges from a single
+# source cluster, route them through a shared trunk near the sink.
+HUB_BUNDLE_MIN = 3
+HUB_TRUNK_OFFSET = 28
+
+
+def _has_groups(components: list[dict]) -> bool:
+    return any("group" in c for c in components)
 
 
 def _assign_positions(components: list[dict], connections: list[dict]) -> None:
@@ -66,6 +106,189 @@ def _assign_positions(components: list[dict], connections: list[dict]) -> None:
         row_y += Y_GAP
 
 
+def _assign_positions_clustered(
+    components: list[dict], connections: list[dict]
+) -> list[dict]:
+    """
+    Group-aware layered layout. Returns cluster rectangles as a list of dicts:
+    `{tier, group, x, y, w, h, members}`. Within each tier, components are
+    bucketed by `group` in GROUP_ORDER, barycenter-sorted within bucket, then
+    placed left-to-right with CLUSTER_GAP_X between buckets. Components that
+    already have explicit x/y are left in place.
+    """
+    needs_layout = [c for c in components if "x" not in c or "y" not in c]
+    if not needs_layout:
+        return []
+
+    adj: dict[str, set[str]] = defaultdict(set)
+    for conn in connections:
+        adj[conn["from"]].add(conn["to"])
+        adj[conn["to"]].add(conn["from"])
+
+    tiers: dict[int, list[dict]] = defaultdict(list)
+    for comp in needs_layout:
+        tiers[int(comp.get("tier", 2))].append(comp)
+
+    placed_x: dict[str, float] = {}
+    clusters: list[dict] = []
+
+    row_y = Y_START
+    for tier_idx in sorted(tiers):
+        row = tiers[tier_idx]
+        buckets: dict[str, list[dict]] = defaultdict(list)
+        for comp in row:
+            buckets[comp.get("group", "compute")].append(comp)
+        ordered_groups = sorted(buckets.keys(), key=lambda g: _GROUP_RANK.get(g, 99))
+
+        def _bary(c: dict) -> float:
+            xs = [placed_x[n] for n in adj[c["id"]] if n in placed_x]
+            return sum(xs) / len(xs) if xs else 0.0
+
+        for g in ordered_groups:
+            buckets[g].sort(key=_bary)
+
+        bucket_widths: dict[str, int] = {}
+        total_w = 0
+        for g in ordered_groups:
+            n = len(buckets[g])
+            w = n * NODE_W + (n - 1) * (X_GAP - NODE_W) + 2 * CLUSTER_PAD_X
+            bucket_widths[g] = w
+            total_w += w
+        total_w += (len(ordered_groups) - 1) * CLUSTER_GAP_X
+
+        page_width = max(1169, total_w + 240)
+        x_cursor = max(80, (page_width - total_w) // 2)
+
+        for g in ordered_groups:
+            members = buckets[g]
+            cluster_x = x_cursor
+            cluster_y = row_y - NODE_H // 2 - CLUSTER_PAD_Y + 6
+            cluster_w = bucket_widths[g]
+            cluster_h = NODE_H + CLUSTER_PAD_Y + 16
+
+            inner_x = cluster_x + CLUSTER_PAD_X
+            for j, comp in enumerate(members):
+                comp["x"] = inner_x + j * X_GAP
+                comp["y"] = row_y - NODE_H // 2
+                placed_x[comp["id"]] = comp["x"] + NODE_W / 2
+
+            clusters.append({
+                "tier": tier_idx,
+                "group": g,
+                "x": cluster_x,
+                "y": cluster_y,
+                "w": cluster_w,
+                "h": cluster_h,
+                "members": [c["id"] for c in members],
+            })
+            x_cursor += cluster_w + CLUSTER_GAP_X
+        row_y += Y_GAP
+
+    return clusters
+
+
+def _compute_edge_waypoints(
+    components: list[dict],
+    connections: list[dict],
+    clusters: list[dict],
+) -> dict[tuple[str, str], list[tuple[float, float]]]:
+    """
+    Two-pass router for inter-cluster edges:
+
+    1. **Hub bundling** — when a sink has ≥HUB_BUNDLE_MIN inbound edges from a
+       single source cluster, route each through a shared trunk just outside
+       the sink. Per-side ports on the sink then fan the trunk out to distinct
+       entry points, producing a clean "many-to-one" approach.
+    2. **Channel routing** — remaining inter-cluster edges between the same
+       (src_cluster, tgt_cluster) pair get unique Y tracks within the gap
+       between cluster boundaries so parallel edges no longer stack into a
+       single fat line.
+
+    Intra-cluster edges are left for draw.io's native orthogonal routing.
+    """
+    if not clusters:
+        return {}
+
+    by_id = {c["id"]: c for c in components}
+    cluster_by_id: dict[str, dict] = {}
+    for cl in clusters:
+        for m in cl["members"]:
+            cluster_by_id[m] = cl
+
+    inter: list[tuple[dict, dict, dict, dict, dict]] = []
+    for conn in connections:
+        s = by_id.get(conn["from"])
+        t = by_id.get(conn["to"])
+        if not (s and t):
+            continue
+        sc = cluster_by_id.get(s["id"])
+        tc = cluster_by_id.get(t["id"])
+        if sc is None or tc is None or sc is tc:
+            continue
+        inter.append((conn, s, t, sc, tc))
+
+    waypoints: dict[tuple[str, str], list[tuple[float, float]]] = {}
+    bundled: set[tuple[str, str]] = set()
+
+    # ── Hub bundling per (sink, source_cluster) ────────────────────────────
+    hub_groups: dict[tuple[str, int], list] = defaultdict(list)
+    for item in inter:
+        conn, _, t, sc, _ = item
+        hub_groups[(t["id"], id(sc))].append(item)
+
+    for (sink_id, _), items in hub_groups.items():
+        if len(items) < HUB_BUNDLE_MIN:
+            continue
+        sink = by_id[sink_id]
+        any_src = items[0][1]
+        downward = any_src["y"] < sink["y"]
+        trunk_y = (
+            sink["y"] - HUB_TRUNK_OFFSET if downward
+            else sink["y"] + NODE_H + HUB_TRUNK_OFFSET
+        )
+        sink_cx = sink["x"] + NODE_W / 2
+        for conn, s, _, _, _ in items:
+            sx = s["x"] + NODE_W / 2
+            waypoints[(conn["from"], conn["to"])] = [(sx, trunk_y), (sink_cx, trunk_y)]
+            bundled.add((conn["from"], conn["to"]))
+
+    # ── Channel routing for remaining inter-cluster edges ──────────────────
+    pairs: dict[tuple[int, int], list] = defaultdict(list)
+    for item in inter:
+        conn, _, _, sc, tc = item
+        if (conn["from"], conn["to"]) in bundled:
+            continue
+        pairs[(id(sc), id(tc))].append(item)
+
+    for items in pairs.values():
+        if len(items) < 2:
+            continue
+        items.sort(key=lambda kv: kv[1]["x"])
+        n = len(items)
+        sample_sc = items[0][3]
+        sample_tc = items[0][4]
+        s_bottom = sample_sc["y"] + sample_sc["h"]
+        t_top = sample_tc["y"]
+        if t_top > s_bottom:
+            band_top = s_bottom + 12
+            band_bot = t_top - 12
+        else:
+            band_top = t_top + sample_tc["h"] + 12
+            band_bot = sample_sc["y"] - 12
+        band_h = max(band_bot - band_top, 20)
+
+        for slot, (conn, s, t, _, _) in enumerate(items):
+            track_y = (
+                (band_top + band_bot) / 2 if n == 1
+                else band_top + band_h * (slot / (n - 1))
+            )
+            sx = s["x"] + NODE_W / 2
+            tx = t["x"] + NODE_W / 2
+            waypoints[(conn["from"], conn["to"])] = [(sx, track_y), (tx, track_y)]
+
+    return waypoints
+
+
 def _edge_style(
     src_comp: dict | None,
     tgt_comp: dict | None,
@@ -117,13 +340,25 @@ def generate_diagram(
     title: str = "Azure Architecture",
 ) -> str:
     """Build a draw.io XML string from a component/connection list."""
-    _assign_positions(components, connections)
+    use_clusters = _has_groups(components)
+    if use_clusters:
+        clusters = _assign_positions_clustered(components, connections)
+        waypoints = _compute_edge_waypoints(components, connections, clusters)
+    else:
+        _assign_positions(components, connections)
+        clusters = []
+        waypoints = {}
 
-    # Canvas: fit content with generous padding
+    # Canvas: fit content (including cluster rectangles) with generous padding
     xs = [c.get("x", 0) for c in components]
     ys = [c.get("y", 0) for c in components]
-    page_width = max(1169, max(xs, default=0) + NODE_W + 240)
-    page_height = max(827, max(ys, default=0) + NODE_H + 200)
+    right = max(xs, default=0) + NODE_W
+    bottom = max(ys, default=0) + NODE_H
+    for cl in clusters:
+        right = max(right, cl["x"] + cl["w"])
+        bottom = max(bottom, cl["y"] + cl["h"])
+    page_width = max(1169, right + 240)
+    page_height = max(827, bottom + 200)
 
     mxfile = ET.Element("mxfile", host="azure-architect-ai")
     diagram = ET.SubElement(mxfile, "diagram", id="arch", name=title)
@@ -137,6 +372,32 @@ def generate_diagram(
     root = ET.SubElement(model, "root")
     ET.SubElement(root, "mxCell", id="0")
     ET.SubElement(root, "mxCell", id="1", parent="0")
+
+    # Cluster rectangles must come BEFORE node cells so they render behind
+    # them — draw.io z-order follows document order.
+    for idx, cl in enumerate(clusters):
+        color = CLUSTER_COLORS.get(cl["group"], "#888888")
+        label = CLUSTER_LABELS.get(cl["group"], cl["group"].title())
+        style = (
+            f"rounded=1;whiteSpace=wrap;html=1;"
+            f"fillColor=none;strokeColor={color};dashed=1;dashPattern=4 4;"
+            f"verticalAlign=top;align=left;fontSize=11;fontColor={color};"
+            f"spacingTop=4;spacingLeft=10;strokeWidth=1.5;"
+        )
+        cell = ET.SubElement(
+            root, "mxCell",
+            id=f"cluster_{idx}",
+            value=label,
+            style=style,
+            vertex="1",
+            parent="1",
+        )
+        ET.SubElement(
+            cell, "mxGeometry",
+            x=str(cl["x"]), y=str(cl["y"]),
+            width=str(cl["w"]), height=str(cl["h"]),
+            **{"as": "geometry"},
+        )
 
     # Index components by id for O(1) lookup in edge routing
     comp_by_id: dict[str, dict] = {c["id"]: c for c in components}
@@ -211,7 +472,12 @@ def generate_diagram(
             target=tgt_cell,
             parent="1",
         )
-        ET.SubElement(cell, "mxGeometry", relative="1", **{"as": "geometry"})
+        geom = ET.SubElement(cell, "mxGeometry", relative="1", **{"as": "geometry"})
+        pts = waypoints.get((src_id, tgt_id))
+        if pts:
+            arr = ET.SubElement(geom, "Array", **{"as": "points"})
+            for x, y in pts:
+                ET.SubElement(arr, "mxPoint", x=str(int(x)), y=str(int(y)))
 
     return _serialize(mxfile)
 
