@@ -124,10 +124,15 @@ class AuditMiddleware:
 
         async def wrapped_receive() -> dict[str, Any]:
             nonlocal sent
-            if sent:
-                return {"type": "http.disconnect"}
-            sent = True
-            return {"type": "http.request", "body": new_body, "more_body": False}
+            if not sent:
+                sent = True
+                return {"type": "http.request", "body": new_body, "more_body": False}
+            # Delegate subsequent receives to the real receive() so
+            # StreamingResponse.listen_for_disconnect blocks until an actual
+            # client disconnect instead of seeing a synthetic one. Returning
+            # http.disconnect here aborts SSE streams the moment the first
+            # await yields to the event loop.
+            return await receive()
 
         status_holder = {"code": 500}
 
