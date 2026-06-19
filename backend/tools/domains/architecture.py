@@ -49,8 +49,22 @@ TOOLS = [
                                     "type": "integer",
                                     "description": "Layout tier 0=internet/users, 1=edge/gateway, 2=app, 3=data, 4=monitoring/security",
                                 },
+                                "group": {
+                                    "type": "string",
+                                    "enum": ["external", "edge", "compute", "data", "observability"],
+                                    "description": (
+                                        "Cluster bucket for diagram layout. external=users/internet/3rd-party SaaS; "
+                                        "edge=Front Door/App Gateway/WAF/API Mgmt/DNS; "
+                                        "compute=App Service/AKS/Container Apps/Functions/VMs; "
+                                        "data=SQL/Cosmos/Storage/Redis/Key Vault/Service Bus; "
+                                        "observability=Monitor/App Insights/Log Analytics/Sentinel. "
+                                        "Populate this for every component — components with the same group "
+                                        "are drawn together in a dashed cluster box, which dramatically "
+                                        "reduces edge crossings on dense diagrams."
+                                    ),
+                                },
                             },
-                            "required": ["id", "label", "shape"],
+                            "required": ["id", "label", "shape", "group"],
                         },
                     },
                     "connections": {

@@ -23,6 +23,12 @@ TOOL USE:
 - For architecture requests, call design_architecture to generate the component list and connections.
   IMPORTANT: always populate deployment_steps with real, runnable Azure CLI commands for each service
   (e.g., `az appservice plan create`, `az sql server create`, `az keyvault create`).
+  ALSO REQUIRED: every component must declare a `group` for diagram clustering — one of
+  `external` (users, internet, 3rd-party SaaS), `edge` (Front Door, App Gateway, WAF, API Mgmt, DNS),
+  `compute` (App Service, AKS, Container Apps, Functions, VMs), `data` (SQL, Cosmos, Storage,
+  Redis, Key Vault, Service Bus), or `observability` (Monitor, App Insights, Log Analytics, Sentinel).
+  Same-group components render inside a shared dashed cluster, which collapses crossing edges into
+  routed channels — diagrams without `group` fall back to a flat layout that overlaps badly.
 - When calling estimate_costs, ALWAYS set region on every line item (default: "eastus").
   Use the SKU names the customer specified or a reasonable default (e.g., "P2v3" for App Service).
 - When calling generate_bicep, ALWAYS set target_scope and emit `targetScope = '<scope>'` as the

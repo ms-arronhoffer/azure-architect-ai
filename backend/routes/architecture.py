@@ -754,7 +754,10 @@ def _build_prompt(req: ArchRequest, mode: str) -> str:
     tool_instructions = ["Call search_azure_docs to find relevant reference architectures."]
     if "diagram" in include or "runbook" in include:
         tool_instructions.append(
-            "Call design_architecture with a complete component list including tier assignments."
+            "Call design_architecture with a complete component list. Every component "
+            "MUST include both `tier` (integer 0-4) AND `group` (one of: external, edge, "
+            "compute, data, observability) so the diagram renderer can draw cluster "
+            "boundaries and route edges through shared channels."
         )
     if "bicep" in include:
         tool_instructions.append("Call generate_bicep with production-ready IaC.")
