@@ -2,9 +2,18 @@
 
 How to deploy Azure Architect AI to Azure Container Apps using the bundled Bicep and GitHub Actions workflows.
 
+## Environments
+
+| Env | Branch | Resource group | Frontend URL | Deployment name | Param file |
+|---|---|---|---|---|---|
+| **prod** | `main` | `aarch-dev-rg` | `https://blueprint.techtools.host` | `aarch-dev` | `infra/main.bicepparam` |
+| **test** | `dev` | `aarch-test-rg` | `https://dev.blueprint.techtools.host` | `aarch-test` | `infra/main.test.bicepparam` |
+
+Both envs share the AOAI account (`aarch-dev-aoai`) and ACR (`aarchdevacr`) that live in `aarch-dev-rg`. The test stack sets `deployOpenAi=false` and `deployAcr=false`; cross-RG role assignments come from `infra/modules/openai-grant.bicep` and `infra/modules/acr-grant.bicep`.
+
 ## Target topology
 
-Subscription-scope Bicep deploys a single resource group (`<prefix>-<env>-rg`) containing 13 module deployments (`infra/main.bicep`):
+Subscription-scope Bicep deploys a resource group (`<prefix>-<env>-rg`) containing 13 module deployments (`infra/main.bicep`):
 
 ```mermaid
 flowchart TB
@@ -116,8 +125,10 @@ Three workflows live under `.github/workflows/`. All use OIDC federated credenti
 
 And these GitHub environments:
 
-- `dev` — used by `deploy.yml`
-- `dev-apply` — used by `infra.yml` apply job; gate with required reviewers
+- `dev` / `dev-apply` — used by deploys to **prod** (`main` branch → `aarch-dev-rg`); `dev-apply` gates `infra.yml` apply with required reviewers.
+- `test` / `test-apply` — used by deploys to **test** (`dev` branch → `aarch-test-rg`); `test-apply` likewise.
+
+The branch-aware `setenv` job in both workflows picks the correct env, RG, deployment name, and param file from `github.ref` (push) or `github.base_ref` (PR).
 
 ### `ci.yml` — pull request CI
 
@@ -130,20 +141,61 @@ Jobs:
 
 ### `infra.yml` — Bicep what-if + apply
 
-`.github/workflows/infra.yml` (61 lines). Triggers on `infra/**` changes.
+`.github/workflows/infra.yml`. Triggers on `infra/**` changes on `main` or `dev`.
 
-- PR: `az deployment sub what-if` with `FullResourcePayloads`
-- `main` push or manual dispatch: `az deployment sub create` (gated by `dev-apply` environment)
+- PR: `az deployment sub what-if` with `FullResourcePayloads` (against the **base branch's** param file).
+- Push: `az deployment sub create` (gated by `<env>-apply` environment).
 
 ### `deploy.yml` — image build + revision update
 
-`.github/workflows/deploy.yml` (133 lines). Triggers on `backend/**` or `frontend/**` changes.
+`.github/workflows/deploy.yml`. Triggers on `backend/**` or `frontend/**` changes on `main` or `dev`, or `workflow_dispatch`.
 
 Jobs:
-- **detect**: paths-filter + reads ACR / RG / app names from the `main` subscription deployment outputs
-- **backend**: `az acr build` of `backend/Dockerfile.prod` then `az containerapp update --image ... --revision-suffix sha-<SHA>`
-- **frontend**: same, for frontend
-- **smoke**: HTTP 200 check on `frontendUrl` (5 retries, 10s apart)
+- **setenv**: picks env-specific outputs (deployment name, RG fallback, param file, GH env) from `github.ref`.
+- **detect**: paths-filter + reads ACR / RG / app names from the env's subscription deployment outputs, with fallback to direct lookup (and ultimately to the shared dev ACR for the test env).
+- **backend**: `az acr build` of `backend/Dockerfile.prod` then `az containerapp update --image ... --revision-suffix sha-<SHA>-r<run_number>`.
+- **frontend**: same, for frontend. Vite env vars (`VITE_ENTRA_*`, `VITE_UNIFIED_AGENTS`) are baked into the image via `--build-arg`.
+- **smoke**: HTTP 200 check on `frontendUrl` (5 retries, 10s apart). Custom domain wins over default FQDN when one is bound.
+
+## Custom domains
+
+Each env's frontend has a managed TLS cert bound to a custom hostname:
+
+| Env | Hostname | Cert (ACA env) |
+|---|---|---|
+| prod | `blueprint.techtools.host` | `aarch-dev-cae` / `blueprint.techtools.host-aarch-de-…` |
+| test | `dev.blueprint.techtools.host` | `aarch-test-cae` / `dev.blueprint.techtools.host-aarch-te-…` |
+
+Bindings are declared in the env's bicepparam (`frontendCustomDomains`), so re-applying Bicep preserves them. Cert provisioning itself is a one-time manual step:
+
+```bash
+# DNS first — CNAME the hostname to <app>.<env-suffix>.<region>.azurecontainerapps.io
+az containerapp env certificate create -g <RG> -n <CAE_NAME> \
+  --hostname dev.blueprint.techtools.host \
+  --validation-method CNAME
+# wait for provisioningState=Succeeded, then bind
+az containerapp hostname bind -g <RG> -n <FRONTEND_APP> \
+  --hostname dev.blueprint.techtools.host \
+  --environment <CAE_NAME> \
+  --certificate <CERT_ID>
+# finally, copy the cert ID into the env's bicepparam frontendCustomDomains[]
+```
+
+## Entra ID (two app registrations)
+
+Auth uses two app regs in tenant `16b3c013-d300-468d-ac64-7eda0820b6d3`:
+
+| App | Client ID | Purpose |
+|---|---|---|
+| `azure-architect-ai-api` | `5e5c9491-d850-4f1b-9d67-939824a4c819` | API resource. Backend validates `aud == api://5e5c9491…`. Exposes `Metrics.Read` app role + `access_as_user` delegated scope. |
+| `azure-architect-ai-spa` | `e9616e6b-3c8b-4153-b814-b01817c9ade2` | SPA client. Holds redirect URIs. `requiredResourceAccess` points at the API's `access_as_user` scope. |
+
+Critical: **`VITE_ENTRA_API_SCOPE` must be `api://5e5c9491…/access_as_user`** (the API app), not the SPA's own URI. Pointing it at the SPA's URI mints tokens with the wrong `aud` and the backend will 401 with `Invalid audience`.
+
+Per-env redirect URIs on the SPA app:
+- `https://blueprint.techtools.host/` (prod)
+- `https://dev.blueprint.techtools.host/` (test)
+- ACA default FQDNs for direct access
 
 ## Auth at runtime
 

@@ -1,83 +1,91 @@
 # `infra/` — Azure deployment
 
-Subscription-scope Bicep that provisions Azure Architect AI as a monolith on
-Azure Container Apps with private images in ACR, Azure OpenAI, Key Vault, and
-an Azure Files share for SQLite persistence.
+Subscription-scope Bicep that provisions Azure Architect AI on Azure Container
+Apps with VNet injection, private Postgres Flexible Server, Key Vault, Azure
+OpenAI, Azure Container Registry, and an optional Azure Front Door.
+
+For workflow / Entra / custom-domain details see [`../docs/DEPLOYMENT.md`](../docs/DEPLOYMENT.md).
+
+## Environments
+
+| Env | Branch | RG | Param file |
+|---|---|---|---|
+| **prod** | `main` | `aarch-dev-rg` | `main.bicepparam` |
+| **test** | `dev` | `aarch-test-rg` | `main.test.bicepparam` |
+
+Both envs share the AOAI account (`aarch-dev-aoai`) and ACR (`aarchdevacr`)
+which live in `aarch-dev-rg`. The test stack sets `deployOpenAi=false` and
+`deployAcr=false`; cross-RG role assignments are created by
+`modules/openai-grant.bicep` and `modules/acr-grant.bicep`.
 
 ## Files
 
 | File | Purpose |
 |---|---|
 | `main.bicep` | Entrypoint (subscription scope). Creates RG and invokes modules. |
-| `main.bicepparam` | Parameter values (env, prefix, location, image references). |
+| `main.bicepparam` | Prod parameter values. |
+| `main.test.bicepparam` | Test parameter values (shares AOAI/ACR with prod). |
 | `modules/identity.bicep` | User-assigned managed identity used by both apps. |
+| `modules/network.bicep` | VNet (3 subnets) + private DNS zones for KV/PG/AOAI. |
 | `modules/containerregistry.bicep` | Premium ACR. Grants `AcrPull` to the MI. |
-| `modules/keyvault.bicep` | RBAC-mode KV. Grants `Key Vault Secrets User` to the MI. |
-| `modules/storage.bicep` | Storage account + Azure Files share for `/app/data` (SQLite). |
+| `modules/acr-grant.bicep` | Cross-RG `AcrPull` for the test MI on the shared ACR. |
+| `modules/keyvault.bicep` | RBAC-mode KV + private endpoint. Grants `Key Vault Secrets User` to the MI. |
+| `modules/storage.bicep` | Storage account + Azure Files share for `/app/data`. |
 | `modules/openai.bicep` | Azure OpenAI account + model deployments. Grants `Cognitive Services OpenAI User` to the MI. |
-| `modules/containerapps-env.bicep` | ACA managed environment + Log Analytics + App Insights + env-scoped Azure Files storage definition. |
-| `modules/containerapp.bicep` | Reusable Container App. Used for backend (internal) and frontend (external). |
+| `modules/openai-grant.bicep` | Cross-RG OpenAI role assignment for the test MI on the shared AOAI. |
+| `modules/postgres.bicep` | Flexible Server (VNet-injected) + private DNS. |
+| `modules/monitoring.bicep` | Log Analytics + Application Insights + alerts. |
+| `modules/search.bicep` | Optional Azure AI Search (`deploySearch=true`). |
+| `modules/containerapps-env.bicep` | ACA managed environment + env-scoped Azure Files definition. |
+| `modules/containerapp.bicep` | Reusable Container App (backend + frontend). Binds custom domains from `frontendCustomDomains`. |
+| `modules/frontdoor.bicep` | Optional Azure Front Door (`deployFrontDoor=true`). |
 
-## First-time deploy
+## Deploy
+
+Day-to-day deploys run through `.github/workflows/infra.yml` and
+`.github/workflows/deploy.yml`. For manual deploys:
 
 ```bash
-# 1) provision platform (placeholder images — won't serve traffic yet)
-az deployment sub create \
-  --location eastus2 \
+# prod
+az deployment sub create --location eastus2 \
   --template-file infra/main.bicep \
   --parameters infra/main.bicepparam
 
-# 2) capture outputs
-RG=$(az deployment sub show -n main --query properties.outputs.resourceGroupName.value -o tsv)
-ACR=$(az deployment sub show -n main --query properties.outputs.acrLoginServer.value -o tsv | cut -d. -f1)
-
-# 3) build & push the real images using ACR Tasks (no local Docker needed)
-az acr build -r "$ACR" -t aa-backend:v1  -f backend/Dockerfile.prod  ./backend
-az acr build -r "$ACR" -t aa-frontend:v1 -f frontend/Dockerfile.prod ./frontend
-
-# 4) redeploy pointing at the real images
-az deployment sub create \
-  --location eastus2 \
+# test (env vars must be exported for readEnvironmentVariable() params)
+az deployment sub create --location centralus \
   --template-file infra/main.bicep \
-  --parameters infra/main.bicepparam \
-  --parameters backendImage="$ACR.azurecr.io/aa-backend:v1" frontendImage="$ACR.azurecr.io/aa-frontend:v1"
-
-# 5) open the SPA
-az deployment sub show -n main --query properties.outputs.frontendUrl.value -o tsv
+  --parameters infra/main.test.bicepparam
 ```
 
 ## Auth model
 
-The user-assigned managed identity (`identity.bicep`) is the only principal that
-talks to OpenAI, KV, and ACR. The backend's existing
-`services/openai_service.py:24-32` `DefaultAzureCredential` path picks up the
-workload identity automatically — **no code change needed** between local
-`az login` and ACA managed identity modes. `AZURE_CLIENT_ID` is exported into
-the backend so the credential picks the right identity when more than one is
-present.
+A single user-assigned managed identity per env (`identity.bicep`) is the only
+principal that talks to OpenAI, KV, Postgres, and ACR. The backend's
+`DefaultAzureCredential` path picks up the workload identity automatically — no
+code change between local `az login` and ACA managed identity modes.
+`AZURE_CLIENT_ID` is exported into the backend so the credential picks the right
+identity when more than one is present.
 
-## What's intentionally NOT here yet
+For the test env, the cross-RG grants in `openai-grant.bicep` / `acr-grant.bicep`
+give the test MI the same roles on the shared dev AOAI/ACR.
 
-These are roadmap, not gaps:
+## Custom domains
 
-- VNet + private endpoints (everything is public-ingress today)
-- Postgres + pgvector (SQLite on file share is the v1 store)
-- Front Door / WAF
-- Per-service identities (single MI keeps role-assignment sprawl low)
-- 8-service decomposition (monolith now; carve in follow-up — see `plans/`)
+Each env's frontend has a managed TLS cert bound to a custom hostname:
 
-## Cost (rough monthly, dev env, `eastus2`)
-
-| Resource | Cost |
+| Env | Hostname |
 |---|---|
-| ACA env + 2 apps (min 1 replica each) | ~$45 |
-| Log Analytics + App Insights (low ingest) | ~$10 |
-| Azure OpenAI (pay-per-token; 50K capacity but only billed on use) | $0 idle |
-| ACR Premium | ~$50 |
-| Storage (10 GB file share) | ~$1 |
-| Key Vault | ~$1 |
-| **Total idle** | **~$107/mo** |
+| prod | `blueprint.techtools.host` |
+| test | `dev.blueprint.techtools.host` |
 
-ACR Premium is the largest fixed cost — drop to `Basic` (~$5/mo) if you don't
-need private link, geo-replication, or content trust. Edit
-`modules/containerregistry.bicep`.
+Bindings are declared in `frontendCustomDomains` in each env's bicepparam, so
+re-applying Bicep preserves them. Cert provisioning itself is a one-time manual
+step (`az containerapp env certificate create --validation-method CNAME` then
+`az containerapp hostname bind`).
+
+## Roadmap
+
+- Private endpoints on every PaaS service (KV + AOAI already private; ACR + Storage pending)
+- WAF policy attached to Front Door
+- Per-service identities (single MI keeps role-assignment sprawl low today)
+- AUTH_ENABLED enforced via Bicep instead of env var
