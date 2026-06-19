@@ -327,7 +327,7 @@ module frontendApp 'modules/containerapp.bicep' = {
     maxReplicas: 3
     envVars: [
       { name: 'BACKEND_HOST', value: backendApp.outputs.internalFqdn }
-      { name: 'BACKEND_PORT', value: '80' }
+      { name: 'BACKEND_PORT', value: '443' }
     ]
     customDomains: frontendCustomDomains
   }
