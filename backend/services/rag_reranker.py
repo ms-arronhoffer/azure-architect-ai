@@ -32,7 +32,7 @@ _CACHE_MAX = 512
 _RERANK_PROMPT = (
     "You are a retrieval reranker for an Azure Solutions Architect. "
     "Given a USER QUERY and a numbered list of CANDIDATE PASSAGES, return JSON: "
-    '{"picks":[{"i":<index>,"score":<0..1>,"why":"<<=12 words>"}]} '
+    '{{"picks":[{{"i":<index>,"score":<0..1>,"why":"<<=12 words>"}}]}} '
     "with the top {top_k} candidates that BEST answer the query. "
     "Score reflects how directly the passage answers, not topical adjacency. "
     "Penalise outdated material, marketing fluff, and off-topic SKU lists. "
