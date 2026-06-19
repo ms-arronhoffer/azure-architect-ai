@@ -69,6 +69,9 @@ param entraTenantId string
 @description('API app registration audience (client ID or api://<id> URI). Tokens issued for this audience authorise /api/* calls.')
 param entraAudience string
 
+@description('Custom domain bindings for the frontend container app. Each entry: { name, certificateId, bindingType }. Leave empty for envs that only use the default ACA FQDN.')
+param frontendCustomDomains array = []
+
 @description('Fernet key for at-rest secret encryption (Base64, 32 bytes). Generate once: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"')
 @secure()
 param secretEncryptionKey string
@@ -326,6 +329,7 @@ module frontendApp 'modules/containerapp.bicep' = {
       { name: 'BACKEND_HOST', value: backendApp.outputs.internalFqdn }
       { name: 'BACKEND_PORT', value: '80' }
     ]
+    customDomains: frontendCustomDomains
   }
 }
 

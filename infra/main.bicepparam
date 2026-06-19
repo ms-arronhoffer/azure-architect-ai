@@ -53,3 +53,14 @@ param oncallEmail = readEnvironmentVariable('ONCALL_EMAIL', 'arronhoffer@microso
 //   ENTRA_AUDIENCE: 'api://<api-app-client-id>' (or the bare client id GUID)
 param entraTenantId = readEnvironmentVariable('ENTRA_TENANT_ID')
 param entraAudience = readEnvironmentVariable('ENTRA_AUDIENCE')
+
+// Custom domain for prod frontend. Cert is a managed cert provisioned out-of-band
+// in the dev ACA env (one-time `az containerapp env certificate create --hostname ...`).
+// Keeping this in Bicep prevents redeploys from wiping the hostname binding.
+param frontendCustomDomains = [
+  {
+    name: 'blueprint.techtools.host'
+    certificateId: '/subscriptions/79398e05-f318-4010-a508-d913c3763e39/resourceGroups/aarch-dev-rg/providers/Microsoft.App/managedEnvironments/aarch-dev-cae/managedCertificates/blueprint.techtools.host-aarch-de-260610114830'
+    bindingType: 'SniEnabled'
+  }
+]
