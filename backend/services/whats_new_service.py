@@ -149,6 +149,18 @@ def _parse_feed(xml_text: str, source: str, source_label: str) -> list[dict]:
     return []
 
 
+async def _fetch_one_feed(client: httpx.AsyncClient, feed: dict, log_event: str) -> list[dict]:
+    try:
+        resp = await client.get(feed["url"])
+        resp.raise_for_status()
+        items = _parse_feed(resp.text, feed["source"], feed["source_label"])
+        log.info(log_event, source=feed["source"], count=len(items))
+        return items
+    except Exception as exc:
+        log.warning(f"{log_event.split('.')[0]}.feed_error", source=feed["source"], error=str(exc))
+        return []
+
+
 async def fetch_announcements(force_refresh: bool = False) -> list[dict]:
     global _cache, _cache_time
     now = time.monotonic()
@@ -156,17 +168,15 @@ async def fetch_announcements(force_refresh: bool = False) -> list[dict]:
         return list(_cache.values())
 
     results: dict[str, dict] = {}
+    # Parallel fan-out — sequential was 7x 15s worst-case, causing cold-cache first
+    # loads to exceed nginx/ACA proxy timeouts.
     async with httpx.AsyncClient(timeout=15.0, follow_redirects=True, headers={"User-Agent": _USER_AGENT}) as client:
-        for feed in _FEEDS:
-            try:
-                resp = await client.get(feed["url"])
-                resp.raise_for_status()
-                items = _parse_feed(resp.text, feed["source"], feed["source_label"])
-                for item in items:
-                    results[item["id"]] = item
-                log.info("whats_new.feed_fetched", source=feed["source"], count=len(items))
-            except Exception as exc:
-                log.warning("whats_new.feed_error", source=feed["source"], error=str(exc))
+        feed_results = await asyncio.gather(
+            *[_fetch_one_feed(client, feed, "whats_new.feed_fetched") for feed in _FEEDS]
+        )
+    for items in feed_results:
+        for item in items:
+            results[item["id"]] = item
 
     _cache = results
     _cache_time = now
@@ -181,16 +191,12 @@ async def fetch_service_health(force_refresh: bool = False) -> list[dict]:
 
     results: dict[str, dict] = {}
     async with httpx.AsyncClient(timeout=15.0, follow_redirects=True, headers={"User-Agent": _USER_AGENT}) as client:
-        for feed in _HEALTH_FEEDS:
-            try:
-                resp = await client.get(feed["url"])
-                resp.raise_for_status()
-                items = _parse_feed(resp.text, feed["source"], feed["source_label"])
-                for item in items:
-                    results[item["id"]] = item
-                log.info("service_health.feed_fetched", source=feed["source"], count=len(items))
-            except Exception as exc:
-                log.warning("service_health.feed_error", source=feed["source"], error=str(exc))
+        feed_results = await asyncio.gather(
+            *[_fetch_one_feed(client, feed, "service_health.feed_fetched") for feed in _HEALTH_FEEDS]
+        )
+    for items in feed_results:
+        for item in items:
+            results[item["id"]] = item
 
     _health_cache = results
     _health_cache_time = now
