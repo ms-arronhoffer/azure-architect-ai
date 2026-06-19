@@ -3,9 +3,11 @@ Chat route — handles all 15 modes via a unified SSE streaming endpoint.
 Tool calls are dispatched and their structured results emitted as typed SSE events.
 """
 
+import asyncio
 import contextlib
 import json
 import os
+import traceback
 from collections.abc import AsyncGenerator
 
 from fastapi import APIRouter, Depends, Request
@@ -101,9 +103,26 @@ async def _stream_chat(mode: str, messages: list[dict], provider: str = "azure",
     try:
         async for chunk in _stream_chat_impl(mode, messages, provider, model, github_token, attachments, user_id):
             yield chunk
-    except Exception as exc:
-        log.exception("chat.stream_failed", mode=mode, error=str(exc))
-        yield f"data: {json.dumps({'type': 'error', 'message': f'stream failed: {type(exc).__name__}: {exc}'})}\n\n"
+    except BaseException as exc:
+        # Diagnostic: catch BaseException (not just Exception) to surface
+        # CancelledError / SystemExit / KeyboardInterrupt that would otherwise
+        # bypass the wrapper and leave the ASGI response half-open.
+        exc_type = type(exc).__name__
+        exc_mro = [c.__name__ for c in type(exc).__mro__]
+        tb = traceback.format_exc()
+        log.error(
+            "chat.stream_failed",
+            mode=mode,
+            error=str(exc),
+            exc_type=exc_type,
+            exc_mro=exc_mro,
+            traceback=tb,
+        )
+        with contextlib.suppress(Exception):
+            yield f"data: {json.dumps({'type': 'error', 'message': f'stream failed: {exc_type}: {exc}'})}\n\n"
+        if isinstance(exc, asyncio.CancelledError):
+            # Re-raise so the framework's cancel scope semantics still fire.
+            raise
 
 
 async def _stream_chat_impl(mode: str, messages: list[dict], provider: str = "azure", model: str = "", github_token: str = "", attachments: list[str] | None = None, user_id: str = "default") -> AsyncGenerator[str, None]:
