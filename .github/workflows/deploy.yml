@@ -2,7 +2,7 @@ name: deploy
 
 on:
   push:
-    branches: [main]
+    branches: [main, dev]
     paths:
       - "backend/**"
       - "frontend/**"
@@ -28,10 +28,36 @@ env:
   IMAGE_TAG: ${{ github.sha }}
 
 jobs:
+  setenv:
+    runs-on: ubuntu-latest
+    outputs:
+      target_env: ${{ steps.pick.outputs.target_env }}
+      gh_env: ${{ steps.pick.outputs.gh_env }}
+      gh_env_apply: ${{ steps.pick.outputs.gh_env_apply }}
+      rg_fallback: ${{ steps.pick.outputs.rg_fallback }}
+      param_file: ${{ steps.pick.outputs.param_file }}
+    steps:
+      - id: pick
+        run: |
+          if [ "${{ github.ref }}" = "refs/heads/dev" ]; then
+            echo "target_env=test" >> $GITHUB_OUTPUT
+            echo "gh_env=test" >> $GITHUB_OUTPUT
+            echo "gh_env_apply=test-apply" >> $GITHUB_OUTPUT
+            echo "rg_fallback=aarch-test-rg" >> $GITHUB_OUTPUT
+            echo "param_file=infra/main.test.bicepparam" >> $GITHUB_OUTPUT
+          else
+            echo "target_env=dev" >> $GITHUB_OUTPUT
+            echo "gh_env=dev" >> $GITHUB_OUTPUT
+            echo "gh_env_apply=dev-apply" >> $GITHUB_OUTPUT
+            echo "rg_fallback=aarch-dev-rg" >> $GITHUB_OUTPUT
+            echo "param_file=infra/main.bicepparam" >> $GITHUB_OUTPUT
+          fi
+
   infra:
+    needs: [setenv]
     if: github.event_name == 'workflow_dispatch' && inputs.deploy_infra == 'true'
     runs-on: ubuntu-latest
-    environment: dev
+    environment: ${{ needs.setenv.outputs.gh_env }}
     steps:
       - uses: actions/checkout@v6
       - uses: azure/login@v2
@@ -51,10 +77,10 @@ jobs:
             -n ${{ env.DEPLOYMENT_NAME }} \
             -l ${{ env.AZURE_LOCATION }} \
             -f infra/main.bicep \
-            -p infra/main.bicepparam
+            -p ${{ needs.setenv.outputs.param_file }}
 
   detect:
-    needs: [infra]
+    needs: [setenv, infra]
     if: always() && (needs.infra.result == 'success' || needs.infra.result == 'skipped')
     runs-on: ubuntu-latest
     outputs:
@@ -89,12 +115,19 @@ jobs:
           ACR_LOGIN=$(az deployment sub show -n ${{ env.DEPLOYMENT_NAME }} --query properties.outputs.acrLoginServer.value -o tsv 2>/dev/null | tr -d '\r\n' || true)
           RG=$(az deployment sub show -n ${{ env.DEPLOYMENT_NAME }} --query properties.outputs.resourceGroupName.value -o tsv 2>/dev/null | tr -d '\r\n' || true)
           if [ -z "$RG" ]; then
-            RG="aarch-dev-rg"
+            RG="${{ needs.setenv.outputs.rg_fallback }}"
             echo "::warning::deployment outputs missing; falling back to RG=$RG"
           fi
           if [ -z "$ACR_LOGIN" ]; then
+            # Look in this RG first; fall back to the shared dev ACR which
+            # the test env borrows when deployAcr=false in its bicepparam.
             ACR_LOGIN=$(az acr list -g "$RG" --query "[0].loginServer" -o tsv | tr -d '\r\n')
-            echo "::warning::deployment outputs missing; falling back to ACR=$ACR_LOGIN"
+            if [ -z "$ACR_LOGIN" ]; then
+              ACR_LOGIN=$(az acr list -g aarch-dev-rg --query "[0].loginServer" -o tsv | tr -d '\r\n')
+              echo "::warning::no ACR in $RG; falling back to shared ACR=$ACR_LOGIN"
+            else
+              echo "::warning::deployment outputs missing; falling back to ACR=$ACR_LOGIN"
+            fi
           fi
           FRONTEND_APP=$(az containerapp list -g $RG --query "[?contains(name, 'frontend')].name | [0]" -o tsv | tr -d '\r\n')
           BACKEND_APP=$(az containerapp list -g $RG --query "[?contains(name, 'backend')].name | [0]" -o tsv | tr -d '\r\n')
@@ -112,13 +145,13 @@ jobs:
           echo "frontendUrl=$FRONTEND_URL" >> $GITHUB_OUTPUT
 
   backend:
-    needs: [detect, infra]
+    needs: [setenv, detect, infra]
     if: |
       always() &&
       (needs.infra.result == 'success' || needs.infra.result == 'skipped') &&
       (needs.detect.outputs.backend == 'true' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
-    environment: dev
+    environment: ${{ needs.setenv.outputs.gh_env }}
     steps:
       - uses: actions/checkout@v6
       - uses: azure/login@v2
@@ -141,13 +174,13 @@ jobs:
             --revision-suffix sha-${IMAGE_TAG:0:6}
 
   frontend:
-    needs: [detect, infra]
+    needs: [setenv, detect, infra]
     if: |
       always() &&
       (needs.infra.result == 'success' || needs.infra.result == 'skipped') &&
       (needs.detect.outputs.frontend == 'true' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
-    environment: dev
+    environment: ${{ needs.setenv.outputs.gh_env }}
     steps:
       - uses: actions/checkout@v6
       - uses: azure/login@v2

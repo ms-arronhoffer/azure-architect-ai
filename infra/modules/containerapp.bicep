@@ -25,6 +25,9 @@ param volumes array = []
 @description('Container App secrets. Either { name, value } or KV-backed { name, keyVaultUrl, identity }. Referenced via secretRef in envVars.')
 param secrets array = []
 
+@description('Custom hostname bindings, e.g. [{ name: "example.com", certificateId: "<env-managed-cert-id>", bindingType: "SniEnabled" }].')
+param customDomains array = []
+
 resource app 'Microsoft.App/containerApps@2025-01-01' = {
   name: name
   location: location
@@ -44,6 +47,7 @@ resource app 'Microsoft.App/containerApps@2025-01-01' = {
         targetPort: targetPort
         transport: 'auto'
         allowInsecure: false
+        customDomains: customDomains
       }
       registries: [
         {

@@ -6,7 +6,7 @@ on:
       - "infra/**"
       - ".github/workflows/infra.yml"
   push:
-    branches: [main]
+    branches: [main, dev]
     paths:
       - "infra/**"
   workflow_dispatch:
@@ -21,10 +21,37 @@ env:
   DEPLOYMENT_NAME: main
 
 jobs:
+  setenv:
+    runs-on: ubuntu-latest
+    outputs:
+      gh_env: ${{ steps.pick.outputs.gh_env }}
+      gh_env_apply: ${{ steps.pick.outputs.gh_env_apply }}
+      param_file: ${{ steps.pick.outputs.param_file }}
+    steps:
+      - id: pick
+        run: |
+          # PR what-if uses the base branch's env (so dev→main PR runs against prod params).
+          # Push uses the branch's env.
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            REF="refs/heads/${{ github.base_ref }}"
+          else
+            REF="${{ github.ref }}"
+          fi
+          if [ "$REF" = "refs/heads/dev" ]; then
+            echo "gh_env=test" >> $GITHUB_OUTPUT
+            echo "gh_env_apply=test-apply" >> $GITHUB_OUTPUT
+            echo "param_file=infra/main.test.bicepparam" >> $GITHUB_OUTPUT
+          else
+            echo "gh_env=dev" >> $GITHUB_OUTPUT
+            echo "gh_env_apply=dev-apply" >> $GITHUB_OUTPUT
+            echo "param_file=infra/main.bicepparam" >> $GITHUB_OUTPUT
+          fi
+
   whatif:
+    needs: [setenv]
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
-    environment: dev
+    environment: ${{ needs.setenv.outputs.gh_env }}
     steps:
       - uses: actions/checkout@v6
       - uses: azure/login@v2
@@ -44,13 +71,14 @@ jobs:
             --name ${{ env.DEPLOYMENT_NAME }} \
             --location ${{ env.AZURE_LOCATION }} \
             --template-file infra/main.bicep \
-            --parameters infra/main.bicepparam \
+            --parameters ${{ needs.setenv.outputs.param_file }} \
             --result-format FullResourcePayloads
 
   apply:
+    needs: [setenv]
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
-    environment: dev-apply  # gate with required reviewers in repo settings
+    environment: ${{ needs.setenv.outputs.gh_env_apply }}  # gate with required reviewers in repo settings
     steps:
       - uses: actions/checkout@v6
       - uses: azure/login@v2
@@ -70,4 +98,4 @@ jobs:
             --name ${{ env.DEPLOYMENT_NAME }} \
             --location ${{ env.AZURE_LOCATION }} \
             --template-file infra/main.bicep \
-            --parameters infra/main.bicepparam
+            --parameters ${{ needs.setenv.outputs.param_file }}

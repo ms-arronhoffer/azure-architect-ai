@@ -24,13 +24,17 @@ server {
     # API proxy. When VITE_API_BASE_URL is set at build time, the SPA bypasses
     # this and hits the API directly — but leaving the proxy in place keeps the
     # same-origin deploy pattern working too.
+    # Must use https — ACA's internal ingress with allowInsecure=false 301s
+    # HTTP requests to https://<internal-fqdn>, which the browser can't follow.
     location /api/ {
-        proxy_pass http://${BACKEND_HOST}:${BACKEND_PORT};
+        proxy_pass https://${BACKEND_HOST}:${BACKEND_PORT};
         proxy_http_version 1.1;
         proxy_set_header Host ${BACKEND_HOST};
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_ssl_server_name on;
+        proxy_ssl_name ${BACKEND_HOST};
 
         # SSE / streaming
         proxy_buffering off;

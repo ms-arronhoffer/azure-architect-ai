@@ -2,7 +2,7 @@
 line-length = 110
 target-version = "py311"
 src = ["backend"]
-extend-exclude = [".venv", "venv", "__pycache__", "data"]
+extend-exclude = [".venv", "venv", "__pycache__", "data", "scratch"]
 
 [tool.ruff.lint]
 select = [

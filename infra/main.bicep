@@ -11,8 +11,8 @@ targetScope = 'subscription'
 @maxLength(8)
 param prefix string
 
-@description('Environment name (dev, stg, prod). Used in naming and tags.')
-@allowed([ 'dev', 'stg', 'prod' ])
+@description('Environment name (dev, test, stg, prod). Used in naming and tags.')
+@allowed([ 'dev', 'test', 'stg', 'prod' ])
 param env string = 'dev'
 
 @description('Azure region for all resources.')
@@ -69,9 +69,36 @@ param entraTenantId string
 @description('API app registration audience (client ID or api://<id> URI). Tokens issued for this audience authorise /api/* calls.')
 param entraAudience string
 
+@description('Custom domain bindings for the frontend container app. Each entry: { name, certificateId, bindingType }. Leave empty for envs that only use the default ACA FQDN.')
+param frontendCustomDomains array = []
+
 @description('Fernet key for at-rest secret encryption (Base64, 32 bytes). Generate once: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"')
 @secure()
 param secretEncryptionKey string
+
+@description('When false, skip creating an AOAI account and instead grant the workload MI access to an existing one referenced by existingOpenAi*.')
+param deployOpenAi bool = true
+
+@description('Resource group of an existing AOAI account to share. Required when deployOpenAi=false.')
+param existingOpenAiResourceGroup string = ''
+
+@description('Name of an existing AOAI account to share. Required when deployOpenAi=false.')
+param existingOpenAiName string = ''
+
+@description('Endpoint of an existing AOAI account (e.g. https://<name>.openai.azure.com/). Required when deployOpenAi=false.')
+param existingOpenAiEndpoint string = ''
+
+@description('When false, skip creating an ACR and instead grant the workload MI AcrPull on an existing one referenced by existingAcr*.')
+param deployAcr bool = true
+
+@description('Resource group of an existing ACR to share. Required when deployAcr=false.')
+param existingAcrResourceGroup string = ''
+
+@description('Name of an existing ACR to share. Required when deployAcr=false.')
+param existingAcrName string = ''
+
+@description('Login server (e.g. <name>.azurecr.io) of an existing ACR. Required when deployAcr=false.')
+param existingAcrLoginServer string = ''
 
 var rgName = '${prefix}-${env}-rg'
 
@@ -104,7 +131,7 @@ module network 'modules/network.bicep' = {
   }
 }
 
-module acr 'modules/containerregistry.bicep' = {
+module acr 'modules/containerregistry.bicep' = if (deployAcr) {
   name: 'acr'
   scope: rg
   params: {
@@ -112,6 +139,15 @@ module acr 'modules/containerregistry.bicep' = {
     env: env
     location: location
     tags: tags
+    miPrincipalId: identity.outputs.principalId
+  }
+}
+
+module acrGrant 'modules/acr-grant.bicep' = if (!deployAcr) {
+  name: 'acr-grant'
+  scope: resourceGroup(existingAcrResourceGroup)
+  params: {
+    acrName: existingAcrName
     miPrincipalId: identity.outputs.principalId
   }
 }
@@ -130,7 +166,7 @@ module kv 'modules/keyvault.bicep' = {
   }
 }
 
-module openai 'modules/openai.bicep' = {
+module openai 'modules/openai.bicep' = if (deployOpenAi) {
   name: 'openai'
   scope: rg
   params: {
@@ -144,6 +180,20 @@ module openai 'modules/openai.bicep' = {
     peSubnetId: network.outputs.peSubnetId
   }
 }
+
+module openaiGrant 'modules/openai-grant.bicep' = if (!deployOpenAi) {
+  name: 'openai-grant'
+  scope: resourceGroup(existingOpenAiResourceGroup)
+  params: {
+    aoaiName: existingOpenAiName
+    miPrincipalId: identity.outputs.principalId
+  }
+}
+
+#disable-next-line BCP318
+var aoaiEndpoint = deployOpenAi ? openai.outputs.endpoint : existingOpenAiEndpoint
+#disable-next-line BCP318
+var acrLoginServer = deployAcr ? acr.outputs.loginServer : existingAcrLoginServer
 
 module postgres 'modules/postgres.bicep' = {
   name: 'postgres'
@@ -222,13 +272,13 @@ module backendApp 'modules/containerapp.bicep' = {
     external: false
     miId: identity.outputs.id
     miClientId: identity.outputs.clientId
-    acrLoginServer: acr.outputs.loginServer
+    acrLoginServer: acrLoginServer
     cpu: '1.0'
     memory: '2.0Gi'
     minReplicas: 1
     maxReplicas: 3
     envVars: [
-      { name: 'AZURE_OPENAI_ENDPOINT', value: openai.outputs.endpoint }
+      { name: 'AZURE_OPENAI_ENDPOINT', value: aoaiEndpoint }
       { name: 'AZURE_CLIENT_ID', value: identity.outputs.clientId }
       { name: 'AZURE_OPENAI_DEPLOYMENT_ARCH', value: 'gpt-5.4' }
       { name: 'AZURE_OPENAI_DEPLOYMENT_CHAT', value: 'gpt-5.4' }
@@ -270,25 +320,26 @@ module frontendApp 'modules/containerapp.bicep' = {
     external: true
     miId: identity.outputs.id
     miClientId: identity.outputs.clientId
-    acrLoginServer: acr.outputs.loginServer
+    acrLoginServer: acrLoginServer
     cpu: '0.5'
     memory: '1.0Gi'
     minReplicas: 1
     maxReplicas: 3
     envVars: [
       { name: 'BACKEND_HOST', value: backendApp.outputs.internalFqdn }
-      { name: 'BACKEND_PORT', value: '80' }
+      { name: 'BACKEND_PORT', value: '443' }
     ]
+    customDomains: frontendCustomDomains
   }
 }
 
 output resourceGroupName string = rg.name
 output frontendUrl string = frontendApp.outputs.fqdn
 output backendInternalFqdn string = backendApp.outputs.internalFqdn
-output acrLoginServer string = acr.outputs.loginServer
+output acrLoginServer string = acrLoginServer
 output managedIdentityClientId string = identity.outputs.clientId
 output keyVaultName string = kv.outputs.name
-output openAiEndpoint string = openai.outputs.endpoint
+output openAiEndpoint string = aoaiEndpoint
 output vnetId string = network.outputs.vnetId
 output postgresFqdn string = postgres.outputs.serverFqdn
 output appInsightsConnectionString string = monitoring.outputs.appInsightsConnectionString
