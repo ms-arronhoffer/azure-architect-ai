@@ -41,3 +41,13 @@ param entraAudience = readEnvironmentVariable('ENTRA_AUDIENCE')
 
 // Disambiguate from dev VNet (10.50.0.0/20).
 param vnetAddressPrefix = '10.60.0.0/20'
+
+// Custom domain for test frontend. Managed cert provisioned out-of-band in the
+// test ACA env (one-time `az containerapp env certificate create --hostname ...`).
+param frontendCustomDomains = [
+  {
+    name: 'dev.blueprint.techtools.host'
+    certificateId: '/subscriptions/79398e05-f318-4010-a508-d913c3763e39/resourceGroups/aarch-test-rg/providers/Microsoft.App/managedEnvironments/aarch-test-cae/managedCertificates/dev.blueprint.techtools.host-aarch-te-260619193555'
+    bindingType: 'SniEnabled'
+  }
+]
