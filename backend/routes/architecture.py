@@ -401,6 +401,7 @@ async def _stream_architecture(req: ArchRequest, provider: str = "azure", model:
                         # lets us emit cost_update events as each item resolves, preserving
                         # the live running-total UX while collapsing wall time to ~max(item).
                         import asyncio
+
                         from services.pricing_service import estimate_line_item
 
                         async def _price_one(item: dict) -> dict | None:
