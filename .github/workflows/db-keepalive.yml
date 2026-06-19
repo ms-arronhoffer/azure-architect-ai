@@ -14,6 +14,10 @@ jobs:
   start-db:
     runs-on: ubuntu-latest
     environment: dev
+    strategy:
+      fail-fast: false
+      matrix:
+        rg: [aarch-dev-rg, aarch-test-rg]
     steps:
       - uses: azure/login@v2
         with:
@@ -23,16 +27,27 @@ jobs:
 
       - name: Start PostgreSQL if stopped
         run: |
+          # Discover the PG server name in this RG (only one per env). Skip the
+          # job cleanly when the RG doesn't exist yet (e.g. test env not deployed).
+          if ! az group show -n ${{ matrix.rg }} >/dev/null 2>&1; then
+            echo "Resource group ${{ matrix.rg }} does not exist — skipping."
+            exit 0
+          fi
+          PG=$(az postgres flexible-server list -g ${{ matrix.rg }} --query "[0].name" -o tsv | tr -d '\r\n')
+          if [ -z "$PG" ]; then
+            echo "No PostgreSQL flexible server found in ${{ matrix.rg }} — skipping."
+            exit 0
+          fi
           STATE=$(az postgres flexible-server show \
-            --name aarch-dev-pg-7s6kzxncbhezw \
-            --resource-group aarch-dev-rg \
+            --name "$PG" \
+            --resource-group ${{ matrix.rg }} \
             --query state -o tsv)
-          echo "Current state: $STATE"
+          echo "${{ matrix.rg }}/$PG state: $STATE"
           if [ "$STATE" = "Stopped" ]; then
             echo "Server is stopped — starting..."
             az postgres flexible-server start \
-              --name aarch-dev-pg-7s6kzxncbhezw \
-              --resource-group aarch-dev-rg
+              --name "$PG" \
+              --resource-group ${{ matrix.rg }}
             echo "Start command issued."
           else
             echo "Server is already $STATE — nothing to do."
