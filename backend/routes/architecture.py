@@ -201,10 +201,16 @@ class ArchRequest(BaseModel):
     mode: str = "architecture"
     existing_description: str = ""
     attachments: list[str] = []
-    include_components: list[str] = []  # e.g. ["diagram","runbook","bicep","cost","adr"]; empty = all
+    include_components: list[str] = []  # empty = DEFAULT_INCLUDE; user picks via UI
     region: str = ""
     llm_config: ModelConfig | None = None
     prior_messages: list[dict] = []  # iteration history: [{role: "user"|"assistant", content: "..."}]
+
+
+# Leaner default — drops bicep + adr from auto-fire (still available via generate-on-demand tabs).
+# Was {"diagram","runbook","bicep","cost","adr"} — slow because every full-pipeline run paid
+# for IaC + ADR LLM turns even when the user just wanted a design + ballpark cost.
+DEFAULT_INCLUDE = frozenset({"diagram", "runbook", "cost"})
 
 
 async def _stream_architecture(req: ArchRequest, provider: str = "azure", model: str = "", github_token: str = "", user_id: str = "default") -> AsyncGenerator[str, None]:
@@ -390,16 +396,16 @@ async def _stream_architecture(req: ArchRequest, provider: str = "azure", model:
                     yield f"data: {json.dumps({'type': 'status', 'message': 'Fetching pricing data...'})}\n\n"
                     line_items = args.get("line_items", [])
                     try:
-                        # Stream per-line cost_update events with running totals so the
-                        # UI can show a live counter as items resolve, then emit the
-                        # final cost_estimate. Keeps a single source-of-truth for the
-                        # numbers (estimate_architecture aggregates the same per-item calls).
-                        running_total = 0.0
-                        per_item_results: list[dict] = []
+                        # Fan out per-item pricing in parallel — pricing API calls were the
+                        # serial hotspot (one HTTP round-trip per SKU). asyncio.as_completed
+                        # lets us emit cost_update events as each item resolves, preserving
+                        # the live running-total UX while collapsing wall time to ~max(item).
+                        import asyncio
                         from services.pricing_service import estimate_line_item
-                        for item in line_items:
+
+                        async def _price_one(item: dict) -> dict | None:
                             try:
-                                est = await estimate_line_item(
+                                return await estimate_line_item(
                                     service=item.get("service", ""),
                                     sku=item.get("sku", ""),
                                     quantity=item.get("quantity", 1),
@@ -407,10 +413,16 @@ async def _stream_architecture(req: ArchRequest, provider: str = "azure", model:
                                     region=item.get("region", req.region or "eastus"),
                                 )
                             except Exception:
+                                return None
+
+                        tasks = [asyncio.create_task(_price_one(item)) for item in line_items]
+                        running_total = 0.0
+                        for fut in asyncio.as_completed(tasks):
+                            est = await fut
+                            if not est:
                                 continue
                             monthly = est.get("monthly_estimate") or 0
                             running_total += monthly
-                            per_item_results.append(est)
                             yield f"data: {json.dumps({'type': 'cost_update', 'running_total_usd': round(running_total, 2), 'delta': {'service': est.get('service'), 'sku': est.get('sku'), 'monthly': monthly, 'quantity': est.get('quantity')}, 'region': est.get('region')})}\n\n"
                         # Final bundled estimate — reuse the aggregated path so totals,
                         # validation, and disclaimer stay identical to the non-streaming case.
@@ -551,7 +563,7 @@ async def _stream_architecture(req: ArchRequest, provider: str = "azure", model:
             break
 
     # Post-LLM: generate diagram and runbook if we have arch data
-    include = set(req.include_components) if req.include_components else {"diagram", "runbook", "bicep", "cost", "adr"}
+    include = set(req.include_components) if req.include_components else set(DEFAULT_INCLUDE)
     if arch_data.get("components"):
         if "diagram" in include:
             try:
@@ -738,7 +750,7 @@ def _build_prompt(req: ArchRequest, mode: str) -> str:
             + base
             + "Call design_dr_strategy with your recommendation. Include a full failover runbook."
         )
-    include = set(req.include_components) if req.include_components else {"diagram", "runbook", "bicep", "cost", "adr", "gantt", "waf"}
+    include = set(req.include_components) if req.include_components else set(DEFAULT_INCLUDE)
     tool_instructions = ["Call search_azure_docs to find relevant reference architectures."]
     if "diagram" in include or "runbook" in include:
         tool_instructions.append(

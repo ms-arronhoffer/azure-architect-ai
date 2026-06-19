@@ -18,6 +18,7 @@ import {
 } from "@fluentui/react-components";
 import { DismissRegular, AddRegular, DeleteRegular, SaveRegular } from "@fluentui/react-icons";
 import type { Engagement, EngagementWrite } from "../hooks/useEngagements";
+import { EngagementReferencesSection } from "./EngagementReferencesSection";
 
 const useStyles = makeStyles({
   body: { padding: "16px 20px", display: "flex", flexDirection: "column", gap: "16px" },
@@ -303,6 +304,12 @@ export default function EngagementDrawer({
                 onChange={(_, d) => setForm({ ...form, notes: d.value })}
               />
             </Field>
+            {editingId && (
+              <>
+                <Divider />
+                <EngagementReferencesSection engagementId={editingId} />
+              </>
+            )}
             <Divider />
             <div className={styles.actions}>
               {editingId && (

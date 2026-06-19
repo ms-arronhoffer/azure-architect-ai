@@ -293,7 +293,7 @@ interface ArchitecturePanelProps {
   initialMessages?: ChatMessage[];
 }
 
-export default function ArchitecturePanel({ mode = "architecture", onRefine, onModeChange, workloadContext, onSave, initialSession, initialMessages }: ArchitecturePanelProps) {
+export default function ArchitecturePanel({ mode = "architecture", onModeChange, workloadContext, onSave, initialSession, initialMessages }: ArchitecturePanelProps) {
   const styles = useStyles();
   const { stream, isStreaming, cancel } = useSSE();
   const { stream: deliverableStream, isStreaming: deliverableStreaming, cancel: cancelDeliverable } = useSSE();
@@ -349,6 +349,18 @@ export default function ArchitecturePanel({ mode = "architecture", onRefine, onM
   const [isDragging, setIsDragging] = useState(false);
   const [iterationMessages, setIterationMessages] = useState<ChatMessage[]>([]);
   const [followupDraft, setFollowupDraft] = useState("");
+  // Leaner default than the legacy full pipeline {diagram, runbook, bicep, cost, adr}.
+  // User can opt in to bicep/adr via the picker; on-demand tabs still generate them.
+  const [selectedArtifacts, setSelectedArtifacts] = useState<Set<string>>(
+    () => new Set(["diagram", "runbook", "cost"]),
+  );
+  function toggleArtifact(key: string) {
+    setSelectedArtifacts((prev) => {
+      const next = new Set(prev);
+      next.has(key) ? next.delete(key) : next.add(key);
+      return next;
+    });
+  }
 
   const sessionId = useRef(crypto.randomUUID()).current;
 
@@ -641,7 +653,7 @@ window.mxBasePath = 'https://viewer.diagrams.net/';
     let localWafResults: Record<string, WafPillarResult> = {};
     let localProjectTimeline: ProjectTimeline | null = null;
 
-    await stream("/api/architecture", buildPayload([]), (event: SseEvent) => {
+    await stream("/api/architecture", buildPayload(Array.from(selectedArtifacts)), (event: SseEvent) => {
       if (event.type === "token") localExplanation += event.content;
       if (event.type === "diagram") localDiagramXml = event.xml;
       if (event.type === "bicep") localBicepResult = { bicep_code: event.code, param_file: event.param_file, deploy_commands: event.deploy_commands ?? [], notes: event.notes ?? [] };
@@ -709,7 +721,7 @@ window.mxBasePath = 'https://viewer.diagrams.net/';
     setActiveTab("explanation");
 
     await stream("/api/architecture", {
-      ...buildPayload([]),
+      ...buildPayload(Array.from(selectedArtifacts)),
       requirements: text,
       prior_messages: priorForApi,
     }, (event: SseEvent) => {
@@ -771,9 +783,18 @@ window.mxBasePath = 'https://viewer.diagrams.net/';
   }
 
   function handleRefine() {
-    if (!onRefine || !explanation) return;
-    const context = explanation + (runbook ? `\n\n**Runbook:**\n${runbook}` : "");
-    onRefine([{ id: crypto.randomUUID(), role: "assistant", content: `Here is the Azure architecture I've designed:\n\n${context}` }]);
+    if (!explanation) return;
+    if (iterationMessages.length === 0) {
+      setIterationMessages([
+        { id: crypto.randomUUID(), role: "user", content: requirements },
+        { id: crypto.randomUUID(), role: "assistant", content: "Initial design generated. Tell me what to change." },
+      ]);
+    }
+    requestAnimationFrame(() => {
+      const ta = document.querySelector<HTMLTextAreaElement>(`.${styles.iterTextarea}`);
+      ta?.focus();
+      ta?.scrollIntoView({ behavior: "smooth", block: "center" });
+    });
   }
 
   async function handleExport() {
@@ -993,6 +1014,28 @@ window.mxBasePath = 'https://viewer.diagrams.net/';
               </div>
             </div>
 
+            {/* Artifact picker — leaner default; user can opt in to heavier artifacts */}
+            <div>
+              <span className={styles.sectionLabel}>Artifacts to generate</span>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: tokens.spacingHorizontalS, marginTop: "4px" }}>
+                {[
+                  { key: "diagram", label: "Diagram" },
+                  { key: "runbook", label: "Runbook" },
+                  { key: "cost", label: "Cost" },
+                  { key: "bicep", label: "Bicep IaC" },
+                  { key: "adr", label: "ADR" },
+                ].map((a) => (
+                  <div
+                    key={a.key}
+                    className={`${styles.patternChip} ${selectedArtifacts.has(a.key) ? styles.patternChipActive : ""}`}
+                    onClick={() => toggleArtifact(a.key)}
+                  >
+                    {a.label}
+                  </div>
+                ))}
+              </div>
+            </div>
+
             {isStreaming ? (
               <Button appearance="primary" icon={<Spinner size="tiny" />} onClick={cancel}>Stop</Button>
             ) : (
@@ -1012,8 +1055,8 @@ window.mxBasePath = 'https://viewer.diagrams.net/';
               </div>
             )}
 
-            {hasResults && onRefine && (
-              <Button appearance="outline" icon={<ChatRegular />} onClick={handleRefine}>Refine in Chat</Button>
+            {hasResults && (
+              <Button appearance="outline" icon={<ChatRegular />} onClick={handleRefine}>Iterate</Button>
             )}
 
             {hasResults && !isAnyStreaming && (

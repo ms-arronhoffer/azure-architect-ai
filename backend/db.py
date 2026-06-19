@@ -9,7 +9,7 @@ import datetime as dt
 from collections.abc import AsyncIterator
 from contextvars import ContextVar
 
-from sqlalchemy import JSON, BigInteger, String, Text, event, select, text
+from sqlalchemy import JSON, BigInteger, LargeBinary, String, Text, event, select, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, with_loader_criteria
 
@@ -75,6 +75,34 @@ class Engagement(Base):
     notes: Mapped[str] = mapped_column(Text, nullable=False, default="")
     reservation_commitments: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
     status: Mapped[str] = mapped_column(String(16), nullable=False, default="active", index=True)
+    user_id: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    tenant_id: Mapped[str] = mapped_column(
+        String(64), nullable=False, default=current_tenant_id, index=True
+    )
+    created_at: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    updated_at: Mapped[int] = mapped_column(BigInteger, nullable=False, index=True)
+
+
+class EngagementReference(Base):
+    """Per-engagement bookmark: URL link, uploaded file, or both.
+
+    File bytes stored inline as LargeBinary with a 5 MB cap enforced at the route
+    layer. Postgres handles this fine for the handful of small reference docs
+    (CSA workbooks, process PDFs) this is sized for; revisit blob storage if we
+    grow beyond ~50 refs per engagement.
+    """
+
+    __tablename__ = "engagement_references"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    engagement_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    title: Mapped[str] = mapped_column(String(256), nullable=False)
+    url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    notes: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    file_name: Mapped[str | None] = mapped_column(String(256), nullable=True)
+    file_mime_type: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    file_size_bytes: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    file_data: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
     user_id: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
     tenant_id: Mapped[str] = mapped_column(
         String(64), nullable=False, default=current_tenant_id, index=True
@@ -213,7 +241,7 @@ _Session = async_sessionmaker(_engine, expire_on_commit=False)
 
 # Models that are partitioned per tenant. Global catalogs (RagDocument, Demo,
 # RefArch) are intentionally excluded — they are shared knowledge bases.
-_TENANT_SCOPED = (Conversation, Engagement, UserSecret, TokenUsage, AuditEvent)
+_TENANT_SCOPED = (Conversation, Engagement, EngagementReference, UserSecret, TokenUsage, AuditEvent)
 
 
 @event.listens_for(Session, "do_orm_execute")
@@ -304,6 +332,7 @@ __all__ = [
     "Conversation",
     "Demo",
     "Engagement",
+    "EngagementReference",
     "RagDocument",
     "RefArch",
     "TokenUsage",
