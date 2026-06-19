@@ -24,7 +24,6 @@ permissions:
 
 env:
   AZURE_LOCATION: centralus
-  DEPLOYMENT_NAME: main
   IMAGE_TAG: ${{ github.sha }}
 
 jobs:
@@ -36,6 +35,7 @@ jobs:
       gh_env_apply: ${{ steps.pick.outputs.gh_env_apply }}
       rg_fallback: ${{ steps.pick.outputs.rg_fallback }}
       param_file: ${{ steps.pick.outputs.param_file }}
+      deployment_name: ${{ steps.pick.outputs.deployment_name }}
     steps:
       - id: pick
         run: |
@@ -45,12 +45,14 @@ jobs:
             echo "gh_env_apply=test-apply" >> $GITHUB_OUTPUT
             echo "rg_fallback=aarch-test-rg" >> $GITHUB_OUTPUT
             echo "param_file=infra/main.test.bicepparam" >> $GITHUB_OUTPUT
+            echo "deployment_name=aarch-test" >> $GITHUB_OUTPUT
           else
             echo "target_env=dev" >> $GITHUB_OUTPUT
             echo "gh_env=dev" >> $GITHUB_OUTPUT
             echo "gh_env_apply=dev-apply" >> $GITHUB_OUTPUT
             echo "rg_fallback=aarch-dev-rg" >> $GITHUB_OUTPUT
             echo "param_file=infra/main.bicepparam" >> $GITHUB_OUTPUT
+            echo "deployment_name=aarch-dev" >> $GITHUB_OUTPUT
           fi
 
   infra:
@@ -74,7 +76,7 @@ jobs:
           ONCALL_EMAIL: ${{ vars.ONCALL_EMAIL }}
         run: |
           az deployment sub create \
-            -n ${{ env.DEPLOYMENT_NAME }} \
+            -n ${{ needs.setenv.outputs.deployment_name }} \
             -l ${{ env.AZURE_LOCATION }} \
             -f infra/main.bicep \
             -p ${{ needs.setenv.outputs.param_file }}
@@ -112,8 +114,8 @@ jobs:
         run: |
           # Try deployment outputs first; fall back to direct lookup so a
           # transiently-failed sub-deployment doesn't block app rollouts.
-          ACR_LOGIN=$(az deployment sub show -n ${{ env.DEPLOYMENT_NAME }} --query properties.outputs.acrLoginServer.value -o tsv 2>/dev/null | tr -d '\r\n' || true)
-          RG=$(az deployment sub show -n ${{ env.DEPLOYMENT_NAME }} --query properties.outputs.resourceGroupName.value -o tsv 2>/dev/null | tr -d '\r\n' || true)
+          ACR_LOGIN=$(az deployment sub show -n ${{ needs.setenv.outputs.deployment_name }} --query properties.outputs.acrLoginServer.value -o tsv 2>/dev/null | tr -d '\r\n' || true)
+          RG=$(az deployment sub show -n ${{ needs.setenv.outputs.deployment_name }} --query properties.outputs.resourceGroupName.value -o tsv 2>/dev/null | tr -d '\r\n' || true)
           if [ -z "$RG" ]; then
             RG="${{ needs.setenv.outputs.rg_fallback }}"
             echo "::warning::deployment outputs missing; falling back to RG=$RG"
@@ -171,7 +173,7 @@ jobs:
             -g ${{ needs.detect.outputs.rg }} \
             -n ${{ needs.detect.outputs.backendApp }} \
             --image ${{ needs.detect.outputs.acr }}.azurecr.io/aa-backend:${{ env.IMAGE_TAG }} \
-            --revision-suffix sha-${IMAGE_TAG:0:6}
+            --revision-suffix sha-${IMAGE_TAG:0:6}-r${{ github.run_number }}
 
   frontend:
     needs: [setenv, detect, infra]
@@ -207,7 +209,7 @@ jobs:
             -g ${{ needs.detect.outputs.rg }} \
             -n ${{ needs.detect.outputs.frontendApp }} \
             --image ${{ needs.detect.outputs.acr }}.azurecr.io/aa-frontend:${{ env.IMAGE_TAG }} \
-            --revision-suffix sha-${IMAGE_TAG:0:6}
+            --revision-suffix sha-${IMAGE_TAG:0:6}-r${{ github.run_number }}
 
   smoke:
     needs: [detect, backend, frontend]

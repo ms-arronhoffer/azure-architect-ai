@@ -25,6 +25,7 @@ import {
   DismissRegular,
 } from "@fluentui/react-icons";
 import type { Announcement } from "../types";
+import { apiFetch } from "../config/api";
 
 const SOURCE_FILTERS = [
   { value: "all", label: "All Sources" },
@@ -362,7 +363,7 @@ export default function WhatsNewPanel() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/whats-new${forceRefresh ? "?refresh=true" : ""}`);
+      const res = await apiFetch(`/api/whats-new${forceRefresh ? "?refresh=true" : ""}`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       setAnnouncements(data.announcements ?? []);
@@ -408,7 +409,7 @@ export default function WhatsNewPanel() {
     setDraftSubject("");
     setDraftBody("");
     try {
-      const res = await fetch("/api/whats-new/draft-email", {
+      const res = await apiFetch("/api/whats-new/draft-email", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

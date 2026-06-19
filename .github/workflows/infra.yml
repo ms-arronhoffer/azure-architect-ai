@@ -18,7 +18,6 @@ permissions:
 
 env:
   AZURE_LOCATION: centralus
-  DEPLOYMENT_NAME: main
 
 jobs:
   setenv:
@@ -27,6 +26,7 @@ jobs:
       gh_env: ${{ steps.pick.outputs.gh_env }}
       gh_env_apply: ${{ steps.pick.outputs.gh_env_apply }}
       param_file: ${{ steps.pick.outputs.param_file }}
+      deployment_name: ${{ steps.pick.outputs.deployment_name }}
     steps:
       - id: pick
         run: |
@@ -41,10 +41,12 @@ jobs:
             echo "gh_env=test" >> $GITHUB_OUTPUT
             echo "gh_env_apply=test-apply" >> $GITHUB_OUTPUT
             echo "param_file=infra/main.test.bicepparam" >> $GITHUB_OUTPUT
+            echo "deployment_name=aarch-test" >> $GITHUB_OUTPUT
           else
             echo "gh_env=dev" >> $GITHUB_OUTPUT
             echo "gh_env_apply=dev-apply" >> $GITHUB_OUTPUT
             echo "param_file=infra/main.bicepparam" >> $GITHUB_OUTPUT
+            echo "deployment_name=aarch-dev" >> $GITHUB_OUTPUT
           fi
 
   whatif:
@@ -68,7 +70,7 @@ jobs:
           ONCALL_EMAIL: ${{ vars.ONCALL_EMAIL }}
         run: |
           az deployment sub what-if \
-            --name ${{ env.DEPLOYMENT_NAME }} \
+            --name ${{ needs.setenv.outputs.deployment_name }} \
             --location ${{ env.AZURE_LOCATION }} \
             --template-file infra/main.bicep \
             --parameters ${{ needs.setenv.outputs.param_file }} \
@@ -95,7 +97,7 @@ jobs:
           ONCALL_EMAIL: ${{ vars.ONCALL_EMAIL }}
         run: |
           az deployment sub create \
-            --name ${{ env.DEPLOYMENT_NAME }} \
+            --name ${{ needs.setenv.outputs.deployment_name }} \
             --location ${{ env.AZURE_LOCATION }} \
             --template-file infra/main.bicep \
             --parameters ${{ needs.setenv.outputs.param_file }}
