@@ -355,6 +355,17 @@ export default function ArchitecturePanel({ mode = "architecture", onRefine, onM
   const { spec } = useWorkloadSpec();
   const [loadedFromSpec, setLoadedFromSpec] = useState(false);
   const autofillAppliedRef = useRef(false);
+  const autoGenerateRef = useRef(false);
+
+  useEffect(() => {
+    if (autoGenerateRef.current) return;
+    if (initialSession) return;
+    if (!initialMessages?.[0]?.content) return;
+    if (!requirements.trim() || isStreaming) return;
+    autoGenerateRef.current = true;
+    handleGenerate();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialMessages, requirements]);
 
   useEffect(() => {
     if (autofillAppliedRef.current) return;
