@@ -128,6 +128,8 @@ module network 'modules/network.bicep' = {
     location: location
     tags: tags
     addressPrefix: vnetAddressPrefix
+    createOpenAiPrivateDnsZone: deployOpenAi
+    createSearchPrivateDnsZone: deploySearch
   }
 }
 
