@@ -209,6 +209,23 @@ class Demo(Base):
     last_synced_at: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
 
+class WhatsNewCache(Base):
+    """Singleton-keyed cache of fetched announcement feeds.
+
+    One row per logical feed set (currently just "default"). `items` holds the
+    full deduplicated list as JSON; the daily scheduler overwrites it. Reads
+    are O(1) by primary key. Global catalog — not tenant-scoped.
+    """
+
+    __tablename__ = "whats_new_cache"
+
+    feed_set: Mapped[str] = mapped_column(String(64), primary_key=True)
+    items: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    fetched_at: Mapped[dt.datetime] = mapped_column(
+        nullable=False, default=lambda: dt.datetime.now(dt.UTC).replace(tzinfo=None)
+    )
+
+
 class RefArch(Base):
     """Reference architecture catalog entry — global library of MS-official + custom architectures."""
 
@@ -337,6 +354,7 @@ __all__ = [
     "RefArch",
     "TokenUsage",
     "UserSecret",
+    "WhatsNewCache",
     "current_engagement_id",
     "current_tenant_id",
     "engagement_id_var",

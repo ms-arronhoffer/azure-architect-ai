@@ -73,6 +73,19 @@ async def lifespan(app: FastAPI):
         except Exception as exc:
             from middleware.logging import get_logger
             get_logger("startup").warning("scheduler.start_failed", error=str(exc))
+
+        async def _seed_whats_new() -> None:
+            try:
+                from services.whats_new_service import fetch_announcements
+                items = await fetch_announcements(force_refresh=False)
+                if not items:
+                    await fetch_announcements(force_refresh=True)
+            except Exception as exc:
+                from middleware.logging import get_logger
+                get_logger("startup").warning("whats_new.seed_failed", error=str(exc))
+
+        import asyncio
+        asyncio.create_task(_seed_whats_new())
         yield
 
 

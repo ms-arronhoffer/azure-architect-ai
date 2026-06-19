@@ -16,6 +16,7 @@ from services.avm_ingest import run_ingest as avm_run_ingest
 from services.azure_updates_ingest import run_ingest as azure_updates_run_ingest
 from services.demo_ingest import run_ingest as demo_run_ingest
 from services.refarch_ingest import run_ingest
+from services.whats_new_service import fetch_announcements
 
 _log = get_logger("scheduler")
 
@@ -66,6 +67,17 @@ def start_scheduler() -> None:
         trigger=CronTrigger(day_of_week="mon", hour=5, minute=11),
         id="avm_ingest_weekly",
         name="Weekly Azure Verified Modules catalog ingest",
+        replace_existing=True,
+        coalesce=True,
+        max_instances=1,
+        misfire_grace_time=3600,
+    )
+    sched.add_job(
+        fetch_announcements,
+        trigger=CronTrigger(hour=12, minute=7, timezone="America/Los_Angeles"),
+        kwargs={"force_refresh": True},
+        id="whats_new_refresh_daily",
+        name="Daily What's New feed refresh (noon US/Pacific)",
         replace_existing=True,
         coalesce=True,
         max_instances=1,
