@@ -26,7 +26,7 @@ from services.error_sanitizer import sanitize_openai_error
 from services.mcp_service import call_mcp_tool, is_mcp_tool
 from services.openai_service import (
     TOOL_INCOMPATIBLE_MODELS,
-    resolve_client_and_model,
+    resolve_async_client_and_model,
 )
 from services.pricing_service import estimate_architecture, validate_sku
 from services.rag_service import cached_learn_search, cached_learn_search_full
@@ -108,7 +108,7 @@ async def _stream_chat(mode: str, messages: list[dict], provider: str = "azure",
 
 async def _stream_chat_impl(mode: str, messages: list[dict], provider: str = "azure", model: str = "", github_token: str = "", attachments: list[str] | None = None, user_id: str = "default") -> AsyncGenerator[str, None]:
     try:
-        client, deployment = resolve_client_and_model(mode, provider, model, github_token)
+        client, deployment = resolve_async_client_and_model(mode, provider, model, github_token)
     except ValueError as e:
         yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
         return
@@ -231,8 +231,8 @@ async def _stream_chat_impl(mode: str, messages: list[dict], provider: str = "az
         finish_reason = None
 
         try:
-            stream = client.chat.completions.create(**kwargs)
-            for chunk in stream:
+            stream = await client.chat.completions.create(**kwargs)
+            async for chunk in stream:
                 if chunk.usage is not None:
                     prompt_tokens += chunk.usage.prompt_tokens or 0
                     completion_tokens += chunk.usage.completion_tokens or 0

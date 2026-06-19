@@ -148,7 +148,7 @@ def route(
                     {"role": "user", "content": _build_user_prompt(message, history_hint)},
                 ],
                 temperature=0,
-                max_tokens=200,
+                max_completion_tokens=200,
                 response_format={"type": "json_object"},
             )
 

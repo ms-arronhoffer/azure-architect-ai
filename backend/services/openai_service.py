@@ -2,7 +2,15 @@ import random
 import time
 
 from azure.identity import DefaultAzureCredential, get_bearer_token_provider
-from openai import APIConnectionError, APIStatusError, AzureOpenAI, OpenAI, RateLimitError
+from openai import (
+    APIConnectionError,
+    APIStatusError,
+    AsyncAzureOpenAI,
+    AsyncOpenAI,
+    AzureOpenAI,
+    OpenAI,
+    RateLimitError,
+)
 
 from config import settings
 from middleware.logging import get_logger
@@ -11,6 +19,7 @@ from observability import openai_tokens_histogram, tracer
 log = get_logger("openai_service")
 
 _client: AzureOpenAI | None = None
+_async_client: AsyncAzureOpenAI | None = None
 
 TOOL_INCOMPATIBLE_MODELS = {
     "llama-3.1-70b-instruct",
@@ -107,6 +116,33 @@ def get_client() -> AzureOpenAI:
     return _client
 
 
+def get_async_client() -> AsyncAzureOpenAI:
+    """Async sibling of `get_client()`. Use for streaming endpoints — sync
+    iteration over a streaming response blocks the event loop, which causes
+    uvicorn's ASGI cancel scope to terminate the request mid-stream and the
+    client sees a 200 with an empty body.
+    """
+    global _async_client
+    if _async_client is None:
+        if settings.azure_openai_key:
+            _async_client = AsyncAzureOpenAI(
+                azure_endpoint=settings.azure_openai_endpoint,
+                api_key=settings.azure_openai_key,
+                api_version=settings.azure_openai_api_version,
+            )
+        else:
+            credential = DefaultAzureCredential()
+            token_provider = get_bearer_token_provider(
+                credential, "https://cognitiveservices.azure.com/.default"
+            )
+            _async_client = AsyncAzureOpenAI(
+                azure_endpoint=settings.azure_openai_endpoint,
+                azure_ad_token_provider=token_provider,
+                api_version=settings.azure_openai_api_version,
+            )
+    return _async_client
+
+
 def get_deployment(mode: str) -> str:
     if mode in ("architecture", "waf"):
         return settings.azure_openai_deployment_arch
@@ -133,6 +169,30 @@ def resolve_client_and_model(
         else "https://models.inference.ai.azure.com"
     )
     client = OpenAI(api_key=github_token, base_url=base_url)
+    model_str = model or "gpt-4o"
+    return client, model_str
+
+
+def resolve_async_client_and_model(
+    mode: str,
+    provider: str = "azure",
+    model: str = "",
+    github_token: str = "",
+) -> tuple[AsyncAzureOpenAI | AsyncOpenAI, str]:
+    """Async sibling of `resolve_client_and_model`. Used by streaming routes."""
+    if provider == "azure" or not provider:
+        deployment = model or get_deployment(mode)
+        return get_async_client(), deployment
+
+    if not github_token:
+        raise ValueError("GitHub token not configured. Add your token in Settings.")
+
+    base_url = (
+        "https://api.githubcopilot.com"
+        if provider == "github-copilot"
+        else "https://models.inference.ai.azure.com"
+    )
+    client = AsyncOpenAI(api_key=github_token, base_url=base_url)
     model_str = model or "gpt-4o"
     return client, model_str
 
