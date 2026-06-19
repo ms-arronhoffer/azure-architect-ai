@@ -78,15 +78,28 @@ PREFETCH_MODES: dict[str, str] = {
     "waf":          "Azure Well-Architected Framework reliability security cost operational excellence performance",
 }
 
+# Per-agent base queries for the unified-agents surface. When the router
+# resolves a request to one of these agents we always prefetch — generic
+# architect questions were previously falling through PREFETCH_MODES,
+# leaving gpt-5.4 to freeball from training data.
+AGENT_PREFETCH: dict[str, str] = {
+    "architect":  "Azure reference architecture Well-Architected Framework AVM Bicep landing zone networking identity",
+    "cost":       "Azure cost optimization pricing reserved instances savings plan FinOps Azure Advisor",
+    "operations": "Azure operations monitoring Log Analytics Application Insights alerting SLO incident response",
+    "compliance": "Azure compliance policy regulatory Microsoft Defender Purview Zero Trust governance",
+    "engagement": "Azure engagement scope subscriptions regions reservation commitments tenant governance",
+}
 
-async def _prefetch_docs(mode: str, user_message: str) -> dict:
-    """Fetch Learn docs before the LLM call for structured-output modes.
+
+async def _prefetch_docs(mode: str, user_message: str, agent: str | None = None) -> dict:
+    """Fetch Learn docs before the LLM call for structured-output modes
+    or unified-agents requests.
 
     Returns ``{"citations": list[dict], "unknown": bool,
     "top_confidence": float, "source": str}`` so the caller can swap in
     honesty-mode prose when retrieval is weak.
     """
-    base = PREFETCH_MODES.get(mode)
+    base = AGENT_PREFETCH.get(agent or "") or PREFETCH_MODES.get(mode)
     if not base:
         return {"citations": [], "unknown": False, "top_confidence": 0.0, "source": "skipped"}
     snippet = user_message[:150].strip()
@@ -138,6 +151,7 @@ async def _stream_chat_impl(mode: str, messages: list[dict], provider: str = "az
     # URLs continue to land on the right agent during the deprecation window.
     routing: dict | None = None
     preamble = ""
+    resolved_agent: str | None = None
     if _unified_agents_enabled():
         last_user = ""
         for m in reversed(messages):
@@ -170,6 +184,7 @@ async def _stream_chat_impl(mode: str, messages: list[dict], provider: str = "az
             preamble = await engagement_context.preamble_for_active()
 
         agent_name = routing.get("agent", DEFAULT_AGENT)
+        resolved_agent = agent_name
         agent_prompt = get_agent_prompt(agent_name)
         fragments_block = get_fragments(routing.get("domain_fragments", []) or [])
         system_parts = [p for p in (preamble, agent_prompt, fragments_block) if p]
@@ -204,7 +219,7 @@ async def _stream_chat_impl(mode: str, messages: list[dict], provider: str = "az
     # Mandatory pre-retrieval for structured output modes — inject into system message
     # so every response is anchored to real Learn articles, not just training knowledge.
     user_content = messages[-1].get("content", "") if messages else ""
-    prefetch_bundle = await _prefetch_docs(mode, user_content)
+    prefetch_bundle = await _prefetch_docs(mode, user_content, agent=resolved_agent)
     prefetched = prefetch_bundle["citations"]
     prompt_tokens = 0
     completion_tokens = 0
