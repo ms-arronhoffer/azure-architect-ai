@@ -176,6 +176,11 @@ async def _llm_json(prompt: str, *, max_tokens: int = 4000, retry_on_parse: bool
 
     use_responses = provider in ("azure", "") and _needs_responses_api(deployment)
 
+    # Responses API requires a newer api-version than the default chat client.
+    # Swap to the dedicated responses client for codex/gpt-5/o-series deployments.
+    if use_responses:
+        client = openai_service.get_responses_client()
+
     def _call_responses(p: str) -> str:
         kwargs: dict[str, Any] = {
             "model": deployment,

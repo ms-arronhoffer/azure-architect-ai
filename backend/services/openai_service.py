@@ -20,6 +20,12 @@ log = get_logger("openai_service")
 
 _client: AzureOpenAI | None = None
 _async_client: AsyncAzureOpenAI | None = None
+_responses_client: AzureOpenAI | None = None
+
+# Responses API requires api-version >= 2025-03-01-preview on Azure OpenAI.
+# Kept separate from the default api_version so legacy Chat Completions paths
+# stay on whatever the env declares.
+RESPONSES_API_VERSION = "2025-03-01-preview"
 
 TOOL_INCOMPATIBLE_MODELS = {
     "llama-3.1-70b-instruct",
@@ -114,6 +120,31 @@ def get_client() -> AzureOpenAI:
                 api_version=settings.azure_openai_api_version,
             )
     return _client
+
+
+def get_responses_client() -> AzureOpenAI:
+    """Dedicated Azure OpenAI client pinned to an api-version that supports
+    the Responses API. Required for codex / gpt-5 / o-series deployments,
+    which reject Chat Completions outright."""
+    global _responses_client
+    if _responses_client is None:
+        if settings.azure_openai_key:
+            _responses_client = AzureOpenAI(
+                azure_endpoint=settings.azure_openai_endpoint,
+                api_key=settings.azure_openai_key,
+                api_version=RESPONSES_API_VERSION,
+            )
+        else:
+            credential = DefaultAzureCredential()
+            token_provider = get_bearer_token_provider(
+                credential, "https://cognitiveservices.azure.com/.default"
+            )
+            _responses_client = AzureOpenAI(
+                azure_endpoint=settings.azure_openai_endpoint,
+                azure_ad_token_provider=token_provider,
+                api_version=RESPONSES_API_VERSION,
+            )
+    return _responses_client
 
 
 def get_async_client() -> AsyncAzureOpenAI:
