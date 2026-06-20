@@ -18,9 +18,11 @@ import {
   AddRegular,
   DismissRegular,
   MoneyRegular,
+  ArrowDownloadRegular,
 } from "@fluentui/react-icons";
 import { apiFetch } from "../config/api";
 import type { CostOptimization } from "../types";
+import { exportMessageToDocx } from "../utils/docxExport";
 import {
   hashCostRequest,
   loadCostState,
@@ -125,6 +127,24 @@ const useStyles = makeStyles({
   },
   reportCard: {
     padding: "20px",
+    display: "flex",
+    flexDirection: "column",
+    gap: "12px",
+    maxHeight: "70vh",
+    minHeight: 0,
+  },
+  reportHeader: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: "12px",
+    flexShrink: 0,
+  },
+  reportScroll: {
+    flex: 1,
+    minHeight: 0,
+    overflowY: "auto",
+    paddingRight: "8px",
   },
   report: {
     lineHeight: 1.6,
@@ -395,9 +415,23 @@ export default function CostOptimizePanel() {
 
         {result?.report && (
           <Card className={styles.reportCard}>
-            <Text size={500} weight="semibold">Narrated report</Text>
-            <div className={styles.report}>
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>{result.report}</ReactMarkdown>
+            <div className={styles.reportHeader}>
+              <Text size={500} weight="semibold">Narrated report</Text>
+              <Button
+                appearance="secondary"
+                size="small"
+                icon={<ArrowDownloadRegular />}
+                onClick={() =>
+                  exportMessageToDocx(result.report ?? "", `cost-optimize-report-${Date.now()}.docx`)
+                }
+              >
+                Export DOCX
+              </Button>
+            </div>
+            <div className={styles.reportScroll}>
+              <div className={styles.report}>
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>{result.report}</ReactMarkdown>
+              </div>
             </div>
           </Card>
         )}
