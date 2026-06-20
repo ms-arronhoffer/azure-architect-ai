@@ -16,6 +16,7 @@ export type DemoPhase =
 export interface DemoPipelineRequestShape {
   demo_slug: string;
   demo_title: string;
+  description: string;
   audience: string;
   duration_minutes: number;
   target_persona: string;
@@ -50,6 +51,7 @@ export function hashDemoRequest(req: DemoPipelineRequestShape): string {
   const normalized = JSON.stringify({
     demo_slug: (req.demo_slug || "").trim(),
     demo_title: (req.demo_title || "").trim(),
+    description: (req.description || "").trim(),
     audience: (req.audience || "").trim(),
     duration_minutes: req.duration_minutes,
     target_persona: (req.target_persona || "").trim(),

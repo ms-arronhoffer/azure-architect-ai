@@ -222,6 +222,7 @@ export default function DemoBuildPanel() {
 
   const [demoSlug, setDemoSlug] = useState(initialSlug);
   const [demoTitle, setDemoTitle] = useState(spec.name || "My Azure Demo");
+  const [description, setDescription] = useState("");
   const [audience, setAudience] = useState<"customer" | "internal" | "partner">("customer");
   const [durationMinutes, setDurationMinutes] = useState<number>(15);
   const [targetPersona, setTargetPersona] = useState("platform engineer");
@@ -251,13 +252,14 @@ export default function DemoBuildPanel() {
     () => ({
       demo_slug: demoSlug,
       demo_title: demoTitle,
+      description,
       audience,
       duration_minutes: durationMinutes,
       target_persona: targetPersona,
       key_features: keyFeatures,
       azure_services: azureServices,
     }),
-    [demoSlug, demoTitle, audience, durationMinutes, targetPersona, keyFeatures, azureServices],
+    [demoSlug, demoTitle, description, audience, durationMinutes, targetPersona, keyFeatures, azureServices],
   );
 
   useEffect(() => {
@@ -312,6 +314,7 @@ export default function DemoBuildPanel() {
       spec,
       demo_slug: demoSlug,
       demo_title: demoTitle,
+      description,
       audience,
       duration_minutes: durationMinutes,
       target_persona: targetPersona,
@@ -474,6 +477,14 @@ export default function DemoBuildPanel() {
             </Dropdown>
           </Field>
         </div>
+        <Field label="What should this demo do? (outcome, key features to showcase, wow moment)">
+          <Textarea
+            value={description}
+            onChange={(_, d) => setDescription(d.value)}
+            rows={3}
+            placeholder="e.g. End-to-end RAG over policy PDFs with streaming citations. Wow moment: live grounding badges that update token-by-token."
+          />
+        </Field>
         <div className={styles.formGrid2}>
           <Field label="Target persona">
             <Input value={targetPersona} onChange={(_, d) => setTargetPersona(d.value)} />

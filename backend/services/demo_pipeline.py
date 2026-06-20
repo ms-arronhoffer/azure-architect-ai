@@ -58,6 +58,7 @@ class DemoBuildRequest(BaseModel):
     spec: WorkloadSpecLite = Field(default_factory=WorkloadSpecLite)
     demo_slug: str
     demo_title: str
+    description: str = ""  # free-text "what should this demo do / outcome / wow moment"
     audience: str = "customer"  # customer | internal | partner
     duration_minutes: int = 15  # 5 | 15 | 30
     target_persona: str = ""
@@ -142,13 +143,15 @@ async def _llm_json(prompt: str, *, max_tokens: int = 4000, retry_on_parse: bool
     )
 
     def _call(messages: list[dict]) -> Any:
+        # temperature + response_format are intentionally omitted: codex /
+        # reasoning deployments reject both with 400 "operation is unsupported".
+        # The prompts enforce strict-JSON output and `_llm_json` handles parse
+        # failures with one repair-reply retry.
         return openai_service.call_with_retry(
             lambda: client.chat.completions.create(
                 model=deployment,
                 messages=messages,
-                temperature=0.2,
                 max_completion_tokens=max_tokens,
-                response_format={"type": "json_object"},
             ),
             max_attempts=2,
             model_name=deployment,
@@ -208,6 +211,7 @@ async def _phase_intake_normalize(
         spec = {
             "slug": slug,
             "title": req.demo_title,
+            "description": req.description,
             "audience": req.audience,
             "duration_minutes": req.duration_minutes,
             "target_persona": req.target_persona,
