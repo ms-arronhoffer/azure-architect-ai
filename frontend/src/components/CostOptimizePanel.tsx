@@ -69,10 +69,12 @@ const useStyles = makeStyles({
     display: "flex",
     flexDirection: "column",
     height: "100%",
+    minHeight: 0,
     overflow: "hidden",
     background: tokens.colorNeutralBackground2,
   },
   header: {
+    flexShrink: 0,
     padding: "20px 28px 16px",
     borderBottom: `1px solid ${tokens.colorNeutralStroke2}`,
     background: tokens.colorNeutralBackground1,
@@ -82,7 +84,9 @@ const useStyles = makeStyles({
   },
   body: {
     flex: 1,
-    overflow: "auto",
+    minHeight: 0,
+    overflowY: "auto",
+    overflowX: "hidden",
     padding: "20px 28px",
     display: "flex",
     flexDirection: "column",
