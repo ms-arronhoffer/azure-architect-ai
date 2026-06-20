@@ -24,6 +24,7 @@ from collections.abc import AsyncGenerator
 from pathlib import Path
 from typing import Any
 
+from openai import BadRequestError
 from pydantic import BaseModel, Field
 
 from middleware.logging import get_logger
@@ -147,17 +148,37 @@ async def _llm_json(prompt: str, *, max_tokens: int = 4000, retry_on_parse: bool
         # reasoning deployments reject both with 400 "operation is unsupported".
         # The prompts enforce strict-JSON output and `_llm_json` handles parse
         # failures with one repair-reply retry.
-        return openai_service.call_with_retry(
-            lambda: client.chat.completions.create(
-                model=deployment,
-                messages=messages,
-                max_completion_tokens=max_tokens,
-            ),
-            max_attempts=2,
-            model_name=deployment,
-        )
+        try:
+            return openai_service.call_with_retry(
+                lambda: client.chat.completions.create(
+                    model=deployment,
+                    messages=messages,
+                    max_completion_tokens=max_tokens,
+                ),
+                max_attempts=2,
+                model_name=deployment,
+            )
+        except BadRequestError as exc:
+            body = getattr(exc, "body", None)
+            msg = getattr(exc, "message", None) or str(exc)
+            log.warning(
+                "demo_pipeline.bad_request",
+                deployment=deployment,
+                message=msg,
+                body=body,
+            )
+            # Re-raise with the actual Azure OpenAI error message surfaced so
+            # the `phase_failed` SSE event carries diagnostic detail instead
+            # of a bare "400" string.
+            raise RuntimeError(f"Azure OpenAI 400 on '{deployment}': {msg}") from exc
 
-    messages = [{"role": "user", "content": prompt}]
+    messages = [
+        {
+            "role": "system",
+            "content": "You output strict JSON only. No prose, no markdown fences.",
+        },
+        {"role": "user", "content": prompt},
+    ]
     resp = await asyncio.to_thread(_call, messages)
     raw = (resp.choices[0].message.content or "").strip() if resp.choices else ""
     try:
