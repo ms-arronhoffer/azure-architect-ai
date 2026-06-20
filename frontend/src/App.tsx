@@ -28,6 +28,8 @@ import WorkloadContextPanel from "./components/WorkloadContextPanel";
 import IntakePanel from "./components/IntakePanel";
 import IntakeChatPanel from "./components/IntakeChatPanel";
 import AnalysisPanel from "./components/AnalysisPanel";
+import CostOptimizePanel from "./components/CostOptimizePanel";
+import DemoBuildPanel from "./components/DemoBuildPanel";
 import LandingZonePanel from "./components/LandingZonePanel";
 import ThreatModelPanel from "./components/ThreatModelPanel";
 import ReliabilityPanel from "./components/ReliabilityPanel";
@@ -49,10 +51,11 @@ import { useWorkloadContext } from "./hooks/useWorkloadContext";
 import { useSettings } from "./hooks/useSettings";
 import { useServiceHealth } from "./hooks/useServiceHealth";
 import { useEngagements } from "./hooks/useEngagements";
+import { useWorkloadSpec } from "./hooks/useWorkloadSpec";
 import EngagementDrawer from "./components/EngagementDrawer";
 import { track } from "./utils/telemetry";
 import { setErrorNotifier } from "./config/api";
-import type { Mode, ConversationRecord, ChatMessage } from "./types";
+import type { Mode, ConversationRecord, ChatMessage, ContinueInSeed } from "./types";
 
 const useStyles = makeStyles({
   root: {
@@ -77,7 +80,7 @@ const useStyles = makeStyles({
 });
 
 const ARCH_MODES: Mode[] = ["architecture", "network", "aiarchitecture", "dataplatform", "apim"];
-const PANEL_MODES: Mode[] = [...ARCH_MODES, "waf", "review", "drbc", "threatmodel", "reliability", "landingzone", "troubleshoot", "strategy", "pipelineforge", "runbookstudio", "namingstandards", "rfpproposal"];
+const PANEL_MODES: Mode[] = [...ARCH_MODES, "waf", "review", "drbc", "threatmodel", "reliability", "landingzone", "troubleshoot", "strategy", "pipelineforge", "runbookstudio", "namingstandards", "rfpproposal", "cost-optimize", "demo-build"];
 
 const UNIFIED_AGENTS = import.meta.env.VITE_UNIFIED_AGENTS === "true";
 const DEFAULT_MODE: Mode = UNIFIED_AGENTS ? "architect" : "qa";
@@ -109,6 +112,8 @@ export default function App() {
   const { settings, saveSettings, githubTokenConfigured, setGithubToken, clearGithubToken } = useSettings();
   const { incidents: healthIncidents, incidentCount, loading: healthLoading, error: healthError, lastChecked: healthLastChecked, refresh: refreshHealth } = useServiceHealth();
   const engagementsApi = useEngagements();
+  const { setSpec: setWorkloadSpec } = useWorkloadSpec();
+  const [analyzeAutoStart, setAnalyzeAutoStart] = useState(false);
 
   const TOASTER_ID = "app-toaster";
   const { dispatchToast } = useToastController(TOASTER_ID);
@@ -144,6 +149,7 @@ export default function App() {
     setSelectedConversation(null);
     setSelectedPanelSession(null);
     setRefinementSeed(null);
+    setAnalyzeAutoStart(false);
     track({ kind: "mode_open", mode: m });
   }
 
@@ -194,9 +200,16 @@ export default function App() {
     }
   }
 
-  function handleContinueIn(targetMode: Mode, seed: string) {
-    const seedMsg: ChatMessage = { id: crypto.randomUUID(), role: "user", content: seed };
-    setRefinementSeed({ id: crypto.randomUUID(), messages: [seedMsg] });
+  function handleContinueIn(targetMode: Mode, seed: ContinueInSeed) {
+    if (typeof seed === "string") {
+      const seedMsg: ChatMessage = { id: crypto.randomUUID(), role: "user", content: seed };
+      setRefinementSeed({ id: crypto.randomUUID(), messages: [seedMsg] });
+      setAnalyzeAutoStart(false);
+    } else {
+      if (seed.spec) setWorkloadSpec(seed.spec);
+      setRefinementSeed(null);
+      setAnalyzeAutoStart(Boolean(seed.autoStart));
+    }
     setMode(targetMode);
     setSelectedConversation(null);
   }
@@ -249,7 +262,13 @@ export default function App() {
       return <IntakePanel key="intake" onContinueIn={handleContinueIn} />;
     }
     if (mode === "analyze") {
-      return <AnalysisPanel key="analyze" onRefine={handleRefine} onContinueIn={handleContinueIn} />;
+      return <AnalysisPanel key="analyze" onRefine={handleRefine} onContinueIn={handleContinueIn} autoStart={analyzeAutoStart} onAutoStartConsumed={() => setAnalyzeAutoStart(false)} />;
+    }
+    if (mode === "cost-optimize") {
+      return <CostOptimizePanel key="cost-optimize" />;
+    }
+    if (mode === "demo-build") {
+      return <DemoBuildPanel key="demo-build" />;
     }
     if (ARCH_MODES.includes(mode)) {
       return (

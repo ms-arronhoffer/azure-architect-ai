@@ -19,10 +19,24 @@ async def get_authenticated_user(token: str) -> dict:
         return r.json()
 
 
-async def create_repo(token: str, name: str, private: bool = True, description: str = "") -> dict:
+async def create_repo(
+    token: str,
+    name: str,
+    private: bool = True,
+    description: str = "",
+    org: str | None = None,
+) -> dict:
+    """Create a repo under the authenticated user, or under `org` when provided.
+
+    GitHub uses two distinct endpoints: `/user/repos` for personal repos and
+    `/orgs/{org}/repos` for org-owned repos. Posting org-targeted creates to
+    `/user/repos` silently lands the repo under the token owner, which then
+    breaks subsequent `push_file(owner=org, ...)` calls with 404s.
+    """
+    url = f"{GITHUB_API}/orgs/{org}/repos" if org else f"{GITHUB_API}/user/repos"
     async with httpx.AsyncClient() as client:
         r = await client.post(
-            f"{GITHUB_API}/user/repos",
+            url,
             headers=_auth(token),
             json={"name": name, "private": private, "description": description, "auto_init": False},
         )

@@ -26,8 +26,8 @@ import {
   AddRegular,
   DismissRegular,
 } from "@fluentui/react-icons";
-import { useWorkloadSpec, toSpecPromptPrefix } from "../hooks/useWorkloadSpec";
-import type { WorkloadSpec, Mode } from "../types";
+import { useWorkloadSpec } from "../hooks/useWorkloadSpec";
+import type { WorkloadSpec, Mode, ContinueInSeed } from "../types";
 import { apiFetch } from "../config/api";
 
 const COMPLIANCE_OPTIONS = [
@@ -255,7 +255,7 @@ function exportMarkdown(spec: WorkloadSpec): string {
 }
 
 interface IntakePanelProps {
-  onContinueIn?: (mode: Mode, seed: string) => void;
+  onContinueIn?: (mode: Mode, seed: ContinueInSeed) => void;
 }
 
 export default function IntakePanel({ onContinueIn }: IntakePanelProps) {
@@ -356,8 +356,7 @@ export default function IntakePanel({ onContinueIn }: IntakePanelProps) {
 
   function handleAnalyze() {
     if (!onContinueIn) return;
-    const seed = toSpecPromptPrefix(spec) + "\nPlease analyze this workload comprehensively: architecture design, WAF assessment, sizing recommendations, and security posture.";
-    onContinueIn("architecture", seed);
+    onContinueIn("analyze", { spec, autoStart: true });
   }
 
   return (

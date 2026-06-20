@@ -1,4 +1,5 @@
 import asyncio
+import datetime as dt
 import hashlib
 import re
 import time
@@ -63,6 +64,50 @@ _health_cache_time: float = 0.0
 _CACHE_TTL = 900  # 15 minutes
 _cache: dict[str, dict] = {}
 _cache_time: float = 0.0
+
+_FEED_SET_KEY = "default"  # key on this string if we ever split feeds by audience
+
+
+async def _load_from_db() -> tuple[list[dict], dt.datetime | None]:
+    from db import WhatsNewCache, session_scope, select
+
+    async with session_scope() as s:
+        row = (
+            await s.execute(
+                select(WhatsNewCache).where(WhatsNewCache.feed_set == _FEED_SET_KEY)
+            )
+        ).scalar_one_or_none()
+        if row is None:
+            return [], None
+        return list(row.items or []), row.fetched_at
+
+
+async def _persist_to_db(items: list[dict]) -> None:
+    from db import WhatsNewCache, session_scope
+
+    async with session_scope() as s:
+        existing = await s.get(WhatsNewCache, _FEED_SET_KEY)
+        now_utc = dt.datetime.now(dt.UTC).replace(tzinfo=None)
+        if existing is None:
+            s.add(WhatsNewCache(feed_set=_FEED_SET_KEY, items=items, fetched_at=now_utc))
+        else:
+            existing.items = items
+            existing.fetched_at = now_utc
+        await s.commit()
+
+
+async def _fetch_live() -> list[dict]:
+    results: dict[str, dict] = {}
+    async with httpx.AsyncClient(
+        timeout=15.0, follow_redirects=True, headers={"User-Agent": _USER_AGENT}
+    ) as client:
+        feed_results = await asyncio.gather(
+            *[_fetch_one_feed(client, feed, "whats_new.feed_fetched") for feed in _FEEDS]
+        )
+    for items in feed_results:
+        for item in items:
+            results[item["id"]] = item
+    return list(results.values())
 
 
 def _strip_html(text: str) -> str:
@@ -162,25 +207,42 @@ async def _fetch_one_feed(client: httpx.AsyncClient, feed: dict, log_event: str)
 
 
 async def fetch_announcements(force_refresh: bool = False) -> list[dict]:
+    """Three-tier read: in-memory → DB → live fetch.
+
+    `force_refresh=True` bypasses both caches AND persists the result. Called
+    by the daily scheduler and the startup seed.
+    """
     global _cache, _cache_time
     now = time.monotonic()
+
     if not force_refresh and _cache and (now - _cache_time) < _CACHE_TTL:
         return list(_cache.values())
 
-    results: dict[str, dict] = {}
-    # Parallel fan-out — sequential was 7x 15s worst-case, causing cold-cache first
-    # loads to exceed nginx/ACA proxy timeouts.
-    async with httpx.AsyncClient(timeout=15.0, follow_redirects=True, headers={"User-Agent": _USER_AGENT}) as client:
-        feed_results = await asyncio.gather(
-            *[_fetch_one_feed(client, feed, "whats_new.feed_fetched") for feed in _FEEDS]
-        )
-    for items in feed_results:
-        for item in items:
-            results[item["id"]] = item
+    if not force_refresh:
+        try:
+            db_items, fetched_at = await _load_from_db()
+        except Exception as exc:
+            log.warning("whats_new.db_read_failed", error=str(exc))
+            db_items, fetched_at = [], None
+        if db_items:
+            _cache = {it["id"]: it for it in db_items}
+            _cache_time = now
+            log.info(
+                "whats_new.cache_hit_db",
+                count=len(db_items),
+                fetched_at=str(fetched_at),
+            )
+            return db_items
 
-    _cache = results
+    items = await _fetch_live()
+    _cache = {it["id"]: it for it in items}
     _cache_time = now
-    return list(results.values())
+    try:
+        await _persist_to_db(items)
+        log.info("whats_new.persisted", count=len(items), force_refresh=force_refresh)
+    except Exception as exc:
+        log.warning("whats_new.db_write_failed", error=str(exc))
+    return items
 
 
 async def fetch_service_health(force_refresh: bool = False) -> list[dict]:

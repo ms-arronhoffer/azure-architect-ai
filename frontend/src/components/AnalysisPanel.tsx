@@ -338,9 +338,13 @@ function fmtElapsed(ms: number): string {
 export default function AnalysisPanel({
   onRefine,
   onContinueIn,
+  autoStart,
+  onAutoStartConsumed,
 }: {
   onRefine?: (context: ChatMessage[]) => void;
   onContinueIn?: (mode: Mode, seed: string) => void;
+  autoStart?: boolean;
+  onAutoStartConsumed?: () => void;
 }) {
   const styles = useStyles();
   const { spec } = useWorkloadSpec();
@@ -380,6 +384,7 @@ export default function AnalysisPanel({
   const pipelineStateRef = useRef<PipelineState | null>(null);
   const phaseTextsRef = useRef<Partial<Record<PipelinePhase, string>>>({});
   const phaseArtifactsRef = useRef<Partial<Record<PipelinePhase, { runbook?: string; bicep?: string; bicep_preview?: BicepPreview; waf_pillars?: WafPillarResult[] }>>>({});
+  const autoStartFiredRef = useRef(false);
 
   useEffect(() => {
     setSavedDesigns(listSavedDesigns());
@@ -409,6 +414,18 @@ export default function AnalysisPanel({
     const id = window.setInterval(() => setNowTs(Date.now()), 1000);
     return () => window.clearInterval(id);
   }, [isRunning]);
+
+  // Auto-start the pipeline when invoked from IntakePanel. Resume always wins.
+  useEffect(() => {
+    if (!autoStart) return;
+    if (autoStartFiredRef.current) return;
+    if (isRunning || resumable) return;
+    if (!spec.name && !spec.additionalNotes) return;
+    autoStartFiredRef.current = true;
+    onAutoStartConsumed?.();
+    setPipelineMode(true);
+    void handleRun();
+  }, [autoStart, spec, isRunning, resumable]);
 
   function persistPipeline() {
     if (!pipelineStateRef.current) return;

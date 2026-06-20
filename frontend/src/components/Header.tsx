@@ -61,6 +61,8 @@ const MODE_LABELS: Record<Mode, string> = {
   intake: "Requirements Studio",
   intakechat: "Guided Discovery",
   analyze: "Workload Analysis",
+  "cost-optimize": "Cost Optimize",
+  "demo-build": "Demo Builder",
   whatsnew: "What's New",
   servicehealth: "Service Health",
   modellifecycle: "Model Lifecycle",
@@ -122,6 +124,8 @@ const MODE_LABELS: Record<Mode, string> = {
 const MODE_SECTION: Partial<Record<Mode, string>> = {
   intake: "Advisory",
   analyze: "Advisory",
+  "cost-optimize": "Cost",
+  "demo-build": "Design & Build",
   qa: "Advisory",
   situation: "Advisory",
   presentation: "Advisory",

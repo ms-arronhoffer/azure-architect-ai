@@ -3,8 +3,10 @@ plus live retail / reservation / right-sizing / carbon endpoints."""
 from __future__ import annotations
 
 import asyncio
+import json
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from auth import require_user
@@ -15,6 +17,7 @@ from services import (
     retail_pricing_service,
     rightsizing_service,
 )
+from services.cost_pipeline import CostOptimizeRequest, stream_cost_pipeline
 
 router = APIRouter(prefix="/cost", tags=["cost"])
 
@@ -164,4 +167,18 @@ async def carbon(req: CarbonRequest, _=Depends(require_user)) -> dict:
     if req.compare_regions:
         out["region_comparison"] = carbon_service.compare_regions(req.compare_regions, items)
     return out
+
+
+@router.post("/optimize")
+async def cost_optimize(req: CostOptimizeRequest, _=Depends(require_user)) -> StreamingResponse:
+    async def gen():
+        async for ev in stream_cost_pipeline(req):
+            yield f"data: {json.dumps(ev, default=str)}\n\n"
+        yield "data: {\"type\": \"done\"}\n\n"
+
+    return StreamingResponse(
+        gen(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 

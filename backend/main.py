@@ -22,6 +22,7 @@ from routes.chat import router as chat_router  # noqa: E402
 from routes.codegen import router as codegen_router  # noqa: E402
 from routes.conversations import router as conversations_router  # noqa: E402
 from routes.cost import router as cost_router  # noqa: E402
+from routes.demo import router as demo_router  # noqa: E402
 from routes.demos import router as demos_router  # noqa: E402
 from routes.demos_admin import router as demos_admin_router  # noqa: E402
 from routes.engagement_references import router as engagement_references_router  # noqa: E402
@@ -73,6 +74,19 @@ async def lifespan(app: FastAPI):
         except Exception as exc:
             from middleware.logging import get_logger
             get_logger("startup").warning("scheduler.start_failed", error=str(exc))
+
+        async def _seed_whats_new() -> None:
+            try:
+                from services.whats_new_service import fetch_announcements
+                items = await fetch_announcements(force_refresh=False)
+                if not items:
+                    await fetch_announcements(force_refresh=True)
+            except Exception as exc:
+                from middleware.logging import get_logger
+                get_logger("startup").warning("whats_new.seed_failed", error=str(exc))
+
+        import asyncio
+        asyncio.create_task(_seed_whats_new())
         yield
 
 
@@ -116,6 +130,7 @@ app.include_router(cost_router, prefix="/api")
 app.include_router(engagements_router, prefix="/api")
 app.include_router(engagement_references_router, prefix="/api")
 app.include_router(demos_router, prefix="/api")
+app.include_router(demo_router, prefix="/api")
 app.include_router(demos_admin_router, prefix="/api")
 app.include_router(refarch_router, prefix="/api")
 app.include_router(refarch_admin_router, prefix="/api")

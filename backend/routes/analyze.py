@@ -1,6 +1,5 @@
 import asyncio
 import json
-import re
 from collections.abc import AsyncGenerator
 from datetime import UTC, datetime
 from typing import Any
@@ -10,11 +9,10 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from limiter import limiter
+from routes._sse import _collect_tagged, _relay_sse
 from routes.architecture import ArchRequest, _stream_architecture
 
 router = APIRouter()
-
-_CONFIDENCE_FENCE_RE = re.compile(r"```confidence\s*\n.*?\n```", re.DOTALL | re.IGNORECASE)
 
 
 class AnalyzeRequest(BaseModel):
@@ -23,80 +21,6 @@ class AnalyzeRequest(BaseModel):
     region: str = ""
     compliance: list[str] = []
     budget_usd: float = 0
-
-
-async def _relay_sse(
-    gen: AsyncGenerator[str, None],
-    job: str,
-    *,
-    phase: str | None = None,
-    container: dict[str, Any] | None = None,
-    yield_individually: bool = True,
-    collected: list[str] | None = None,
-) -> AsyncGenerator[str, None]:
-    """Tag SSE chunks with _job and optional _phase. If container is given, accumulate token
-    text and structured artifacts. If yield_individually=False, append tagged chunks to
-    collected instead of yielding (caller batches them later).
-    """
-    if container is not None:
-        container.setdefault("text", "")
-        container.setdefault("artifacts", {})
-        container.setdefault("waf_pillars", [])
-        container.setdefault("confidence", [])
-
-    async for chunk in gen:
-        if not chunk.startswith("data: "):
-            if yield_individually:
-                yield chunk
-            elif collected is not None:
-                collected.append(chunk)
-            continue
-        raw = chunk[6:].strip()
-        try:
-            obj = json.loads(raw)
-        except Exception:
-            if yield_individually:
-                yield chunk
-            elif collected is not None:
-                collected.append(chunk)
-            continue
-        obj["_job"] = job
-        if phase:
-            obj["_phase"] = phase
-        if container is not None:
-            etype = obj.get("type")
-            if etype == "token":
-                container["text"] += obj.get("content", "")
-            elif etype == "runbook":
-                container["artifacts"]["runbook"] = obj.get("markdown", "")
-            elif etype == "bicep":
-                container["artifacts"]["bicep"] = obj.get("code", "")
-            elif etype == "bicep_preview":
-                container["artifacts"]["bicep_preview"] = obj.get("preview")
-            elif etype == "waf_pillar":
-                pillar = obj.get("pillar")
-                if pillar:
-                    container["waf_pillars"].append(pillar)
-            elif etype == "confidence":
-                items = obj.get("items") or []
-                if isinstance(items, list):
-                    container["confidence"].extend(items)
-                # Scrub the confidence fence from accumulated text so the
-                # tab markdown doesn't show a raw JSON block to the user.
-                container["text"] = _CONFIDENCE_FENCE_RE.sub("", container["text"]).rstrip() + "\n"
-        tagged = f"data: {json.dumps(obj)}\n\n"
-        if yield_individually:
-            yield tagged
-        elif collected is not None:
-            collected.append(tagged)
-
-
-async def _collect_tagged(gen: AsyncGenerator[str, None], job: str) -> list[str]:
-    """Collect SSE chunks tagged with _job=<job> for batch emission (parallel mode)."""
-    collected: list[str] = []
-    async for _ in _relay_sse(gen, job, yield_individually=False, collected=collected):
-        pass  # pragma: no cover
-    return collected
 
 
 async def _stream_analyze(req: AnalyzeRequest) -> AsyncGenerator[str, None]:

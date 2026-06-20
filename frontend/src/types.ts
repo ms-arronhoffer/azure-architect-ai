@@ -36,6 +36,7 @@ export type Mode =
   | "intake"
   | "intakechat"
   | "analyze"
+  | "cost-optimize"
   | "troubleshoot"
   | "whatsnew"
   | "servicehealth"
@@ -47,6 +48,7 @@ export type Mode =
   | "medalliondesigner"
   | "modelmigration"
   | "showcase"
+  | "demo-build"
   | "refarch"
   | "netvnet"
   | "netfirewall"
@@ -1154,3 +1156,64 @@ export type SseEvent =
   | { type: "done" }
   | { type: "status"; message: string }
   | { type: "error"; message: string };
+
+// ── Cross-panel handoff seed ─────────────────────────────────────────────────
+
+/** Payload passed to `handleContinueIn(mode, seed)`. Strings are treated as a
+ * user-message text seed (legacy behavior); objects carry richer context such
+ * as a validated WorkloadSpec and an auto-start flag for pipeline panels. */
+export type ContinueInSeed =
+  | string
+  | { spec?: WorkloadSpec; autoStart?: boolean };
+
+// ── Cost optimization pipeline ───────────────────────────────────────────────
+
+export interface CostOptimization {
+  type: "cost_optimization";
+  generated_at: string;
+  engagement_id: string | null;
+  estimate: Record<string, unknown> | null;
+  live_price: Record<string, unknown> | null;
+  carbon: Record<string, unknown> | null;
+  reservations: Record<string, unknown> | null;
+  rightsizing: Record<string, unknown> | null;
+  break_even: Record<string, unknown> | null;
+  report: string;
+}
+
+// ── Demo Builder ─────────────────────────────────────────────────────────────
+
+export interface DemoFileManifestEntry {
+  path: string;
+  kind: "code" | "infra" | "docs" | "config";
+  size: number;
+  sha256: string;
+}
+
+export interface DemoSpec {
+  slug: string;
+  title: string;
+  audience: "customer" | "internal" | "partner";
+  duration_minutes: number;
+  target_persona: string;
+  key_features: string[];
+  azure_services: string[];
+  workload_spec: Record<string, unknown>;
+}
+
+export type DemoVerifyResult =
+  | { ok: boolean; output: string }
+  | { skipped: true; reason: string };
+
+export interface DemoBuilt {
+  type: "demo_built";
+  generated_at: string;
+  engagement_id: string | null;
+  job_id: string;
+  spec: DemoSpec | null;
+  manifest: DemoFileManifestEntry[];
+  diagrams: Array<{ name: string; mermaid: string }>;
+  verify: DemoVerifyResult | null;
+  repo_url: string | null;
+  readme_md: string;
+}

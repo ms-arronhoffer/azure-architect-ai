@@ -16,9 +16,10 @@ import type { Mode, ModelConfig, UserSettings } from "../types";
 import { useAuth } from "../auth/AuthProvider";
 
 const AZURE_MODELS_BY_MODE: Partial<Record<Mode, string[]>> = {
-  codegen: ["gpt-5.3-codex"],
-  architecture: ["gpt-5.3-codex", "gpt-5.4"],
-  review: ["gpt-5.3-codex", "gpt-5.4"],
+  codegen: ["gpt-5.3-codex", "gpt-5.4", "gpt-5.4-pro"],
+  architecture: ["gpt-5.3-codex", "gpt-5.4", "gpt-5.4-pro"],
+  review: ["gpt-5.3-codex", "gpt-5.4", "gpt-5.4-pro"],
+  "demo-build": ["gpt-5.3-codex", "gpt-5.4", "gpt-5.4-pro"],
 };
 
 const MODELS_BY_PROVIDER: Record<string, string[]> = {
@@ -60,6 +61,7 @@ const CHAT_MODES: Array<{ mode: Mode; label: string }> = [
   { mode: "architecture", label: "Architecture Design" },
   { mode: "review", label: "Architecture Review" },
   { mode: "codegen", label: "Code Generator" },
+  { mode: "demo-build", label: "Demo Builder" },
 ];
 
 const useStyles = makeStyles({

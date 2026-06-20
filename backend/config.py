@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     azure_openai_key: str | None = None
     azure_openai_deployment_chat: str = "gpt-4o-mini"
     azure_openai_deployment_arch: str = "gpt-4.1"
+    azure_openai_deployment_demo_build: str = "gpt-5.3-codex"
     azure_openai_deployment_embedding: str = "text-embedding-3-small"
     azure_openai_api_version: str = "2024-12-01-preview"
 
