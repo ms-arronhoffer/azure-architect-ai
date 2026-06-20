@@ -16,10 +16,10 @@ import type { Mode, ModelConfig, UserSettings } from "../types";
 import { useAuth } from "../auth/AuthProvider";
 
 const AZURE_MODELS_BY_MODE: Partial<Record<Mode, string[]>> = {
-  codegen: ["gpt-5.3-codex"],
-  architecture: ["gpt-5.3-codex", "gpt-5.4"],
-  review: ["gpt-5.3-codex", "gpt-5.4"],
-  "demo-build": ["gpt-5.3-codex"],
+  codegen: ["gpt-5.3-codex", "gpt-5.4", "gpt-5.4-pro"],
+  architecture: ["gpt-5.3-codex", "gpt-5.4", "gpt-5.4-pro"],
+  review: ["gpt-5.3-codex", "gpt-5.4", "gpt-5.4-pro"],
+  "demo-build": ["gpt-5.3-codex", "gpt-5.4", "gpt-5.4-pro"],
 };
 
 const MODELS_BY_PROVIDER: Record<string, string[]> = {

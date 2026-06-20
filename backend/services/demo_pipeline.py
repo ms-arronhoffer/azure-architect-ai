@@ -126,11 +126,42 @@ def manifest(files: dict[str, str]) -> list[dict]:
     return out
 
 
-async def _llm_json(prompt: str, *, max_tokens: int = 4000, retry_on_parse: bool = True) -> dict:
-    """Single-shot chat completion that must return JSON. One retry on parse fail.
+_SYSTEM_TEXT = "You output strict JSON only. No prose, no markdown fences."
 
-    Honors the user-configured model in `mode_models["demo-build"]` (falls back
-    to the `gpt-5.3-codex` default deployment).
+
+def _needs_responses_api(deployment: str) -> bool:
+    """Detect codex / gpt-5 / o-series deployments. These reject Chat Completions
+    entirely with `{'error': {'message': 'The requested operation is unsupported.'}}`
+    and must be called via `client.responses.create()` instead."""
+    d = (deployment or "").lower()
+    return (
+        d.startswith("gpt-5")
+        or "codex" in d
+        or d.startswith("o1")
+        or d.startswith("o3")
+        or d.startswith("o4")
+    )
+
+
+def _extract_responses_text(resp: Any) -> str:
+    text = getattr(resp, "output_text", None)
+    if text:
+        return text.strip()
+    chunks: list[str] = []
+    for item in getattr(resp, "output", []) or []:
+        for c in getattr(item, "content", []) or []:
+            t = getattr(c, "text", None)
+            if t:
+                chunks.append(t)
+    return "".join(chunks).strip()
+
+
+async def _llm_json(prompt: str, *, max_tokens: int = 4000, retry_on_parse: bool = True) -> dict:
+    """Single-shot LLM call that must return JSON. One retry on parse fail.
+
+    Routes to the Responses API for codex / gpt-5 / o-series deployments (which
+    reject `chat.completions` outright); falls back to Chat Completions for
+    gpt-4-family deployments. Honors `mode_models["demo-build"]`.
     """
     try:
         app_settings = await load_settings()
@@ -143,49 +174,67 @@ async def _llm_json(prompt: str, *, max_tokens: int = 4000, retry_on_parse: bool
         mode="demo-build", provider=provider, model=model_override
     )
 
-    def _try(messages: list[dict], token_kw: str) -> Any:
-        kwargs: dict[str, Any] = {"model": deployment, "messages": messages}
-        kwargs[token_kw] = max_tokens
-        return openai_service.call_with_retry(
-            lambda: client.chat.completions.create(**kwargs),
-            max_attempts=2,
-            model_name=deployment,
-        )
+    use_responses = provider in ("azure", "") and _needs_responses_api(deployment)
 
-    user_only = [{"role": "user", "content": prompt}]
-    sys_user = [
-        {"role": "system", "content": "You output strict JSON only. No prose, no markdown fences."},
-        {"role": "user", "content": prompt},
-    ]
+    def _call_responses(p: str) -> str:
+        kwargs: dict[str, Any] = {
+            "model": deployment,
+            "input": p,
+            "instructions": _SYSTEM_TEXT,
+            "max_output_tokens": max_tokens,
+        }
+        try:
+            resp = openai_service.call_with_retry(
+                lambda: client.responses.create(**kwargs),
+                max_attempts=2,
+                model_name=deployment,
+            )
+        except BadRequestError as exc:
+            msg = getattr(exc, "message", None) or str(exc)
+            log.warning(
+                "demo_pipeline.responses_bad_request",
+                deployment=deployment,
+                message=msg,
+            )
+            raise RuntimeError(
+                f"Azure OpenAI Responses API 400 on '{deployment}': {msg}"
+            ) from exc
+        return _extract_responses_text(resp)
 
-    # "Operation is unsupported" on codex/reasoning deployments can mean any of:
-    # rejected system role, rejected max_completion_tokens, or rejected
-    # max_tokens. Try the four viable combinations in order from most-modern
-    # (system+max_completion_tokens) to most-legacy (user+max_tokens). Surface
-    # the last error if all attempts fail.
-    attempts: list[tuple[str, list[dict], str]] = [
-        ("sys+max_completion_tokens", sys_user, "max_completion_tokens"),
-        ("user+max_completion_tokens", user_only, "max_completion_tokens"),
-        ("sys+max_tokens", sys_user, "max_tokens"),
-        ("user+max_tokens", user_only, "max_tokens"),
-    ]
+    def _call_chat(p: str) -> str:
+        """4-way parameter fallback for gpt-4-family deployments."""
+        user_only = [{"role": "user", "content": p}]
+        sys_user = [{"role": "system", "content": _SYSTEM_TEXT}, *user_only]
 
-    def _call(messages_unused: list[dict]) -> Any:
+        def _try(msgs: list[dict], token_kw: str) -> Any:
+            kwargs: dict[str, Any] = {"model": deployment, "messages": msgs}
+            kwargs[token_kw] = max_tokens
+            return openai_service.call_with_retry(
+                lambda: client.chat.completions.create(**kwargs),
+                max_attempts=2,
+                model_name=deployment,
+            )
+
+        attempts: list[tuple[str, list[dict], str]] = [
+            ("sys+max_completion_tokens", sys_user, "max_completion_tokens"),
+            ("user+max_completion_tokens", user_only, "max_completion_tokens"),
+            ("sys+max_tokens", sys_user, "max_tokens"),
+            ("user+max_tokens", user_only, "max_tokens"),
+        ]
         last_exc: BadRequestError | None = None
         for label, msgs, token_kw in attempts:
             try:
-                return _try(msgs, token_kw)
+                resp = _try(msgs, token_kw)
+                return (resp.choices[0].message.content or "").strip() if resp.choices else ""
             except BadRequestError as exc:
                 msg = getattr(exc, "message", None) or str(exc)
                 log.warning(
-                    "demo_pipeline.bad_request_retry",
+                    "demo_pipeline.chat_bad_request_retry",
                     deployment=deployment,
                     attempt=label,
                     message=msg,
                 )
                 last_exc = exc
-                # Only fall through on "unsupported"-style errors; bail on
-                # auth / quota / content-filter 400s immediately.
                 if "unsupported" not in msg.lower():
                     raise RuntimeError(f"Azure OpenAI 400 on '{deployment}': {msg}") from exc
         msg = getattr(last_exc, "message", None) or str(last_exc) if last_exc else "unknown"
@@ -193,28 +242,23 @@ async def _llm_json(prompt: str, *, max_tokens: int = 4000, retry_on_parse: bool
             f"Azure OpenAI 400 on '{deployment}' after all parameter fallbacks: {msg}"
         )
 
-    messages = sys_user
-    resp = await asyncio.to_thread(_call, messages)
-    raw = (resp.choices[0].message.content or "").strip() if resp.choices else ""
+    async def _one_shot(p: str) -> str:
+        if use_responses:
+            return await asyncio.to_thread(_call_responses, p)
+        return await asyncio.to_thread(_call_chat, p)
+
+    raw = await _one_shot(prompt)
     try:
         return json.loads(raw)
     except json.JSONDecodeError as exc:
         if not retry_on_parse:
             raise
-        repair = [
-            *messages,
-            {"role": "assistant", "content": raw},
-            {
-                "role": "user",
-                "content": (
-                    "Your last reply was not valid JSON. Reply again with the "
-                    "exact same schema, valid JSON only, no prose, no markdown "
-                    f"fences. Parser error: {exc.msg}"
-                ),
-            },
-        ]
-        resp2 = await asyncio.to_thread(_call, repair)
-        raw2 = (resp2.choices[0].message.content or "").strip() if resp2.choices else ""
+        repair = (
+            f"{prompt}\n\n---\nYour previous reply was not valid JSON. Reply "
+            "again with the exact same schema, valid JSON only, no prose, no "
+            f"markdown fences. Parser error: {exc.msg}"
+        )
+        raw2 = await _one_shot(repair)
         return json.loads(raw2)
 
 
