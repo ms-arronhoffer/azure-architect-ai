@@ -146,6 +146,8 @@ def get_async_client() -> AsyncAzureOpenAI:
 def get_deployment(mode: str) -> str:
     if mode in ("architecture", "waf"):
         return settings.azure_openai_deployment_arch
+    if mode == "demo-build":
+        return settings.azure_openai_deployment_demo_build
     return settings.azure_openai_deployment_chat
 
 
