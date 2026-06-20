@@ -143,42 +143,57 @@ async def _llm_json(prompt: str, *, max_tokens: int = 4000, retry_on_parse: bool
         mode="demo-build", provider=provider, model=model_override
     )
 
-    def _call(messages: list[dict]) -> Any:
-        # temperature + response_format are intentionally omitted: codex /
-        # reasoning deployments reject both with 400 "operation is unsupported".
-        # The prompts enforce strict-JSON output and `_llm_json` handles parse
-        # failures with one repair-reply retry.
-        try:
-            return openai_service.call_with_retry(
-                lambda: client.chat.completions.create(
-                    model=deployment,
-                    messages=messages,
-                    max_completion_tokens=max_tokens,
-                ),
-                max_attempts=2,
-                model_name=deployment,
-            )
-        except BadRequestError as exc:
-            body = getattr(exc, "body", None)
-            msg = getattr(exc, "message", None) or str(exc)
-            log.warning(
-                "demo_pipeline.bad_request",
-                deployment=deployment,
-                message=msg,
-                body=body,
-            )
-            # Re-raise with the actual Azure OpenAI error message surfaced so
-            # the `phase_failed` SSE event carries diagnostic detail instead
-            # of a bare "400" string.
-            raise RuntimeError(f"Azure OpenAI 400 on '{deployment}': {msg}") from exc
+    def _try(messages: list[dict], token_kw: str) -> Any:
+        kwargs: dict[str, Any] = {"model": deployment, "messages": messages}
+        kwargs[token_kw] = max_tokens
+        return openai_service.call_with_retry(
+            lambda: client.chat.completions.create(**kwargs),
+            max_attempts=2,
+            model_name=deployment,
+        )
 
-    messages = [
-        {
-            "role": "system",
-            "content": "You output strict JSON only. No prose, no markdown fences.",
-        },
+    user_only = [{"role": "user", "content": prompt}]
+    sys_user = [
+        {"role": "system", "content": "You output strict JSON only. No prose, no markdown fences."},
         {"role": "user", "content": prompt},
     ]
+
+    # "Operation is unsupported" on codex/reasoning deployments can mean any of:
+    # rejected system role, rejected max_completion_tokens, or rejected
+    # max_tokens. Try the four viable combinations in order from most-modern
+    # (system+max_completion_tokens) to most-legacy (user+max_tokens). Surface
+    # the last error if all attempts fail.
+    attempts: list[tuple[str, list[dict], str]] = [
+        ("sys+max_completion_tokens", sys_user, "max_completion_tokens"),
+        ("user+max_completion_tokens", user_only, "max_completion_tokens"),
+        ("sys+max_tokens", sys_user, "max_tokens"),
+        ("user+max_tokens", user_only, "max_tokens"),
+    ]
+
+    def _call(messages_unused: list[dict]) -> Any:
+        last_exc: BadRequestError | None = None
+        for label, msgs, token_kw in attempts:
+            try:
+                return _try(msgs, token_kw)
+            except BadRequestError as exc:
+                msg = getattr(exc, "message", None) or str(exc)
+                log.warning(
+                    "demo_pipeline.bad_request_retry",
+                    deployment=deployment,
+                    attempt=label,
+                    message=msg,
+                )
+                last_exc = exc
+                # Only fall through on "unsupported"-style errors; bail on
+                # auth / quota / content-filter 400s immediately.
+                if "unsupported" not in msg.lower():
+                    raise RuntimeError(f"Azure OpenAI 400 on '{deployment}': {msg}") from exc
+        msg = getattr(last_exc, "message", None) or str(last_exc) if last_exc else "unknown"
+        raise RuntimeError(
+            f"Azure OpenAI 400 on '{deployment}' after all parameter fallbacks: {msg}"
+        )
+
+    messages = sys_user
     resp = await asyncio.to_thread(_call, messages)
     raw = (resp.choices[0].message.content or "").strip() if resp.choices else ""
     try:
