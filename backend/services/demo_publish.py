@@ -1,16 +1,18 @@
 """GitHub publishing for demo builds.
 
-Gated entirely behind `DEMO_FACTORY_PUBLISH=true`. Requires `GITHUB_TOKEN`
-in the environment (the existing services/github_service helpers take a
-token argument; this module pulls it from env). Hardcodes the
-`ms-arronhoffer` org for v1; override with `DEMO_FACTORY_GH_ORG`.
+Token resolution order:
+  1. Explicit `github_token` arg (per-user PAT from the encrypted secret_store)
+  2. `GITHUB_TOKEN` environment variable (operator-provided default)
 
-The github_service helpers operate against the authenticated user's
-account (`POST /user/repos`); for org-owned repos the caller still needs
-push permission via that user. v1 sidesteps that nuance by treating the
-org name as the repo owner for subsequent file pushes — the operator is
-expected to either run as a member of ms-arronhoffer or override
-DEMO_FACTORY_GH_ORG to their own handle.
+When the caller passes a token we treat publishing as enabled. The
+`DEMO_FACTORY_PUBLISH` env flag is honored only as a fallback for the
+env-token path so existing operator deployments keep their explicit gate.
+
+Repo owner is derived from the create-repo response (`owner.login`) so
+subsequent file pushes always target the actual owning account/org.
+`DEMO_FACTORY_GH_ORG` (or `_DEFAULT_ORG`) only steers *where* the repo
+is created — when set we POST to `/orgs/{org}/repos`; otherwise we POST
+to `/user/repos` under the token owner.
 """
 
 from __future__ import annotations
@@ -23,40 +25,51 @@ from services import github_service
 
 log = get_logger("demo_publish")
 
-_DEFAULT_ORG = "ms-arronhoffer"
 _PUBLISH_ENV = "DEMO_FACTORY_PUBLISH"
 _ORG_ENV = "DEMO_FACTORY_GH_ORG"
 _TOKEN_ENV = "GITHUB_TOKEN"
 
 
-def publish_enabled() -> bool:
+def publish_enabled(github_token: str | None = None) -> bool:
+    """A per-user token implies opt-in; otherwise require the env gate."""
+    if github_token:
+        return True
     return os.environ.get(_PUBLISH_ENV, "").lower() == "true"
 
 
-def target_org() -> str:
-    return os.environ.get(_ORG_ENV) or _DEFAULT_ORG
+def target_org() -> str | None:
+    """Org to create the repo under. None means create under the token owner."""
+    val = os.environ.get(_ORG_ENV) or ""
+    return val or None
 
 
 async def publish_to_github(
-    slug: str, title: str, files: dict[str, str], azure_services: list[str]
+    slug: str,
+    title: str,
+    files: dict[str, str],
+    azure_services: list[str],
+    github_token: str = "",
 ) -> str:
-    """Create a private repo and push every file. Returns the HTML URL.
+    """Create a repo and push every file. Returns the HTML URL.
 
     Raises RuntimeError when publishing is disabled or the token is missing
     so the caller can surface a `phase_skipped` / `phase_failed` event.
     """
-    if not publish_enabled():
+    token = github_token or os.environ.get(_TOKEN_ENV) or ""
+    if not publish_enabled(token):
         raise RuntimeError("publish_disabled")
-    token = os.environ.get(_TOKEN_ENV)
     if not token:
         raise RuntimeError("github_token_missing")
 
-    owner = target_org()
+    org = target_org()
     description = f"{title} — Azure AI demo (services: {', '.join(azure_services) or 'n/a'})"
     repo = await github_service.create_repo(
-        token, name=slug, private=True, description=description
+        token, name=slug, private=True, description=description, org=org
     )
-    html_url = repo.get("html_url") or f"https://github.com/{owner}/{slug}"
+    # Trust the API response over local config — covers both org repos and
+    # personal repos under whichever account the token actually owns.
+    owner = (repo.get("owner") or {}).get("login") or org or ""
+    html_url = repo.get("html_url") or (f"https://github.com/{owner}/{slug}" if owner else "")
 
     # Push files one at a time. GitHub's contents API is per-file; serialize
     # to avoid hitting secondary rate limits on a fresh repo.

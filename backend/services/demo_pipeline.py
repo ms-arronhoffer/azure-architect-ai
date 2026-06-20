@@ -66,7 +66,7 @@ class DemoBuildRequest(BaseModel):
     key_features: list[str] = Field(default_factory=list)
     azure_services: list[str] = Field(default_factory=list)
     seed_bicep: str = ""  # optional prior bundled_design.bicep to extend
-    publish: bool = False
+    publish: bool = True
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
@@ -464,17 +464,21 @@ async def _phase_verify(
 
 
 async def _phase_publish(
-    req: DemoBuildRequest, files: dict[str, str], state: dict[str, Any]
+    req: DemoBuildRequest,
+    files: dict[str, str],
+    state: dict[str, Any],
+    github_token: str = "",
 ) -> AsyncGenerator[dict, None]:
     yield _phase_event("publish", "started")
     spec = state.get("spec") or {}
     if not req.publish:
         yield _phase_event("publish", "skipped", reason="publish_disabled")
         return
-    if not demo_publish.publish_enabled():
+    token = github_token or os.environ.get("GITHUB_TOKEN") or ""
+    if not demo_publish.publish_enabled(token):
         yield _phase_event("publish", "skipped", reason="publish_disabled")
         return
-    if not os.environ.get("GITHUB_TOKEN"):
+    if not token:
         yield _phase_event("publish", "skipped", reason="github_token_missing")
         return
     if not files:
@@ -486,6 +490,7 @@ async def _phase_publish(
             title=spec.get("title") or req.demo_title,
             files=files,
             azure_services=spec.get("azure_services") or [],
+            github_token=token,
         )
         state["repo_url"] = url
         yield _phase_event("publish", "complete", repo_url=url)
@@ -500,6 +505,7 @@ async def _phase_publish(
 
 async def stream_demo_pipeline(
     req: DemoBuildRequest,
+    github_token: str = "",
 ) -> AsyncGenerator[dict, None]:
     """6-phase demo build. Final event is `demo_built`."""
     state: dict[str, Any] = {
@@ -531,7 +537,7 @@ async def stream_demo_pipeline(
         yield ev
     async for ev in _phase_verify(files, state):
         yield ev
-    async for ev in _phase_publish(req, files, state):
+    async for ev in _phase_publish(req, files, state, github_token=github_token):
         yield ev
 
     diagrams: list[dict] = []

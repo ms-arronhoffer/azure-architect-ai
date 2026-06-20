@@ -19,7 +19,7 @@ from threading import Lock
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 
-from auth import require_user
+from auth import require_user, user_id_from_claims
 from middleware.logging import get_logger
 from services.demo_pipeline import DemoBuildRequest, stream_demo_pipeline
 
@@ -61,11 +61,11 @@ def _build_zip(files: dict[str, str]) -> bytes:
     return buf.getvalue()
 
 
-async def _stream(req: DemoBuildRequest, job_id: str) -> AsyncGenerator[str, None]:
+async def _stream(req: DemoBuildRequest, job_id: str, github_token: str) -> AsyncGenerator[str, None]:
     """Wrap the pipeline so the final event includes job_id and the file map is
     stashed in the ZIP cache instead of being shipped over the wire twice."""
     try:
-        async for ev in stream_demo_pipeline(req):
+        async for ev in stream_demo_pipeline(req, github_token=github_token):
             if ev.get("type") == "demo_built":
                 files = ev.pop("files", {}) or {}
                 slug = (ev.get("spec") or {}).get("slug") or req.demo_slug
@@ -81,12 +81,17 @@ async def _stream(req: DemoBuildRequest, job_id: str) -> AsyncGenerator[str, Non
 
 @router.post("/build")
 async def demo_build(
-    req: DemoBuildRequest, _=Depends(require_user)
+    req: DemoBuildRequest, claims=Depends(require_user)
 ) -> StreamingResponse:
     _evict_expired()
     job_id = uuid.uuid4().hex
+    from db import session_scope
+    from services.secret_store import get_secret
+    user_id = user_id_from_claims(claims)
+    async with session_scope() as session:
+        github_token = await get_secret(session, user_id, "github_pat") or ""
     return StreamingResponse(
-        _stream(req, job_id),
+        _stream(req, job_id, github_token),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
