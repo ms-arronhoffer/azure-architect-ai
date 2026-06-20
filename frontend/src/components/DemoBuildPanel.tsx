@@ -16,6 +16,8 @@ import {
   Switch,
   Tooltip,
   Textarea,
+  MessageBar,
+  MessageBarBody,
 } from "@fluentui/react-components";
 import {
   PlayRegular,
@@ -24,9 +26,10 @@ import {
   ArrowDownloadRegular,
   DocumentRegular,
 } from "@fluentui/react-icons";
-import { apiFetch, apiPath } from "../config/api";
+import { apiFetch } from "../config/api";
 import type { DemoBuilt, DemoFileManifestEntry } from "../types";
 import { useWorkloadSpec } from "../hooks/useWorkloadSpec";
+import { useSettings } from "../hooks/useSettings";
 import {
   hashDemoRequest,
   loadDemoState,
@@ -67,10 +70,12 @@ const useStyles = makeStyles({
     display: "flex",
     flexDirection: "column",
     height: "100%",
+    minHeight: 0,
     overflow: "hidden",
     background: tokens.colorNeutralBackground2,
   },
   header: {
+    flexShrink: 0,
     padding: "20px 28px 16px",
     borderBottom: `1px solid ${tokens.colorNeutralStroke2}`,
     background: tokens.colorNeutralBackground1,
@@ -80,7 +85,9 @@ const useStyles = makeStyles({
   },
   body: {
     flex: 1,
-    overflow: "auto",
+    minHeight: 0,
+    overflowY: "auto",
+    overflowX: "hidden",
     padding: "20px 28px",
     display: "flex",
     flexDirection: "column",
@@ -112,6 +119,9 @@ const useStyles = makeStyles({
     display: "flex",
     flexDirection: "column",
     gap: "6px",
+    maxHeight: "360px",
+    overflowY: "auto",
+    paddingRight: "4px",
   },
   phaseRow: {
     display: "flex",
@@ -218,6 +228,7 @@ interface FileMapState {
 export default function DemoBuildPanel() {
   const styles = useStyles();
   const { spec } = useWorkloadSpec();
+  const { githubTokenConfigured } = useSettings();
   const initialSlug = useMemo(() => slugify(spec.name || "my-azure-demo"), [spec.name]);
 
   const [demoSlug, setDemoSlug] = useState(initialSlug);
@@ -229,6 +240,21 @@ export default function DemoBuildPanel() {
   const [keyFeaturesText, setKeyFeaturesText] = useState("streaming, managed identity");
   const [azureServicesText, setAzureServicesText] = useState("Azure OpenAI, App Service");
   const [publish, setPublish] = useState(false);
+  const [publishTouched, setPublishTouched] = useState(false);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
+
+  // Default the Publish switch ON once we know a PAT is configured, but never
+  // override an explicit user toggle (publishTouched).
+  useEffect(() => {
+    if (!publishTouched && githubTokenConfigured) setPublish(true);
+  }, [githubTokenConfigured, publishTouched]);
+
+  // Auto-clear download error after a few seconds (no toaster wired up).
+  useEffect(() => {
+    if (!downloadError) return;
+    const t = setTimeout(() => setDownloadError(null), 6000);
+    return () => clearTimeout(t);
+  }, [downloadError]);
 
   const [isRunning, setIsRunning] = useState(false);
   const [events, setEvents] = useState<DemoPhaseEvent[]>([]);
@@ -417,14 +443,29 @@ export default function DemoBuildPanel() {
     setResumable(null);
   }
 
-  function handleDownloadZip() {
+  async function handleDownloadZip() {
     if (!result?.job_id) return;
-    const url = apiPath(`/api/demo/${result.job_id}/zip`);
-    // Trigger a download via anchor — apiFetch isn't needed, the browser
-    // attaches the auth cookie/header automatically only for fetch. For SPA
-    // bearer auth, open in a new tab where the user is already authenticated;
-    // for cookie-based auth, this works directly.
-    window.open(url, "_blank");
+    setDownloadError(null);
+    try {
+      const res = await apiFetch(`/api/demo/${result.job_id}/zip`);
+      if (!res.ok) {
+        const text = await res.text().catch(() => "");
+        throw new Error(`Download failed (${res.status})${text ? `: ${text.slice(0, 200)}` : ""}`);
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${demoSlug || "demo"}.zip`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setDownloadError(msg);
+      console.error("demo zip download failed", err);
+    }
   }
 
   const filesByKind = useMemo(() => {
@@ -511,12 +552,20 @@ export default function DemoBuildPanel() {
           )}
           {isRunning && <Spinner size="tiny" />}
           <Tooltip
-            content="Requires DEMO_FACTORY_PUBLISH=true and GITHUB_TOKEN on the backend. Publishes to the configured org (default ms-arronhoffer)."
+            content={
+              githubTokenConfigured
+                ? "Publish requires a GitHub PAT saved in Settings. The repo is created under your account, or under DEMO_FACTORY_GH_ORG when set."
+                : "Save a GitHub PAT in Settings to enable publishing. Without a PAT this phase is skipped."
+            }
             relationship="label"
           >
             <Switch
               checked={publish}
-              onChange={(_, d) => setPublish(d.checked)}
+              onChange={(_, d) => {
+                setPublishTouched(true);
+                setPublish(d.checked);
+              }}
+              disabled={!githubTokenConfigured}
               label="Publish to GitHub"
             />
           </Tooltip>
@@ -531,6 +580,11 @@ export default function DemoBuildPanel() {
             </Button>
           )}
         </div>
+        {downloadError && (
+          <MessageBar intent="error">
+            <MessageBarBody>ZIP download failed: {downloadError}</MessageBarBody>
+          </MessageBar>
+        )}
         {resumable && !isRunning && (
           <div className={styles.controls}>
             <Text size={200}>Previous run available.</Text>
