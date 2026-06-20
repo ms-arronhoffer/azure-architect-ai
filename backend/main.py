@@ -55,6 +55,12 @@ async def lifespan(app: FastAPI):
         except Exception as exc:
             from middleware.logging import get_logger
             get_logger("startup").warning("db.init_skipped", error=str(exc))
+        try:
+            from services.secret_key_init import ensure_secret_encryption_key
+            await ensure_secret_encryption_key()
+        except Exception as exc:
+            from middleware.logging import get_logger
+            get_logger("startup").warning("secret_key.init_skipped", error=str(exc))
         # Wire OpenTelemetry + Azure Monitor after middleware is registered (see below).
         from observability import configure_telemetry
         configure_telemetry(app)
