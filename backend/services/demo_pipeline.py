@@ -268,9 +268,11 @@ async def _llm_json(prompt: str, *, max_tokens: int = 4000, retry_on_parse: bool
             f"Azure OpenAI 400 on '{deployment}' after all parameter fallbacks: {msg}"
         )
 
-    # Reasoning models stream for a long time; cap at 5 min so a real hang
-    # fails fast instead of looking like the pipeline froze.
-    timeout_s = 300.0 if use_responses else 120.0
+    # Reasoning models (gpt-5.x / o-series) can spend 10+ min on internal
+    # reasoning for large build prompts (~8k output tokens × 3 concurrent
+    # lanes). Cap at 15 min so a true hang fails fast without aborting a
+    # slow-but-progressing run.
+    timeout_s = 900.0 if use_responses else 120.0
 
     async def _one_shot(p: str) -> str:
         worker = _call_responses if use_responses else _call_chat
