@@ -33,7 +33,6 @@ import {
   BranchForkRegular,
   DocumentBulletListRegular,
   TagRegular,
-  DocumentRegular,
   PlayCircleRegular,
   GlobeRegular,
   ServerRegular,
@@ -132,8 +131,6 @@ const NAV_SECTIONS: NavSectionDef[] = [
       { mode: "analyze", label: "Workload Analysis", icon: <ChartMultipleRegular />, description: "Architecture + WAF + Security in one click" },
       { mode: "cost-optimize", label: "Cost Optimize", icon: <DataUsageRegular />, description: "Deterministic 7-phase cost pipeline with narrated report" },
       { mode: "strategy", label: "Strategy Builder", icon: <TargetRegular />, description: "AI-generated Azure strategy document" },
-      { mode: "rfpproposal", label: "RFP / Proposal Writer", icon: <DocumentRegular />, description: "Azure technical proposals and statements of work" },
-      { mode: "modelmigration", label: "Migration Advisor", icon: <ArrowSwapRegular />, description: "Score model migrations and plan PTU capacity" },
     ],
   },
   {
@@ -141,7 +138,6 @@ const NAV_SECTIONS: NavSectionDef[] = [
     items: [
       { mode: "architecture", label: "Architecture Design", icon: <BuildingRegular />, description: "Architecture, Network, AI, Data Platform, APIM", activeWhen: ARCH_MODES },
       { mode: "landingzone", label: "Landing Zone", icon: <LayerRegular />, description: "Azure CAF landing zone design with management groups" },
-      { mode: "bootstrap", label: "Bootstrapper", icon: <RocketRegular />, description: "4-step guided wizard with ZIP download" },
       { mode: "demo-build", label: "Demo Builder", icon: <RocketRegular />, description: "Generate a clone-and-run Azure demo: app + Bicep + docs" },
       { mode: "namingstandards", label: "Naming Standards", icon: <TagRegular />, description: "CAF naming conventions + Bicep/Terraform enforcement module" },
       { subheading: "Library" },
@@ -171,6 +167,12 @@ const NAV_SECTIONS: NavSectionDef[] = [
       { mode: "pipelineforge", label: "Pipeline Forge", icon: <BranchForkRegular />, description: "Generate GitHub Actions & Azure DevOps CI/CD pipelines" },
       { mode: "runbookstudio", label: "Runbook Studio", icon: <DocumentBulletListRegular />, description: "Generate SRE runbooks for Azure failure scenarios" },
       { mode: "troubleshoot", label: "Troubleshoot", icon: <WrenchScrewdriverRegular />, description: "Diagnose and resolve Azure issues" },
+    ],
+  },
+  {
+    label: "Reports",
+    items: [
+      { mode: "modelmigration", label: "Model IQ", icon: <ArrowSwapRegular />, description: "Score model migrations and plan PTU capacity" },
     ],
   },
 ];

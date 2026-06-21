@@ -642,15 +642,6 @@ export default function IntakePanel({ onContinueIn }: IntakePanelProps) {
         >
           Continue in Strategy
         </Button>
-        <Button
-          appearance="outline"
-          icon={<ArrowForwardRegular />}
-          onClick={() => onContinueIn && onContinueIn("bootstrap", "")}
-          disabled={!spec.name || !onContinueIn}
-          title="Open Bootstrap Wizard pre-populated from this spec"
-        >
-          Continue in Bootstrap
-        </Button>
         <Button appearance="subtle" onClick={reset} style={{ marginLeft: "auto" }}>Reset</Button>
       </div>
     </div>

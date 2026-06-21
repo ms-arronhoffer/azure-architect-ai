@@ -11,7 +11,7 @@ export interface TelemetryState {
   designsSaved: number;
   designsExported: number;
   designsCompared: number;
-  autofillApplied: Record<"strategy" | "bootstrap" | "architecture", number>;
+  autofillApplied: Record<"strategy" | "architecture", number>;
   firstSeen: string;
   lastSeen: string;
 }
@@ -24,7 +24,7 @@ export type TelemetryEvent =
   | { kind: "design_saved" }
   | { kind: "design_exported" }
   | { kind: "design_compared" }
-  | { kind: "autofill_applied"; panel: "strategy" | "bootstrap" | "architecture" };
+  | { kind: "autofill_applied"; panel: "strategy" | "architecture" };
 
 function emptyState(): TelemetryState {
   const now = new Date().toISOString();
@@ -37,7 +37,7 @@ function emptyState(): TelemetryState {
     designsSaved: 0,
     designsExported: 0,
     designsCompared: 0,
-    autofillApplied: { strategy: 0, bootstrap: 0, architecture: 0 },
+    autofillApplied: { strategy: 0, architecture: 0 },
     firstSeen: now,
     lastSeen: now,
   };

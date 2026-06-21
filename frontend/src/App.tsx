@@ -17,13 +17,12 @@ import ReferenceLibrary from "./components/ReferenceLibrary";
 import StrategyPanel from "./components/StrategyPanel";
 import PresentationPanel from "./components/PresentationPanel";
 import SettingsDrawer from "./components/SettingsDrawer";
+import HowToDrawer from "./components/HowToDrawer";
 import CodegenPanel from "./components/CodegenPanel";
 import LearningPlanPanel from "./components/LearningPlanPanel";
 import PipelineForgePanel from "./components/PipelineForgePanel";
 import RunbookStudioPanel from "./components/RunbookStudioPanel";
 import NamingStandardsPanel from "./components/NamingStandardsPanel";
-import RfpProposalPanel from "./components/RfpProposalPanel";
-import BootstrapPanel from "./components/BootstrapPanel";
 import WorkloadContextPanel from "./components/WorkloadContextPanel";
 import IntakePanel from "./components/IntakePanel";
 import IntakeChatPanel from "./components/IntakeChatPanel";
@@ -80,7 +79,7 @@ const useStyles = makeStyles({
 });
 
 const ARCH_MODES: Mode[] = ["architecture", "network", "aiarchitecture", "dataplatform", "apim"];
-const PANEL_MODES: Mode[] = [...ARCH_MODES, "waf", "review", "drbc", "threatmodel", "reliability", "landingzone", "troubleshoot", "strategy", "pipelineforge", "runbookstudio", "namingstandards", "rfpproposal", "cost-optimize", "demo-build"];
+const PANEL_MODES: Mode[] = [...ARCH_MODES, "waf", "review", "drbc", "threatmodel", "reliability", "landingzone", "troubleshoot", "strategy", "pipelineforge", "runbookstudio", "namingstandards", "cost-optimize", "demo-build"];
 
 const UNIFIED_AGENTS = import.meta.env.VITE_UNIFIED_AGENTS === "true";
 const DEFAULT_MODE: Mode = UNIFIED_AGENTS ? "architect" : "qa";
@@ -104,6 +103,7 @@ export default function App() {
   const [contextOpen, setContextOpen] = useState(false);
   const [engagementsOpen, setEngagementsOpen] = useState(false);
   const [telemetryOpen, setTelemetryOpen] = useState(false);
+  const [howToOpen, setHowToOpen] = useState(false);
   const [selectedConversation, setSelectedConversation] = useState<ConversationRecord | null>(null);
   const [refinementSeed, setRefinementSeed] = useState<{ id: string; messages: ChatMessage[]; suggestedReplies?: string[] } | null>(null);
   const [selectedPanelSession, setSelectedPanelSession] = useState<ConversationRecord | null>(null);
@@ -136,7 +136,6 @@ export default function App() {
   const pipelineForgeSessionId = useRef(crypto.randomUUID()).current;
   const runbookStudioSessionId = useRef(crypto.randomUUID()).current;
   const namingStandardsSessionId = useRef(crypto.randomUUID()).current;
-  const rfpProposalSessionId = useRef(crypto.randomUUID()).current;
   const threatModelSessionId = useRef(crypto.randomUUID()).current;
   const reliabilitySessionId = useRef(crypto.randomUUID()).current;
   const landingZoneSessionId = useRef(crypto.randomUUID()).current;
@@ -327,11 +326,9 @@ export default function App() {
     if (mode === "presentation") return <PresentationPanel key="presentation" />;
     if (mode === "codegen") return <CodegenPanel key="codegen" onRefine={handleRefine} />;
     if (mode === "learningplan") return <LearningPlanPanel key="learningplan" />;
-    if (mode === "bootstrap") return <BootstrapPanel key="bootstrap" onRefine={handleRefine} />;
     if (mode === "pipelineforge") return <PipelineForgePanel key="pipelineforge" onRefine={handleRefine} sessionId={pipelineForgeSessionId} onSave={handlePanelSave} initialSession={panelSession("pipelineforge")} />;
     if (mode === "runbookstudio") return <RunbookStudioPanel key="runbookstudio" onRefine={handleRefine} sessionId={runbookStudioSessionId} onSave={handlePanelSave} initialSession={panelSession("runbookstudio")} />;
     if (mode === "namingstandards") return <NamingStandardsPanel key="namingstandards" onRefine={handleRefine} sessionId={namingStandardsSessionId} onSave={handlePanelSave} initialSession={panelSession("namingstandards")} />;
-    if (mode === "rfpproposal") return <RfpProposalPanel key="rfpproposal" onRefine={handleRefine} sessionId={rfpProposalSessionId} onSave={handlePanelSave} initialSession={panelSession("rfpproposal")} />;
     if (NETWORK_DESK_MODES.includes(mode)) {
       return (
         <NetworkDeskPanel
@@ -443,6 +440,7 @@ export default function App() {
             onOpenHistory={() => setHistoryOpen(true)}
             onOpenSettings={() => setSettingsOpen(true)}
             onOpenContext={() => setContextOpen(true)}
+            onOpenHowTo={() => setHowToOpen(true)}
             workloadContext={workloadContext}
             saveStatus={saveStatus}
             engagements={engagementsApi.engagements}
@@ -469,6 +467,10 @@ export default function App() {
         githubTokenConfigured={githubTokenConfigured}
         onSaveGithubToken={setGithubToken}
         onClearGithubToken={clearGithubToken}
+      />
+      <HowToDrawer
+        open={howToOpen}
+        onClose={() => setHowToOpen(false)}
       />
       <EngagementDrawer
         open={engagementsOpen}

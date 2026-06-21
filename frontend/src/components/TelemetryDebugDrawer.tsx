@@ -79,7 +79,6 @@ export default function TelemetryDebugDrawer({ open, onClose }: Props) {
 
         <div className={styles.section}>Autofills applied</div>
         <div className={styles.row}><span>Strategy → Spec</span><span>{stats.autofillApplied.strategy}</span></div>
-        <div className={styles.row}><span>Spec → Bootstrap</span><span>{stats.autofillApplied.bootstrap}</span></div>
         <div className={styles.row}><span>Spec → Architecture</span><span>{stats.autofillApplied.architecture}</span></div>
 
         <div className={styles.section}>Modes opened ({totalModeOpens} total)</div>

@@ -13,6 +13,7 @@ import {
   SettingsRegular,
   GlobeRegular,
   SignOutRegular,
+  QuestionCircleRegular,
 } from "@fluentui/react-icons";
 import type { Mode } from "../types";
 import type { WorkloadContext } from "../types";
@@ -43,8 +44,6 @@ const MODE_LABELS: Record<Mode, string> = {
   pipelineforge: "Pipeline Forge",
   runbookstudio: "Runbook Studio",
   namingstandards: "Naming Standards",
-  rfpproposal: "RFP / Proposal Writer",
-  bootstrap: "Bootstrapper",
   aiarchitecture: "AI Architecture",
   dataplatform: "Data Platform",
   apim: "API Management",
@@ -72,7 +71,7 @@ const MODE_LABELS: Record<Mode, string> = {
   fabricplanner: "Fabric Capacity Planner",
   adfpipeline: "ADF Pipeline Generator",
   medalliondesigner: "Medallion Schema Designer",
-  modelmigration: "Migration Advisor",
+  modelmigration: "Model IQ",
   showcase: "Demo Showcase",
   refarch: "Reference Architectures",
   netvnet: "VNet & Subnet Architect",
@@ -132,11 +131,9 @@ const MODE_SECTION: Partial<Record<Mode, string>> = {
   certprep: "Advisory",
   learningplan: "Advisory",
   regional: "Advisory",
-  rfpproposal: "Advisory",
   architecture: "Design & Build",
   reference: "Design & Build",
   compare: "Design & Build",
-  bootstrap: "Design & Build",
   network: "Design & Build",
   pipelineforge: "Design & Build",
   namingstandards: "Design & Build",
@@ -160,7 +157,7 @@ const MODE_SECTION: Partial<Record<Mode, string>> = {
   whatsnew: "Communications",
   servicehealth: "Communications",
   modellifecycle: "Communications",
-  modelmigration: "Communications",
+  modelmigration: "Reports",
   showcase: "Communications",
   strategy: "Design & Build",
   datapipelineadvisor: "Data Engineering",
@@ -324,6 +321,7 @@ interface HeaderProps {
   onOpenHistory: () => void;
   onOpenSettings: () => void;
   onOpenContext: () => void;
+  onOpenHowTo: () => void;
   workloadContext?: WorkloadContext;
   saveStatus?: SaveStatus;
   engagements?: Engagement[];
@@ -332,7 +330,7 @@ interface HeaderProps {
   onOpenEngagements?: () => void;
 }
 
-export default function Header({ mode, darkMode, onToggleDark, onOpenHistory, onOpenSettings, onOpenContext, workloadContext, saveStatus, engagements, activeEngagement, onSelectEngagement, onOpenEngagements }: HeaderProps) {
+export default function Header({ mode, darkMode, onToggleDark, onOpenHistory, onOpenSettings, onOpenContext, onOpenHowTo, workloadContext, saveStatus, engagements, activeEngagement, onSelectEngagement, onOpenEngagements }: HeaderProps) {
   const styles = useStyles();
   const section = MODE_SECTION[mode];
   const { account, logout, enabled: authEnabled } = useAuth();
@@ -412,6 +410,13 @@ export default function Header({ mode, darkMode, onToggleDark, onOpenHistory, on
           icon={<SettingsRegular />}
           onClick={onOpenSettings}
           title="Settings"
+        />
+        <Button
+          appearance="subtle"
+          size="small"
+          icon={<QuestionCircleRegular />}
+          onClick={onOpenHowTo}
+          title="How to use this app"
         />
         <Button
           appearance="subtle"

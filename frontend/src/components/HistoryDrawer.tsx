@@ -44,7 +44,6 @@ const MODE_LABELS: Partial<Record<Mode, string>> = {
   reference: "Reference",
   codegen: "Code Gen",
   learningplan: "Learning Plan",
-  bootstrap: "Bootstrap",
 };
 
 const PANEL_MODES = new Set<Mode>([

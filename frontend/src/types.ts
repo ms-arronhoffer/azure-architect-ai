@@ -19,8 +19,6 @@ export type Mode =
   | "pipelineforge"
   | "runbookstudio"
   | "namingstandards"
-  | "rfpproposal"
-  | "bootstrap"
   | "aiarchitecture"
   | "dataplatform"
   | "apim"
@@ -702,17 +700,6 @@ export interface WorkloadSpec {
   migrationTimeline: string;
   regulatoryNotes: string;
   additionalNotes: string;
-}
-
-// ── Bootstrap output ──────────────────────────────────────────────────────────
-
-export interface BootstrapOutputs {
-  explanation?: string;
-  diagramXml?: string;
-  bicepCode?: string;
-  paramFile?: string;
-  runbookMarkdown?: string;
-  costSummary?: string;
 }
 
 // ── Region comparison types ───────────────────────────────────────────────────
