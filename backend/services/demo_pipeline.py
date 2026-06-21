@@ -183,24 +183,31 @@ async def _llm_json(prompt: str, *, max_tokens: int = 4000, retry_on_parse: bool
 
     def _call_responses(p: str) -> str:
         # gpt-5 / o-series burn output tokens on internal reasoning before
-        # producing visible text. With a 3.5k budget the JSON gets truncated
-        # mid-string. Inflate the budget, pin reasoning to "low" for these
-        # small JSON-shaping calls, and request json_object format so the
-        # model emits well-formed JSON when it does fit.
+        # producing visible text. Stream the response (no max_output_tokens
+        # cap) so reasoning + JSON can complete without truncation, and ask
+        # for json_object format so the visible output is well-formed.
+        # gpt-5.4-pro rejects effort=low; medium is the lowest accepted.
         is_reasoning = _needs_responses_api(deployment)
-        effective_max = max(max_tokens * 3, 12000) if is_reasoning else max_tokens
         kwargs: dict[str, Any] = {
             "model": deployment,
             "input": p,
             "instructions": _SYSTEM_TEXT,
-            "max_output_tokens": effective_max,
         }
         if is_reasoning:
-            kwargs["reasoning"] = {"effort": "low"}
+            kwargs["reasoning"] = {"effort": "medium"}
             kwargs["text"] = {"format": {"type": "json_object"}}
+        else:
+            kwargs["max_output_tokens"] = max_tokens
+
+        def _stream_and_collect() -> Any:
+            with client.responses.stream(**kwargs) as stream:
+                for _ in stream:
+                    pass
+                return stream.get_final_response()
+
         try:
             resp = openai_service.call_with_retry(
-                lambda: client.responses.create(**kwargs),
+                _stream_and_collect,
                 max_attempts=2,
                 model_name=deployment,
             )
