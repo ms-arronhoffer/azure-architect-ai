@@ -12,6 +12,19 @@ class Settings(BaseSettings):
     azure_openai_deployment_embedding: str = "text-embedding-3-small"
     azure_openai_api_version: str = "2024-12-01-preview"
 
+    # Per-deployment routing overrides. When a deployment name matches one of
+    # these, the openai_service swaps the base endpoint / api-version / key
+    # instead of using the global ones above. Used when a model lives on a
+    # different Azure OpenAI / Foundry resource than the primary one.
+    # gpt-5.4-pro currently lives on the arronhoffer-demo-resource Foundry
+    # account in eastus (resource group: test-AI-Foundry). The Responses API
+    # is the only supported surface for this deployment.
+    azure_openai_endpoint_gpt54pro: str = (
+        "https://arronhoffer-demo-resource.cognitiveservices.azure.com"
+    )
+    azure_openai_api_version_gpt54pro: str = "2025-04-01-preview"
+    azure_openai_key_gpt54pro: str | None = None
+
     # RAG corpus. Pre-warmed at startup when true; reindex via /api/rag/reindex.
     rag_enabled: bool = True
     rag_top_k: int = 5

@@ -18,14 +18,76 @@ from observability import openai_tokens_histogram, tracer
 
 log = get_logger("openai_service")
 
-_client: AzureOpenAI | None = None
-_async_client: AsyncAzureOpenAI | None = None
-_responses_client: AzureOpenAI | None = None
-
 # Responses API requires api-version >= 2025-03-01-preview on Azure OpenAI.
 # Kept separate from the default api_version so legacy Chat Completions paths
 # stay on whatever the env declares.
 RESPONSES_API_VERSION = "2025-03-01-preview"
+
+# Per-deployment routing. Maps deployment names whose endpoint / api-version
+# differ from the global settings to their override values. Looked up by
+# `_route_for(deployment)`; cache key for the client also includes endpoint
+# and api-version so swapping models doesn't reuse the wrong client.
+_MODEL_ROUTES: dict[str, dict[str, str | None]] = {
+    "gpt-5.4-pro": {
+        "endpoint": settings.azure_openai_endpoint_gpt54pro,
+        "api_version": settings.azure_openai_api_version_gpt54pro,
+        "key": settings.azure_openai_key_gpt54pro,
+    },
+}
+
+
+def _route_for(deployment: str | None) -> dict[str, str | None] | None:
+    if not deployment:
+        return None
+    return _MODEL_ROUTES.get(deployment)
+
+
+def _route_endpoint(deployment: str | None) -> str:
+    route = _route_for(deployment)
+    return (route or {}).get("endpoint") or settings.azure_openai_endpoint  # type: ignore[return-value]
+
+
+def _route_api_version(deployment: str | None, default: str) -> str:
+    route = _route_for(deployment)
+    return (route or {}).get("api_version") or default  # type: ignore[return-value]
+
+
+def _route_key(deployment: str | None) -> str | None:
+    route = _route_for(deployment)
+    if route is None:
+        return settings.azure_openai_key
+    # An explicit per-route key overrides the global one. When the route has
+    # no key, fall back to the global key so AAD-only setups keep working.
+    return route.get("key") or settings.azure_openai_key
+
+
+_client_cache: dict[tuple[str, str, str, bool], AzureOpenAI | AsyncAzureOpenAI] = {}
+
+
+def _build_client(
+    *, endpoint: str, api_version: str, key: str | None, is_async: bool
+) -> AzureOpenAI | AsyncAzureOpenAI:
+    cache_key = (endpoint, api_version, key or "", is_async)
+    cached = _client_cache.get(cache_key)
+    if cached is not None:
+        return cached
+    cls: type[AzureOpenAI] | type[AsyncAzureOpenAI] = (
+        AsyncAzureOpenAI if is_async else AzureOpenAI
+    )
+    if key:
+        client = cls(azure_endpoint=endpoint, api_key=key, api_version=api_version)
+    else:
+        credential = DefaultAzureCredential()
+        token_provider = get_bearer_token_provider(
+            credential, "https://cognitiveservices.azure.com/.default"
+        )
+        client = cls(
+            azure_endpoint=endpoint,
+            azure_ad_token_provider=token_provider,
+            api_version=api_version,
+        )
+    _client_cache[cache_key] = client
+    return client
 
 TOOL_INCOMPATIBLE_MODELS = {
     "llama-3.1-70b-instruct",
@@ -100,78 +162,34 @@ def _retry_after_seconds(exc: Exception) -> float | None:
         return None
 
 
-def get_client() -> AzureOpenAI:
-    global _client
-    if _client is None:
-        if settings.azure_openai_key:
-            _client = AzureOpenAI(
-                azure_endpoint=settings.azure_openai_endpoint,
-                api_key=settings.azure_openai_key,
-                api_version=settings.azure_openai_api_version,
-            )
-        else:
-            credential = DefaultAzureCredential()
-            token_provider = get_bearer_token_provider(
-                credential, "https://cognitiveservices.azure.com/.default"
-            )
-            _client = AzureOpenAI(
-                azure_endpoint=settings.azure_openai_endpoint,
-                azure_ad_token_provider=token_provider,
-                api_version=settings.azure_openai_api_version,
-            )
-    return _client
+def get_client(deployment: str | None = None) -> AzureOpenAI:
+    endpoint = _route_endpoint(deployment)
+    api_version = _route_api_version(deployment, settings.azure_openai_api_version)
+    key = _route_key(deployment)
+    return _build_client(endpoint=endpoint, api_version=api_version, key=key, is_async=False)  # type: ignore[return-value]
 
 
-def get_responses_client() -> AzureOpenAI:
+def get_responses_client(deployment: str | None = None) -> AzureOpenAI:
     """Dedicated Azure OpenAI client pinned to an api-version that supports
     the Responses API. Required for codex / gpt-5 / o-series deployments,
-    which reject Chat Completions outright."""
-    global _responses_client
-    if _responses_client is None:
-        if settings.azure_openai_key:
-            _responses_client = AzureOpenAI(
-                azure_endpoint=settings.azure_openai_endpoint,
-                api_key=settings.azure_openai_key,
-                api_version=RESPONSES_API_VERSION,
-            )
-        else:
-            credential = DefaultAzureCredential()
-            token_provider = get_bearer_token_provider(
-                credential, "https://cognitiveservices.azure.com/.default"
-            )
-            _responses_client = AzureOpenAI(
-                azure_endpoint=settings.azure_openai_endpoint,
-                azure_ad_token_provider=token_provider,
-                api_version=RESPONSES_API_VERSION,
-            )
-    return _responses_client
+    which reject Chat Completions outright. When `deployment` matches a
+    per-deployment route, that route's endpoint/api-version/key wins."""
+    endpoint = _route_endpoint(deployment)
+    api_version = _route_api_version(deployment, RESPONSES_API_VERSION)
+    key = _route_key(deployment)
+    return _build_client(endpoint=endpoint, api_version=api_version, key=key, is_async=False)  # type: ignore[return-value]
 
 
-def get_async_client() -> AsyncAzureOpenAI:
+def get_async_client(deployment: str | None = None) -> AsyncAzureOpenAI:
     """Async sibling of `get_client()`. Use for streaming endpoints — sync
     iteration over a streaming response blocks the event loop, which causes
     uvicorn's ASGI cancel scope to terminate the request mid-stream and the
     client sees a 200 with an empty body.
     """
-    global _async_client
-    if _async_client is None:
-        if settings.azure_openai_key:
-            _async_client = AsyncAzureOpenAI(
-                azure_endpoint=settings.azure_openai_endpoint,
-                api_key=settings.azure_openai_key,
-                api_version=settings.azure_openai_api_version,
-            )
-        else:
-            credential = DefaultAzureCredential()
-            token_provider = get_bearer_token_provider(
-                credential, "https://cognitiveservices.azure.com/.default"
-            )
-            _async_client = AsyncAzureOpenAI(
-                azure_endpoint=settings.azure_openai_endpoint,
-                azure_ad_token_provider=token_provider,
-                api_version=settings.azure_openai_api_version,
-            )
-    return _async_client
+    endpoint = _route_endpoint(deployment)
+    api_version = _route_api_version(deployment, settings.azure_openai_api_version)
+    key = _route_key(deployment)
+    return _build_client(endpoint=endpoint, api_version=api_version, key=key, is_async=True)  # type: ignore[return-value]
 
 
 def get_deployment(mode: str) -> str:
@@ -191,7 +209,7 @@ def resolve_client_and_model(
     """Return (client, model_string) for the given provider/model combo."""
     if provider == "azure" or not provider:
         deployment = model or get_deployment(mode)
-        return get_client(), deployment
+        return get_client(deployment), deployment
 
     if not github_token:
         raise ValueError("GitHub token not configured. Add your token in Settings.")
@@ -215,7 +233,7 @@ def resolve_async_client_and_model(
     """Async sibling of `resolve_client_and_model`. Used by streaming routes."""
     if provider == "azure" or not provider:
         deployment = model or get_deployment(mode)
-        return get_async_client(), deployment
+        return get_async_client(deployment), deployment
 
     if not github_token:
         raise ValueError("GitHub token not configured. Add your token in Settings.")
