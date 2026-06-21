@@ -287,6 +287,38 @@ class ArbSubmission(Base):
     updated_at: Mapped[int] = mapped_column(BigInteger, nullable=False, index=True)
 
 
+class MigrationJob(Base):
+    """Async Model IQ bundle job.
+
+    A single job ingests 1..N retirement-report CSVs, runs analysis +
+    narrative, produces 1..3 export formats, and zips them. The route layer
+    returns the row immediately with ``status='pending'``; a background
+    task drives it through ``running -> complete|failed`` and writes the
+    finished ZIP to ``backend/data/model_iq_bundles/{id}.zip``. Rows older
+    than 24 h are purged by a scheduler cron alongside the on-disk zip.
+    """
+
+    __tablename__ = "migration_jobs"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="pending", index=True)
+    phase: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    formats: Mapped[str] = mapped_column(String(64), nullable=False, default="pptx,docx,pdf")
+    files_total: Mapped[int] = mapped_column(nullable=False, default=0)
+    files_done: Mapped[int] = mapped_column(nullable=False, default=0)
+    bundle_path: Mapped[str | None] = mapped_column(Text, nullable=True)
+    size_bytes: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    terminal_event: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    user_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    engagement_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    tenant_id: Mapped[str] = mapped_column(
+        String(64), nullable=False, default=current_tenant_id, index=True
+    )
+    created_at: Mapped[int] = mapped_column(BigInteger, nullable=False, index=True)
+    completed_at: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+
+
 class ArbCondition(Base):
     """Trackable approval condition attached to an ARB submission. Each row
     is a single remediation item (e.g. "Enable PIM for Key Vault admins")
@@ -329,6 +361,7 @@ _TENANT_SCOPED = (
     AuditEvent,
     ArbSubmission,
     ArbCondition,
+    MigrationJob,
 )
 
 
@@ -424,6 +457,7 @@ __all__ = [
     "Demo",
     "Engagement",
     "EngagementReference",
+    "MigrationJob",
     "RagDocument",
     "RefArch",
     "TokenUsage",

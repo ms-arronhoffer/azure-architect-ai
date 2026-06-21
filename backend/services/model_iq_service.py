@@ -618,3 +618,114 @@ def analyze_retirement_report(tsv_text: str) -> dict:
         "customers": customers,
         "model_summary": model_summary,
     }
+
+
+def analyze_retirement_reports(texts: list[str]) -> dict:
+    """Analyze multiple retirement-report CSVs/TSVs and merge results.
+
+    Customers from different files are merged by `tpid`; collisions on
+    `(tpid, subscription_id, model, version)` keep the entry from the
+    last file (last-write-wins, matches single-file behaviour where a
+    duplicate row would also be merged into the same group).
+    Model summary entries are merged by model name; counts are summed
+    and the most-urgent retirement date wins.
+    """
+    if not texts:
+        raise ValueError("analyze_retirement_reports requires at least one input")
+
+    merged_customers: dict[str, dict] = {}
+    merged_models: dict[str, dict] = {}
+    total_rows = 0
+
+    for tsv_text in texts:
+        result = analyze_retirement_report(tsv_text)
+        total_rows += int(result["summary"].get("total_rows", 0))
+
+        for c in result.get("customers", []):
+            existing = merged_customers.get(c["tpid"])
+            if existing is None:
+                merged_customers[c["tpid"]] = {
+                    "tpid": c["tpid"],
+                    "tp_name": c["tp_name"],
+                    "csam": c.get("csam", ""),
+                    "deployments": list(c.get("deployments", [])),
+                }
+            else:
+                # Dedup deployments on (subscription_id, model, version)
+                key_of = lambda d: (d.get("subscription_id", ""), d.get("model", ""), d.get("version", ""))
+                by_key = {key_of(d): d for d in existing["deployments"]}
+                for d in c.get("deployments", []):
+                    by_key[key_of(d)] = d  # last write wins
+                existing["deployments"] = list(by_key.values())
+
+        for m in result.get("model_summary", []):
+            mid = m["model"]
+            existing_m = merged_models.get(mid)
+            if existing_m is None:
+                merged_models[mid] = dict(m)
+            else:
+                existing_m["row_count"] = existing_m.get("row_count", 0) + m.get("row_count", 0)
+                existing_m["customer_count"] = existing_m.get("customer_count", 0) + m.get("customer_count", 0)
+                # Prefer the most-urgent record's retirement date.
+                cur_rank = _URGENCY_RANK.get(existing_m.get("urgency", "unknown"), 0)
+                new_rank = _URGENCY_RANK.get(m.get("urgency", "unknown"), 0)
+                if new_rank > cur_rank:
+                    existing_m["urgency"] = m["urgency"]
+                    existing_m["retirement_date"] = m.get("retirement_date", "")
+                    existing_m["days_until_retirement"] = m.get("days_until_retirement")
+
+    # Recompute per-customer priority and sort.
+    for c in merged_customers.values():
+        max_rank = max(
+            (_URGENCY_RANK.get(d.get("urgency", "unknown"), 0) for d in c["deployments"]),
+            default=0,
+        )
+        c["priority"] = _RANK_TO_URGENCY.get(max_rank, "unknown")
+        c["deployments"].sort(
+            key=lambda d: (
+                -_URGENCY_RANK.get(d.get("urgency", "unknown"), 0),
+                -d.get("peak_usage_score", 0),
+            )
+        )
+
+    customers = sorted(
+        merged_customers.values(),
+        key=lambda c: (-_URGENCY_RANK.get(c["priority"], 0), c.get("tp_name", "")),
+    )
+    model_summary = sorted(
+        merged_models.values(),
+        key=lambda m: (
+            -_URGENCY_RANK.get(m.get("urgency", "unknown"), 0),
+            m.get("days_until_retirement") or 9999,
+        ),
+    )
+
+    all_deps = [d for c in customers for d in c["deployments"]]
+    urgency_counts: dict[str, int] = {"critical": 0, "high": 0, "medium": 0, "low": 0, "unknown": 0}
+    for d in all_deps:
+        urgency_counts[d.get("urgency", "unknown")] = (
+            urgency_counts.get(d.get("urgency", "unknown"), 0) + 1
+        )
+    very_high_critical = [
+        d for d in all_deps
+        if d.get("urgency") in ("critical", "high") and d.get("peak_usage_score", 0) >= 3
+    ]
+
+    return {
+        "summary": {
+            "analysis_date": date.today().isoformat(),
+            "files": len(texts),
+            "total_rows": total_rows,
+            "unique_customers": len(customers),
+            "unique_models": len(model_summary),
+            "unique_deployments": len(all_deps),
+            "critical": urgency_counts["critical"],
+            "high": urgency_counts["high"],
+            "medium": urgency_counts["medium"],
+            "low": urgency_counts["low"],
+            "unknown": urgency_counts["unknown"],
+            "high_usage_urgent": len(very_high_critical),
+        },
+        "customers": customers,
+        "model_summary": model_summary,
+    }
