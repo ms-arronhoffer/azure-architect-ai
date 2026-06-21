@@ -594,6 +594,8 @@ export default function AnalysisPanel({
                 sizing: obj.sizing,
                 security: obj.security,
                 waf: obj.waf,
+                quota_constraints: obj.quota_constraints || [],
+                cost_estimate: obj.cost_estimate || null,
               };
               setBundledDesign(bundle);
               setActiveTab("bundled");
@@ -1132,6 +1134,24 @@ export default function AnalysisPanel({
                       {bundledDesign.workload_name} • {new Date(bundledDesign.generated_at).toLocaleString()}
                     </Text>
                   </div>
+                  {bundledDesign.quota_constraints && bundledDesign.quota_constraints.length > 0 && (
+                    <MessageBar intent="warning" style={{ marginBottom: "12px" }}>
+                      <MessageBarBody>
+                        <strong>Quota constraints:</strong>{" "}
+                        {bundledDesign.quota_constraints.map((c, i) => {
+                          const alt = c.alternatives?.[0];
+                          return (
+                            <span key={`${c.sku}-${c.region}-${i}`}>
+                              {i > 0 ? "; " : ""}
+                              <code>{c.sku}</code> in <code>{c.region}</code>
+                              {" "}(requested {c.requested}, available {c.available}
+                              {alt ? `; try ${alt.region} → ${alt.available} available` : "; no alternative found"})
+                            </span>
+                          );
+                        })}
+                      </MessageBarBody>
+                    </MessageBar>
+                  )}
                   <Accordion multiple collapsible defaultOpenItems={["architecture"]}>
                     <AccordionItem value="architecture">
                       <AccordionHeader>Architecture</AccordionHeader>

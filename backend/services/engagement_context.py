@@ -12,12 +12,14 @@ regulatory boundary applies.
 """
 from __future__ import annotations
 
+from collections import Counter
 from typing import Any
 
 from sqlalchemy import select
 
-from db import Engagement, current_engagement_id, session_scope
+from db import Engagement, RagDocument, current_engagement_id, session_scope
 from middleware.logging import get_logger
+from services.rag_service import CORPUS_TENANT_INVENTORY
 
 log = get_logger("engagement_context")
 
@@ -75,6 +77,84 @@ def format_preamble(engagement: Engagement) -> str:
     return "\n".join(parts)
 
 
+async def inventory_snapshot(engagement_id: str) -> str | None:
+    """Compact narrative summary of the engagement's tenant_inventory corpus.
+
+    Returns a short line like "12 resources (top: VM×5, Storage×3) across
+    eastus2/westus; 3 Key Vaults; 2 NSG rules open to 0.0.0.0/0; 4 policy
+    findings; MTD $1,234.56 USD" — under ~200 tokens. Returns None when the
+    engagement has no inventory yet so the caller can skip the section.
+    """
+    async with session_scope() as session:
+        stmt = (
+            select(RagDocument)
+            .where(RagDocument.corpus == CORPUS_TENANT_INVENTORY)
+            .where(RagDocument.engagement_id == engagement_id)
+        )
+        rows = (await session.execute(stmt)).scalars().all()
+    if not rows:
+        return None
+
+    fact_kinds: Counter[str] = Counter()
+    resource_types: Counter[str] = Counter()
+    regions: Counter[str] = Counter()
+    open_ports: Counter[str] = Counter()
+    cost_total = 0.0
+    currency: str | None = None
+    advisor_high = 0
+    policy_findings = 0
+    for row in rows:
+        meta = row.doc_metadata or {}
+        kind = meta.get("fact_kind") or "unknown"
+        fact_kinds[kind] += 1
+        if kind == "resource":
+            rtype = meta.get("resource_type") or "unknown"
+            # Collapse to short last-segment label (e.g. Microsoft.Compute/virtualMachines → virtualMachines)
+            short = rtype.rsplit("/", 1)[-1] if "/" in rtype else rtype
+            resource_types[short] += 1
+            if meta.get("region"):
+                regions[meta["region"]] += 1
+        elif kind == "open_nsg_rule":
+            port = str(meta.get("destination_port") or "*")
+            open_ports[port] += 1
+        elif kind == "policy_noncompliance":
+            policy_findings += 1
+        elif kind == "advisor_recommendation":
+            if (meta.get("impact") or "").lower() == "high":
+                advisor_high += 1
+        elif kind == "cost_mtd":
+            try:
+                cost_total += float(meta.get("total_cost") or 0.0)
+            except (TypeError, ValueError):
+                pass
+            if not currency:
+                currency = meta.get("currency")
+
+    fragments: list[str] = []
+    total_resources = fact_kinds.get("resource", 0)
+    if total_resources:
+        top_types = ", ".join(f"{name}×{count}" for name, count in resource_types.most_common(3))
+        region_list = ", ".join(name for name, _ in regions.most_common(3)) or "unknown"
+        fragments.append(f"{total_resources} resources (top: {top_types}) across {region_list}")
+    public_ip_count = fact_kinds.get("public_ip", 0)
+    if public_ip_count:
+        fragments.append(f"{public_ip_count} public IPs")
+    open_rule_count = fact_kinds.get("open_nsg_rule", 0)
+    if open_rule_count:
+        port_summary = ", ".join(f"port {p}" for p, _ in open_ports.most_common(3))
+        fragments.append(f"{open_rule_count} NSG rules open to 0.0.0.0/0 ({port_summary})")
+    if policy_findings:
+        fragments.append(f"{policy_findings} non-compliant policy findings")
+    if advisor_high:
+        fragments.append(f"{advisor_high} high-impact Advisor recs")
+    if cost_total > 0:
+        fragments.append(f"MTD ~{cost_total:,.2f} {currency or 'USD'}")
+
+    if not fragments:
+        return None
+    return "; ".join(fragments)
+
+
 async def preamble_for_active() -> str:
     """Return the formatted preamble for the active engagement, or "" when
     none is set. Safe to unconditionally concatenate into a system prompt.
@@ -83,10 +163,26 @@ async def preamble_for_active() -> str:
     if eng is None:
         return ""
     try:
-        return format_preamble(eng)
+        base = format_preamble(eng)
     except Exception as exc:
         log.warning("engagement.preamble_failed", engagement_id=eng.id, error=str(exc))
         return ""
+    try:
+        snapshot = await inventory_snapshot(eng.id)
+    except Exception as exc:
+        log.warning("engagement.inventory_snapshot_failed", engagement_id=eng.id, error=str(exc))
+        snapshot = None
+    if not snapshot:
+        return base
+    # Insert before the trailing blank line so the preamble stays a single block.
+    lines = base.rstrip("\n").split("\n")
+    lines.append(f"- **Tenant Inventory Snapshot**: {snapshot}")
+    lines.append(
+        "- This snapshot is a per-engagement RAG corpus; full details are "
+        "retrievable via citations when the design prompt needs them."
+    )
+    lines.append("")
+    return "\n".join(lines)
 
 
 def to_dict(engagement: Engagement) -> dict[str, Any]:
@@ -107,4 +203,11 @@ def to_dict(engagement: Engagement) -> dict[str, Any]:
     }
 
 
-__all__ = ["format_preamble", "load", "load_active", "preamble_for_active", "to_dict"]
+__all__ = [
+    "format_preamble",
+    "inventory_snapshot",
+    "load",
+    "load_active",
+    "preamble_for_active",
+    "to_dict",
+]

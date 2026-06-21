@@ -31,6 +31,7 @@ CORPUS_REFERENCE_ARCHS = "reference_archs"
 CORPUS_LEARN = "learn"
 CORPUS_AZURE_UPDATES = "azure_updates"
 CORPUS_AVM = "avm"
+CORPUS_TENANT_INVENTORY = "tenant_inventory"
 
 # Corpora that the chat citation flow searches in addition to the live Learn
 # fallback. Ordered for documentation; the merger sorts by cosine score.
@@ -67,15 +68,22 @@ async def index_documents(
     corpus: str,
     docs: Iterable[dict],
     replace: bool = False,
+    engagement_id: str | None = None,
 ) -> int:
     """Embed and upsert documents. Each doc must have source_id, title, content.
     Optional: url, metadata. Returns count indexed.
+
+    When ``engagement_id`` is provided, each persisted row is stamped with it
+    (used by the ``tenant_inventory`` corpus for per-engagement isolation).
     """
     items = list(docs)
     if not items:
         return 0
     if replace:
-        await session.execute(delete(RagDocument).where(RagDocument.corpus == corpus))
+        stmt = delete(RagDocument).where(RagDocument.corpus == corpus)
+        if engagement_id is not None:
+            stmt = stmt.where(RagDocument.engagement_id == engagement_id)
+        await session.execute(stmt)
     try:
         vectors = embed_texts([d["content"] for d in items])
     except Exception as e:
@@ -96,6 +104,7 @@ async def index_documents(
                     content=doc["content"],
                     embedding=vec,
                     doc_metadata=doc.get("metadata", {}),
+                    engagement_id=engagement_id,
                     updated_at=now,
                 )
             )
@@ -105,6 +114,8 @@ async def index_documents(
             existing.content = doc["content"]
             existing.embedding = vec
             existing.doc_metadata = doc.get("metadata", {})
+            if engagement_id is not None:
+                existing.engagement_id = engagement_id
             existing.updated_at = now
     await session.commit()
     log.info("rag.indexed", corpus=corpus, count=len(items))
@@ -192,6 +203,7 @@ async def hybrid_search(
     corpora: list[str] | None = None,
     top_k: int = 30,
     confidence_floor: float | None = None,
+    engagement_id: str | None = None,
 ) -> dict:
     """RRF-merge cosine + rapidfuzz token-set lexical scoring.
 
@@ -199,7 +211,18 @@ async def hybrid_search(
     Each hit carries the merged ``score`` (RRF) plus the constituent
     ``cosine``/``lexical`` scores for debugging. ``unknown`` is True when
     the strongest hit's RRF score is below ``confidence_floor``.
+
+    ``engagement_id`` filters the ``tenant_inventory`` corpus: only chunks
+    stamped with the active engagement come back, while public corpora
+    (learn / avm / refarchs / azure_updates) remain visible. When omitted,
+    falls back to ``engagement_id_var`` so chat/architecture routes don't
+    have to thread it manually.
     """
+    from sqlalchemy import or_
+
+    from db import RagDocument as _RagDocument
+    from db import current_engagement_id
+
     from rapidfuzz import fuzz
 
     floor = _DEFAULT_CONFIDENCE_FLOOR if confidence_floor is None else confidence_floor
@@ -212,9 +235,22 @@ async def hybrid_search(
         log.warning("rag.hybrid_embed_failed", error=str(e))
         q_vec = []
 
+    effective_engagement = engagement_id if engagement_id is not None else current_engagement_id()
+
     stmt = select(RagDocument)
     if corpora:
         stmt = stmt.where(RagDocument.corpus.in_(corpora))
+    # Tenant inventory isolation: hide tenant_inventory chunks unless they
+    # belong to the active engagement. Other corpora are unaffected.
+    if effective_engagement is None:
+        stmt = stmt.where(_RagDocument.corpus != CORPUS_TENANT_INVENTORY)
+    else:
+        stmt = stmt.where(
+            or_(
+                _RagDocument.corpus != CORPUS_TENANT_INVENTORY,
+                _RagDocument.engagement_id == effective_engagement,
+            )
+        )
     rows = (await session.execute(stmt)).scalars().all()
     if not rows:
         return {"hits": [], "unknown": True, "top_score": 0.0}

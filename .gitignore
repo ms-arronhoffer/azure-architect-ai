@@ -39,3 +39,4 @@ backend/conversations.db
 backend/user_settings.json
 backend/data/conversations.db
 backend/data/__pycache__/
+backend/data/arb_packets/

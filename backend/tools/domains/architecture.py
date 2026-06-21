@@ -151,4 +151,40 @@ TOOLS = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "check_quota_alternatives",
+            "description": (
+                "Check Azure subscription quota for a list of (sku, region) tuples and, "
+                "when constrained, surface alternative regions with available capacity. "
+                "Call this mid-conversation when the user asks 'can I run this in <region>?' "
+                "or after the architecture phase emits a cost_estimate."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "items": {
+                        "type": "array",
+                        "description": "Line items to check.",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "service": {"type": "string"},
+                                "sku": {"type": "string", "description": "VM size or SKU name, e.g. Standard_D8s_v5."},
+                                "region": {"type": "string", "description": "Azure region to check first."},
+                                "quantity": {"type": "integer", "description": "Requested count.", "default": 1},
+                            },
+                            "required": ["sku", "region"],
+                        },
+                    },
+                    "preferred_region": {
+                        "type": "string",
+                        "description": "Optional region to try before geo-pair fallbacks.",
+                    },
+                },
+                "required": ["items"],
+            },
+        },
+    },
 ]

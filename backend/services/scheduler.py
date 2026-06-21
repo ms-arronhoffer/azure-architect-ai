@@ -16,6 +16,9 @@ from services.avm_ingest import run_ingest as avm_run_ingest
 from services.azure_updates_ingest import run_ingest as azure_updates_run_ingest
 from services.demo_ingest import run_ingest as demo_run_ingest
 from services.refarch_ingest import run_ingest
+from services.tenant_inventory_ingest import (
+    ingest_all_active_engagements as tenant_inventory_run_ingest,
+)
 from services.whats_new_service import fetch_announcements
 
 _log = get_logger("scheduler")
@@ -67,6 +70,16 @@ def start_scheduler() -> None:
         trigger=CronTrigger(day_of_week="mon", hour=5, minute=11),
         id="avm_ingest_weekly",
         name="Weekly Azure Verified Modules catalog ingest",
+        replace_existing=True,
+        coalesce=True,
+        max_instances=1,
+        misfire_grace_time=3600,
+    )
+    sched.add_job(
+        tenant_inventory_run_ingest,
+        trigger=CronTrigger(hour=2, minute=37),
+        id="tenant_inventory_ingest_nightly",
+        name="Nightly per-engagement Azure inventory snapshot",
         replace_existing=True,
         coalesce=True,
         max_instances=1,

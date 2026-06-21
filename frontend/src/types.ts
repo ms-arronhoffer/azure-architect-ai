@@ -774,6 +774,74 @@ export interface DecisionCard {
   when_to_reconsider: string[];
 }
 
+// ── ARB (Architecture Review Board) ──────────────────────────────────────────
+
+export type ArbStatus =
+  | "draft"
+  | "submitted"
+  | "in_review"
+  | "approved"
+  | "approved_with_conditions"
+  | "rejected"
+  | "withdrawn";
+
+export type ArbConditionStatus = "open" | "in_progress" | "cleared" | "waived";
+export type ArbConditionSeverity = "blocker" | "major" | "minor";
+
+export interface ArbCondition {
+  id: string;
+  submission_id: string;
+  text: string;
+  severity: ArbConditionSeverity;
+  status: ArbConditionStatus;
+  owner: string | null;
+  due_date: number | null;
+  evidence_url: string | null;
+  cleared_at: number | null;
+  cleared_by: string | null;
+  notes: string | null;
+}
+
+export interface ArbSubmission {
+  id: string;
+  engagement_id: string;
+  title: string;
+  submitted_by: string;
+  submitted_at: number;
+  status: ArbStatus;
+  bundled_design_snapshot: Record<string, unknown>;
+  citation_snapshot: Citation[];
+  inventory_snapshot_at: number | null;
+  reviewer_packet_url: string | null;
+  decision_summary: string | null;
+  decided_at: number | null;
+  decided_by: string | null;
+  conditions?: ArbCondition[];
+}
+
+export interface ArbSubmissionProposal {
+  title: string;
+  summary?: string;
+  conditions?: Array<{
+    text: string;
+    severity: ArbConditionSeverity;
+    owner?: string;
+  }>;
+}
+
+export interface ArbConditionActionPayload {
+  condition_id: string;
+  evidence_url?: string;
+  notes?: string;
+  rationale?: string;
+}
+
+export interface ArbStatusTransitionProposal {
+  submission_id: string;
+  target_status: Exclude<ArbStatus, "draft">;
+  decision_summary?: string;
+}
+
 
 
 // ── Architecture-route SSE result types ──────────────────────────────────────
@@ -889,7 +957,10 @@ export type StructuredResult =
   | { kind: "cicd_files"; data: CicdFilesResult }
   | { kind: "cost_alerts"; data: CostAlertsResult }
   | { kind: "security_posture"; data: SecurityPostureResult }
-  | { kind: "multicloud_comparison"; data: MulticloudComparisonResult };
+  | { kind: "multicloud_comparison"; data: MulticloudComparisonResult }
+  | { kind: "arb_submission_proposal"; data: ArbSubmissionProposal }
+  | { kind: "arb_condition_action"; data: { action: "clear" | "waive"; payload: ArbConditionActionPayload } }
+  | { kind: "arb_status_transition"; data: ArbStatusTransitionProposal };
 
 
 // ── Presentation / deck builder types ────────────────────────────────────────
@@ -1041,7 +1112,25 @@ export interface BundledDesign {
   sizing: { text: string };
   security: { text: string };
   waf: { pillars: WafPillarResult[] };
+  quota_constraints?: QuotaConstraint[];
+  cost_estimate?: { total_monthly_estimate?: number; line_items?: Array<Record<string, unknown>> } | null;
   confidence?: ConfidenceItem[];
+}
+
+export interface QuotaConstraintAlternative {
+  region: string;
+  available: number;
+  subscription_id?: string;
+}
+
+export interface QuotaConstraint {
+  service: string;
+  sku: string;
+  region: string;
+  requested: number;
+  available: number;
+  subscription_id: string;
+  alternatives: QuotaConstraintAlternative[];
 }
 
 export interface ConfidenceItem {
@@ -1152,7 +1241,10 @@ export type SseEvent =
   | { type: "fabric_capacity_plan"; plan: FabricCapacityPlan }
   | { type: "adf_pipeline"; pipeline: AdfPipelineResult }
   | { type: "medallion_schema"; design: MedallionSchemaDesign }
-  | { type: "bundled_design"; workload_name: string; generated_at: string; architecture: BundledDesign["architecture"]; sizing: BundledDesign["sizing"]; security: BundledDesign["security"]; waf: BundledDesign["waf"] }
+  | { type: "bundled_design"; workload_name: string; generated_at: string; architecture: BundledDesign["architecture"]; sizing: BundledDesign["sizing"]; security: BundledDesign["security"]; waf: BundledDesign["waf"]; quota_constraints?: QuotaConstraint[]; cost_estimate?: BundledDesign["cost_estimate"] }
+  | { type: "arb_submission_proposal"; proposal: ArbSubmissionProposal }
+  | { type: "arb_condition_action"; action: "clear" | "waive"; payload: ArbConditionActionPayload }
+  | { type: "arb_status_transition"; transition: ArbStatusTransitionProposal }
   | { type: "done" }
   | { type: "status"; message: string }
   | { type: "error"; message: string };

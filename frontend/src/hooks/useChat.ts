@@ -194,6 +194,18 @@ function _toStructuredResult(event: { type: string; [key: string]: unknown }): S
       return { kind: "security_posture", data: event.posture as never };
     case "multicloud_comparison":
       return { kind: "multicloud_comparison", data: event.comparison as never };
+    case "arb_submission_proposal":
+      return { kind: "arb_submission_proposal", data: event.proposal as never };
+    case "arb_condition_action":
+      return {
+        kind: "arb_condition_action",
+        data: {
+          action: event.action as "clear" | "waive",
+          payload: event.payload as never,
+        } as never,
+      };
+    case "arb_status_transition":
+      return { kind: "arb_status_transition", data: event.transition as never };
     default:
       return null;
   }

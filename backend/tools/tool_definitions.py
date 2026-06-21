@@ -9,6 +9,7 @@ from tools.domains.compliance import TOOLS as _compliance_tools
 from tools.domains.cost import TOOLS as _cost_tools
 from tools.domains.devsecops import TOOLS as _devsecops_tools
 from tools.domains.drbc import TOOLS as _drbc_tools
+from tools.domains.engagement import TOOLS as _engagement_tools
 from tools.domains.fabric import TOOLS as _fabric_tools
 from tools.domains.governance import TOOLS as _governance_tools
 from tools.domains.iac import TOOLS as _iac_tools
@@ -26,7 +27,7 @@ from tools.domains.stakeholder import TOOLS as _stakeholder_tools
 from tools.domains.troubleshoot import TOOLS as _troubleshoot_tools
 from tools.domains.waf import TOOLS as _waf_tools
 
-TOOLS = _architecture_tools + _bicep_tools + _codegen_tools + _comparison_tools + _compliance_tools + _cost_tools + _devsecops_tools + _drbc_tools + _fabric_tools + _adf_tools + _medallion_tools + _governance_tools + _iac_tools + _learning_tools + _migration_tools + _monitoring_tools + _network_tools + _operations_tools + _presentation_tools + _project_tools + _qa_tools + _security_tools + _stakeholder_tools + _troubleshoot_tools + _waf_tools
+TOOLS = _architecture_tools + _bicep_tools + _codegen_tools + _comparison_tools + _compliance_tools + _cost_tools + _devsecops_tools + _drbc_tools + _engagement_tools + _fabric_tools + _adf_tools + _medallion_tools + _governance_tools + _iac_tools + _learning_tools + _migration_tools + _monitoring_tools + _network_tools + _operations_tools + _presentation_tools + _project_tools + _qa_tools + _security_tools + _stakeholder_tools + _troubleshoot_tools + _waf_tools
 
 _BY_NAME = {t["function"]["name"]: t for t in TOOLS}
 
@@ -68,6 +69,8 @@ TOOLS_BY_MODE: dict[str, list] = {
         "search_azure_docs", "generate_learning_plan", "generate_practice_exam",
         "create_stakeholder_plan", "generate_deck_outline", "review_deck_outline",
         "generate_tco_report", "estimate_costs",
+        "submit_arb_design", "clear_arb_condition", "waive_arb_condition",
+        "transition_arb_status",
     ),
     # ── Legacy modes (deprecation window — UNIFIED_AGENTS=false path) ──
     "qa":           get_tools("search_azure_docs", "compare_services", "recommend_service"),

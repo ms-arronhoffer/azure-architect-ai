@@ -19,16 +19,21 @@ import {
   MenuPopover,
   MenuList,
   MenuItem,
+  MessageBar,
+  MessageBarBody,
 } from "@fluentui/react-components";
 import { CopyRegular, CheckmarkRegular, ArrowDownloadRegular, ArrowForwardRegular } from "@fluentui/react-icons";
 import { useState } from "react";
 import { copyComparisonAsMarkdown, exportComparisonSvg, exportComparisonPng } from "../../utils/comparisonExport";
 import { downloadTextFile, downloadFilesAsZip, languageFromFilename } from "../../utils/fileBundleExport";
+import { apiFetch, currentEngagementId } from "../../config/api";
+import { listSavedDesigns } from "../../utils/bundledDesignStore";
 import type {
   StructuredResult, ServiceComparison, RegionComparison, PracticeExamPack,
   StakeholderPlan, DecisionCard, Mode,
   TerraformFilesResult, ArmFilesResult, CicdFilesResult,
   CostAlertsResult, SecurityPostureResult, MulticloudComparisonResult,
+  ArbSubmissionProposal, ArbConditionActionPayload, ArbStatusTransitionProposal,
 } from "../../types";
 
 const useCardStyles = makeStyles({
@@ -637,6 +642,9 @@ export default function StructuredResultCard({ result, onContinueIn }: { result:
   if (result.kind === "cost_alerts") return <CostAlertsCard data={result.data} />;
   if (result.kind === "security_posture") return <SecurityPostureCard data={result.data} />;
   if (result.kind === "multicloud_comparison") return <MulticloudComparisonCard data={result.data} />;
+  if (result.kind === "arb_submission_proposal") return <ArbSubmissionProposalCard data={result.data} />;
+  if (result.kind === "arb_condition_action") return <ArbConditionActionCard data={result.data} />;
+  if (result.kind === "arb_status_transition") return <ArbStatusTransitionCard data={result.data} />;
 
   return null;
 }
@@ -1396,6 +1404,246 @@ function MulticloudComparisonCard({ data }: { data: MulticloudComparisonResult }
       {data.note && (
         <Text size={200} block style={{ marginTop: "6px", color: tokens.colorNeutralForeground3 }}>{data.note}</Text>
       )}
+    </div>
+  );
+}
+
+// ── ARB confirmation cards ───────────────────────────────────────────────────
+
+type AckState = "idle" | "submitting" | "done" | "error";
+
+function ArbSubmissionProposalCard({ data }: { data: ArbSubmissionProposal }) {
+  const styles = useCardStyles();
+  const [state, setState] = useState<AckState>("idle");
+  const [message, setMessage] = useState<string | null>(null);
+
+  async function confirm() {
+    const engagementId = currentEngagementId();
+    if (!engagementId) {
+      setState("error");
+      setMessage("Select an engagement first — ARB submissions are scoped to one.");
+      return;
+    }
+    const latest = listSavedDesigns()[0];
+    if (!latest) {
+      setState("error");
+      setMessage("No bundled design saved yet. Run an architecture analysis and save it before submitting.");
+      return;
+    }
+    setState("submitting");
+    setMessage(null);
+    try {
+      const citations = (latest.bundle as { citations?: unknown[] }).citations ?? [];
+      const res = await apiFetch(`/api/engagements/${engagementId}/arb/submissions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: data.title,
+          bundled_design_snapshot: latest.bundle,
+          citation_snapshot: citations,
+          conditions: data.conditions ?? [],
+        }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const row = await res.json();
+      setState("done");
+      setMessage(`Submitted as ${row.id.slice(0, 8)}… — packet generating in the background.`);
+    } catch (err) {
+      setState("error");
+      setMessage(err instanceof Error ? err.message : "Submission failed.");
+    }
+  }
+
+  return (
+    <div className={styles.card}>
+      <div className={styles.cardTitle}>
+        <Badge appearance="filled" color="brand">Propose ARB submission</Badge>
+        <Text size={200}>{(data.conditions?.length ?? 0)} pre-filed condition{(data.conditions?.length ?? 0) !== 1 ? "s" : ""}</Text>
+      </div>
+      <Text size={300} weight="semibold" block>{data.title}</Text>
+      {data.summary && (
+        <Text size={200} block style={{ marginTop: "6px", color: tokens.colorNeutralForeground2 }}>{data.summary}</Text>
+      )}
+      {data.conditions && data.conditions.length > 0 && (
+        <div style={{ marginTop: "10px" }}>
+          <Text size={200} weight="semibold" block style={{ marginBottom: "4px" }}>Conditions</Text>
+          {data.conditions.map((c, i) => (
+            <div key={i} style={{ display: "flex", gap: "6px", alignItems: "center", marginBottom: "4px" }}>
+              <Badge appearance="tint" size="small" color={c.severity === "blocker" ? "danger" : c.severity === "major" ? "warning" : "informative"}>
+                {c.severity}
+              </Badge>
+              <Text size={200}>{c.text}</Text>
+              {c.owner && <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>· {c.owner}</Text>}
+            </div>
+          ))}
+        </div>
+      )}
+      {message && (
+        <MessageBar intent={state === "error" ? "error" : "success"} style={{ marginTop: "10px" }}>
+          <MessageBarBody>{message}</MessageBarBody>
+        </MessageBar>
+      )}
+      <div style={{ marginTop: "12px", display: "flex", gap: "8px" }}>
+        <Button appearance="primary" disabled={state !== "idle"} onClick={confirm}>
+          {state === "submitting" ? "Submitting…" : state === "done" ? "Submitted" : "Confirm submission"}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function ArbConditionActionCard({ data }: { data: { action: "clear" | "waive"; payload: ArbConditionActionPayload } }) {
+  const styles = useCardStyles();
+  const [state, setState] = useState<AckState>("idle");
+  const [message, setMessage] = useState<string | null>(null);
+  const { action, payload } = data;
+
+  async function confirm() {
+    if (action === "clear" && !payload.evidence_url) {
+      setState("error");
+      setMessage("Evidence URL is required to clear a condition.");
+      return;
+    }
+    if (action === "waive" && !payload.rationale) {
+      setState("error");
+      setMessage("Rationale is required to waive a condition.");
+      return;
+    }
+    setState("submitting");
+    setMessage(null);
+    try {
+      const body =
+        action === "clear"
+          ? { status: "cleared", evidence_url: payload.evidence_url, notes: payload.notes }
+          : { status: "waived", notes: payload.rationale };
+      const res = await apiFetch(`/api/arb/conditions/${payload.condition_id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      setState("done");
+      setMessage(action === "clear" ? "Condition cleared." : "Condition waived.");
+    } catch (err) {
+      setState("error");
+      setMessage(err instanceof Error ? err.message : "Action failed.");
+    }
+  }
+
+  const verb = action === "clear" ? "Clear" : "Waive";
+  return (
+    <div className={styles.card}>
+      <div className={styles.cardTitle}>
+        <Badge appearance="filled" color={action === "clear" ? "success" : "warning"}>
+          {verb} ARB condition
+        </Badge>
+        <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
+          {payload.condition_id.slice(0, 8)}…
+        </Text>
+      </div>
+      {action === "clear" && payload.evidence_url && (
+        <div style={{ marginBottom: "6px" }}>
+          <Text size={200} weight="semibold">Evidence: </Text>
+          <Text size={200} style={{ wordBreak: "break-all" }}>{payload.evidence_url}</Text>
+        </div>
+      )}
+      {action === "waive" && payload.rationale && (
+        <div style={{ marginBottom: "6px" }}>
+          <Text size={200} weight="semibold" block>Rationale</Text>
+          <Text size={200}>{payload.rationale}</Text>
+        </div>
+      )}
+      {payload.notes && action === "clear" && (
+        <div>
+          <Text size={200} weight="semibold" block>Notes</Text>
+          <Text size={200}>{payload.notes}</Text>
+        </div>
+      )}
+      {message && (
+        <MessageBar intent={state === "error" ? "error" : "success"} style={{ marginTop: "10px" }}>
+          <MessageBarBody>{message}</MessageBarBody>
+        </MessageBar>
+      )}
+      <div style={{ marginTop: "12px", display: "flex", gap: "8px" }}>
+        <Button appearance="primary" disabled={state !== "idle"} onClick={confirm}>
+          {state === "submitting" ? "Applying…" : state === "done" ? "Applied" : `Confirm ${verb.toLowerCase()}`}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function ArbStatusTransitionCard({ data }: { data: ArbStatusTransitionProposal }) {
+  const styles = useCardStyles();
+  const [state, setState] = useState<AckState>("idle");
+  const [message, setMessage] = useState<string | null>(null);
+
+  const terminal = ["approved", "approved_with_conditions", "rejected"];
+  const decisionRequired = terminal.includes(data.target_status);
+
+  async function confirm() {
+    if (decisionRequired && !data.decision_summary) {
+      setState("error");
+      setMessage("Decision summary is required for terminal transitions.");
+      return;
+    }
+    setState("submitting");
+    setMessage(null);
+    try {
+      const res = await apiFetch(`/api/arb/submissions/${data.submission_id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          status: data.target_status,
+          ...(data.decision_summary ? { decision_summary: data.decision_summary } : {}),
+        }),
+      });
+      if (res.status === 409) {
+        setState("error");
+        setMessage("Transition not allowed from current status.");
+        return;
+      }
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      setState("done");
+      setMessage(`Status moved to ${data.target_status}.`);
+    } catch (err) {
+      setState("error");
+      setMessage(err instanceof Error ? err.message : "Transition failed.");
+    }
+  }
+
+  const color =
+    data.target_status === "approved" || data.target_status === "approved_with_conditions" ? "success"
+    : data.target_status === "rejected" ? "danger"
+    : data.target_status === "withdrawn" ? "subtle"
+    : "informative";
+
+  return (
+    <div className={styles.card}>
+      <div className={styles.cardTitle}>
+        <Badge appearance="filled" color="brand">ARB status transition</Badge>
+        <Badge appearance="tint" color={color}>{data.target_status}</Badge>
+      </div>
+      <Text size={200} block>
+        <Text size={200} weight="semibold">Submission: </Text>
+        {data.submission_id.slice(0, 8)}…
+      </Text>
+      {data.decision_summary && (
+        <div style={{ marginTop: "8px" }}>
+          <Text size={200} weight="semibold" block>Decision summary</Text>
+          <Text size={200}>{data.decision_summary}</Text>
+        </div>
+      )}
+      {message && (
+        <MessageBar intent={state === "error" ? "error" : "success"} style={{ marginTop: "10px" }}>
+          <MessageBarBody>{message}</MessageBarBody>
+        </MessageBar>
+      )}
+      <div style={{ marginTop: "12px", display: "flex", gap: "8px" }}>
+        <Button appearance="primary" disabled={state !== "idle"} onClick={confirm}>
+          {state === "submitting" ? "Applying…" : state === "done" ? "Applied" : "Confirm transition"}
+        </Button>
+      </div>
     </div>
   );
 }

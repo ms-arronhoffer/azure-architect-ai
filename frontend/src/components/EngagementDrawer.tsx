@@ -19,6 +19,8 @@ import {
 import { DismissRegular, AddRegular, DeleteRegular, SaveRegular } from "@fluentui/react-icons";
 import type { Engagement, EngagementWrite } from "../hooks/useEngagements";
 import { EngagementReferencesSection } from "./EngagementReferencesSection";
+import { EngagementInventorySection } from "./EngagementInventorySection";
+import { EngagementArbSection } from "./EngagementArbSection";
 
 const useStyles = makeStyles({
   body: { padding: "16px 20px", display: "flex", flexDirection: "column", gap: "16px" },
@@ -307,7 +309,11 @@ export default function EngagementDrawer({
             {editingId && (
               <>
                 <Divider />
+                <EngagementInventorySection engagementId={editingId} />
+                <Divider />
                 <EngagementReferencesSection engagementId={editingId} />
+                <Divider />
+                <EngagementArbSection engagementId={editingId} />
               </>
             )}
             <Divider />

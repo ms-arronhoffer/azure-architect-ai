@@ -126,6 +126,10 @@ class RagDocument(Base):
     content: Mapped[str] = mapped_column(Text, nullable=False)
     embedding: Mapped[list] = mapped_column(JSON, nullable=False)
     doc_metadata: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    # Per-engagement scoping for tenant_inventory corpus chunks. Null for
+    # public corpora (learn / avm / reference_archs / azure_updates).
+    # Indexed because hybrid_search filters on it when an engagement is active.
+    engagement_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     updated_at: Mapped[dt.datetime] = mapped_column(
         nullable=False, default=lambda: dt.datetime.now(dt.UTC).replace(tzinfo=None)
     )
@@ -252,13 +256,80 @@ class RefArch(Base):
     last_synced_at: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
 
+class ArbSubmission(Base):
+    """Architecture Review Board submission — a frozen design that has been
+    handed off for governance review. The `bundled_design_snapshot` and
+    `citation_snapshot` columns capture the artifact exactly as it stood at
+    submit time so reviewers always see what the architect signed off on,
+    even if the upstream RAG docs or design panels are later edited.
+    """
+
+    __tablename__ = "arb_submissions"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    engagement_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    title: Mapped[str] = mapped_column(Text, nullable=False)
+    submitted_by: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    submitted_at: Mapped[int] = mapped_column(BigInteger, nullable=False, index=True)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="submitted", index=True)
+    bundled_design_snapshot: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    citation_snapshot: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    inventory_snapshot_at: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    reviewer_packet_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    decision_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+    decided_at: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    decided_by: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    user_id: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    tenant_id: Mapped[str] = mapped_column(
+        String(64), nullable=False, default=current_tenant_id, index=True
+    )
+    created_at: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    updated_at: Mapped[int] = mapped_column(BigInteger, nullable=False, index=True)
+
+
+class ArbCondition(Base):
+    """Trackable approval condition attached to an ARB submission. Each row
+    is a single remediation item (e.g. "Enable PIM for Key Vault admins")
+    with its own severity, owner, due date, and evidence trail. Lets the
+    'approved with conditions' state be enforceable rather than aspirational.
+    """
+
+    __tablename__ = "arb_conditions"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    submission_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    text: Mapped[str] = mapped_column(Text, nullable=False)
+    severity: Mapped[str] = mapped_column(String(16), nullable=False, default="minor")
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="open", index=True)
+    owner: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    due_date: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    evidence_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    cleared_at: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    cleared_by: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    tenant_id: Mapped[str] = mapped_column(
+        String(64), nullable=False, default=current_tenant_id, index=True
+    )
+    created_at: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    updated_at: Mapped[int] = mapped_column(BigInteger, nullable=False, index=True)
+
+
 _engine = create_async_engine(settings.database_url, future=True, pool_pre_ping=True)
 _Session = async_sessionmaker(_engine, expire_on_commit=False)
 
 
 # Models that are partitioned per tenant. Global catalogs (RagDocument, Demo,
 # RefArch) are intentionally excluded — they are shared knowledge bases.
-_TENANT_SCOPED = (Conversation, Engagement, EngagementReference, UserSecret, TokenUsage, AuditEvent)
+_TENANT_SCOPED = (
+    Conversation,
+    Engagement,
+    EngagementReference,
+    UserSecret,
+    TokenUsage,
+    AuditEvent,
+    ArbSubmission,
+    ArbCondition,
+)
 
 
 @event.listens_for(Session, "do_orm_execute")
@@ -311,6 +382,9 @@ async def init_db() -> None:
         # Engagement linkage on conversations (Theme 4): nullable so legacy
         # rows and "no engagement selected" requests both keep working.
         await _ensure_column(conn, "conversations", "engagement_id", "VARCHAR(64)")
+        # Per-engagement RAG chunks (tenant_inventory corpus). Null for
+        # public corpora — existing rows backfill to NULL implicitly.
+        await _ensure_column(conn, "rag_documents", "engagement_id", "VARCHAR(64)")
 
 
 async def _ensure_column(conn, table: str, column: str, ddl_type: str) -> None:

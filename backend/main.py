@@ -16,6 +16,7 @@ from services.mcp_service import init_mcp
 configure_logging()
 from routes.admin import router as admin_router  # noqa: E402
 from routes.analyze import router as analyze_router  # noqa: E402
+from routes.arb import router as arb_router  # noqa: E402
 from routes.architecture import router as arch_router  # noqa: E402
 from routes.auth import router as auth_router  # noqa: E402
 from routes.chat import router as chat_router  # noqa: E402
@@ -135,6 +136,7 @@ app.include_router(iac_router, prefix="/api")
 app.include_router(cost_router, prefix="/api")
 app.include_router(engagements_router, prefix="/api")
 app.include_router(engagement_references_router, prefix="/api")
+app.include_router(arb_router, prefix="/api")
 app.include_router(demos_router, prefix="/api")
 app.include_router(demo_router, prefix="/api")
 app.include_router(demos_admin_router, prefix="/api")

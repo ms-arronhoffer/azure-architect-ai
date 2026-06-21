@@ -499,6 +499,26 @@ async def _dispatch_tool(name: str, args: dict) -> tuple[object, dict | None]:
         except Exception as e:
             return {"status": "error", "message": str(e)}, None
 
+    if name == "check_quota_alternatives":
+        from services import engagement_context as _ec
+        from services.quota_service import QuotaServiceUnavailable, check_quota_for_line_items
+        try:
+            items = args.get("items", []) or []
+            preferred = args.get("preferred_region")
+            eng = await _ec.load_active()
+            sub_ids = list(eng.subscription_ids) if eng and eng.subscription_ids else []
+            if not sub_ids:
+                return {"status": "error", "message": "no subscriptions on active engagement"}, None
+            result = await check_quota_for_line_items(items, sub_ids, preferred_region=preferred)
+            return {
+                "status": "quota_checked",
+                "constraint_count": len(result.get("constraints", [])),
+            }, {"type": "quota_alternatives", "result": result}
+        except QuotaServiceUnavailable as e:
+            return {"status": "unavailable", "message": str(e)}, None
+        except Exception as e:
+            return {"status": "error", "message": str(e)}, None
+
     if name == "analyze_reservations":
         import asyncio as _asyncio
 
@@ -656,6 +676,18 @@ async def _dispatch_tool(name: str, args: dict) -> tuple[object, dict | None]:
 
     if name == "create_stakeholder_plan":
         return {"status": "plan_created"}, {"type": "stakeholder_plan", "plan": {**args}}
+
+    if name == "submit_arb_design":
+        return {"status": "arb_submission_proposed"}, {"type": "arb_submission_proposal", "proposal": {**args}}
+
+    if name == "clear_arb_condition":
+        return {"status": "arb_condition_clear_proposed"}, {"type": "arb_condition_action", "action": "clear", "payload": {**args}}
+
+    if name == "waive_arb_condition":
+        return {"status": "arb_condition_waive_proposed"}, {"type": "arb_condition_action", "action": "waive", "payload": {**args}}
+
+    if name == "transition_arb_status":
+        return {"status": "arb_status_transition_proposed"}, {"type": "arb_status_transition", "transition": {**args}}
 
     if name == "recommend_service":
         return {"status": "service_recommended"}, {"type": "decision_card", "card": {**args}}

@@ -11,6 +11,8 @@ from pydantic import BaseModel
 from limiter import limiter
 from routes._sse import _collect_tagged, _relay_sse
 from routes.architecture import ArchRequest, _stream_architecture
+from services import engagement_context
+from services.quota_service import QuotaServiceUnavailable, check_quota_for_line_items
 
 router = APIRouter()
 
@@ -101,9 +103,50 @@ async def _stream_pipeline(req: AnalyzeRequest) -> AsyncGenerator[str, None]:
 
     arch_text = arch_state.get("text", "")
 
-    # 2. Security — fed by architecture
+    # 1b. Quota check — fed by architecture's cost_estimate line items
+    quota_constraints: list[dict[str, Any]] = []
+    quota_priors = ""
+    yield f"data: {json.dumps({'type': 'phase_started', '_job': 'quota_check', '_phase': 'pipeline'})}\n\n"
+    try:
+        engagement = await engagement_context.load_active()
+    except Exception:
+        engagement = None
+    cost_estimate = arch_state.get("cost_estimate") or {}
+    line_items = cost_estimate.get("line_items") or []
+    sub_ids = list(engagement.subscription_ids) if engagement and engagement.subscription_ids else []
+    preferred_region = (engagement.region_preference if engagement else None) or req.region or None
+
+    if not line_items or not sub_ids:
+        yield f"data: {json.dumps({'type': 'phase_skipped', '_job': 'quota_check', '_phase': 'pipeline', 'reason': 'no_line_items_or_subscriptions'})}\n\n"
+    else:
+        try:
+            quota_result = await check_quota_for_line_items(
+                line_items,
+                sub_ids,
+                preferred_region=preferred_region,
+            )
+            quota_constraints = quota_result.get("constraints", [])
+            for c in quota_constraints:
+                yield f"data: {json.dumps({'type': 'quota_constraint', '_job': 'quota_check', '_phase': 'pipeline', **c})}\n\n"
+            yield f"data: {json.dumps({'type': 'phase_complete', '_job': 'quota_check', '_phase': 'pipeline', 'constraints': quota_constraints, 'alternatives_by_sku': quota_result.get('alternatives_by_sku', {})})}\n\n"
+            if quota_constraints:
+                lines = ["", "## Prior Step — Quota Constraints", ""]
+                for c in quota_constraints:
+                    alt = c.get("alternatives") or []
+                    alt_txt = ", ".join(f"{a['region']} ({a['available']} avail)" for a in alt) or "no alternatives found"
+                    lines.append(
+                        f"- `{c['sku']}` in `{c['region']}`: requested {c['requested']}, "
+                        f"available {c['available']}. Alternatives: {alt_txt}."
+                    )
+                quota_priors = "\n".join(lines)
+        except QuotaServiceUnavailable as exc:
+            yield f"data: {json.dumps({'type': 'phase_skipped', '_job': 'quota_check', '_phase': 'pipeline', 'reason': 'mcp_unavailable', 'detail': str(exc)})}\n\n"
+        except Exception as exc:  # pragma: no cover - defensive
+            yield f"data: {json.dumps({'type': 'phase_failed', '_job': 'quota_check', '_phase': 'pipeline', 'error': str(exc)})}\n\n"
+
+    # 2. Security — fed by architecture + quota constraints
     yield f"data: {json.dumps({'type': 'analyze_status', 'job': 'security', 'status': 'running', '_phase': 'pipeline'})}\n\n"
-    sec_priors = "\n\n## Prior Step — Architecture\n" + arch_text
+    sec_priors = "\n\n## Prior Step — Architecture\n" + arch_text + quota_priors
     security_req = ArchRequest(
         requirements=req.requirements + sec_priors,
         constraints=req.constraints,
@@ -145,6 +188,8 @@ async def _stream_pipeline(req: AnalyzeRequest) -> AsyncGenerator[str, None]:
         "sizing": {"text": ""},
         "security": {"text": security_text},
         "waf": {"pillars": waf_state.get("waf_pillars", [])},
+        "quota_constraints": quota_constraints,
+        "cost_estimate": arch_state.get("cost_estimate"),
         "confidence": (arch_state.get("confidence", []) or [])
             + (security_state.get("confidence", []) or [])
             + (waf_state.get("confidence", []) or []),

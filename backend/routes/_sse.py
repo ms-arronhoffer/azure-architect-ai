@@ -38,6 +38,7 @@ async def _relay_sse(
         container.setdefault("artifacts", {})
         container.setdefault("waf_pillars", [])
         container.setdefault("confidence", [])
+        container.setdefault("cost_estimate", None)
 
     async for chunk in gen:
         if not chunk.startswith("data: "):
@@ -77,6 +78,10 @@ async def _relay_sse(
                 if isinstance(items, list):
                     container["confidence"].extend(items)
                 container["text"] = _CONFIDENCE_FENCE_RE.sub("", container["text"]).rstrip() + "\n"
+            elif etype == "cost_estimate":
+                est = obj.get("estimate")
+                if isinstance(est, dict):
+                    container["cost_estimate"] = est
         tagged = f"data: {json.dumps(obj)}\n\n"
         if yield_individually:
             yield tagged
