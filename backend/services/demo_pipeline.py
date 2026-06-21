@@ -196,6 +196,10 @@ async def _llm_json(prompt: str, *, max_tokens: int = 4000, retry_on_parse: bool
         if is_reasoning:
             kwargs["reasoning"] = {"effort": "medium"}
             kwargs["text"] = {"format": {"type": "json_object"}}
+            # Generous safety cap so reasoning can't run unbounded. 16k is
+            # ~4x the chat budget and enough room for full JSON after
+            # medium-effort reasoning on the largest demo prompts.
+            kwargs["max_output_tokens"] = max(max_tokens * 4, 16000)
         else:
             kwargs["max_output_tokens"] = max_tokens
 
@@ -264,10 +268,18 @@ async def _llm_json(prompt: str, *, max_tokens: int = 4000, retry_on_parse: bool
             f"Azure OpenAI 400 on '{deployment}' after all parameter fallbacks: {msg}"
         )
 
+    # Reasoning models stream for a long time; cap at 5 min so a real hang
+    # fails fast instead of looking like the pipeline froze.
+    timeout_s = 300.0 if use_responses else 120.0
+
     async def _one_shot(p: str) -> str:
-        if use_responses:
-            return await asyncio.to_thread(_call_responses, p)
-        return await asyncio.to_thread(_call_chat, p)
+        worker = _call_responses if use_responses else _call_chat
+        try:
+            return await asyncio.wait_for(asyncio.to_thread(worker, p), timeout=timeout_s)
+        except asyncio.TimeoutError as exc:
+            raise RuntimeError(
+                f"Azure OpenAI '{deployment}' did not return within {int(timeout_s)}s"
+            ) from exc
 
     raw = await _one_shot(prompt)
     try:
@@ -362,7 +374,20 @@ async def _phase_architecture_design(
             json.dumps(state.get("recommendations") or [], default=str),
             engagement_preamble,
         )
-        design = await _llm_json(prompt, max_tokens=3500)
+        # Reasoning models can run 60–180s with no visible output. Race the
+        # LLM call against a heartbeat ticker so the SSE stream emits a
+        # progress event every 10s and the UI doesn't look frozen.
+        design_task = asyncio.create_task(_llm_json(prompt, max_tokens=3500))
+        elapsed = 0
+        while not design_task.done():
+            try:
+                await asyncio.wait_for(asyncio.shield(design_task), timeout=10.0)
+            except asyncio.TimeoutError:
+                elapsed += 10
+                yield _phase_event(
+                    "architecture_design", "progress", elapsed_s=elapsed
+                )
+        design = design_task.result()
         state["design"] = design
         yield _phase_event(
             "architecture_design",
