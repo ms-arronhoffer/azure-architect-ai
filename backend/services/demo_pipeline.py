@@ -128,6 +128,19 @@ def manifest(files: dict[str, str]) -> list[dict]:
 
 _SYSTEM_TEXT = "You output strict JSON only. No prose, no markdown fences."
 
+# Per-phase model split for the demo-build pipeline. All gpt-5.4 family by
+# product requirement. Reasoning model (-pro) only on the one phase that
+# genuinely benefits — architecture_design — to avoid the high-latency tax on
+# output-heavy build lanes. Each entry is overridable via
+# `app_settings.mode_models["demo-build.<phase>"]`.
+_PHASE_DEFAULTS: dict[str, str] = {
+    "recommendations": "gpt-5.4-mini",
+    "architecture_design": "gpt-5.4-pro",
+    "code": "gpt-5.4",
+    "infra": "gpt-5.4",
+    "docs": "gpt-5.4",
+}
+
 
 def _needs_responses_api(deployment: str) -> bool:
     """Detect codex / gpt-5 / o-series deployments. These reject Chat Completions
@@ -156,20 +169,36 @@ def _extract_responses_text(resp: Any) -> str:
     return "".join(chunks).strip()
 
 
-async def _llm_json(prompt: str, *, max_tokens: int = 4000, retry_on_parse: bool = True) -> dict:
+async def _llm_json(
+    prompt: str,
+    *,
+    max_tokens: int = 4000,
+    retry_on_parse: bool = True,
+    phase: str = "default",
+) -> dict:
     """Single-shot LLM call that must return JSON. One retry on parse fail.
 
     Routes to the Responses API for codex / gpt-5 / o-series deployments (which
     reject `chat.completions` outright); falls back to Chat Completions for
-    gpt-4-family deployments. Honors `mode_models["demo-build"]`.
+    gpt-4-family deployments.
+
+    Per-phase model selection (gpt-5.4 family only by design):
+      - `recommendations`           → gpt-5.4-mini (fast/cheap, light reasoning)
+      - `architecture_design`       → gpt-5.4-pro  (deep reasoning, one-shot)
+      - `code` / `infra` / `docs`   → gpt-5.4      (chat, high-output codegen)
+
+    Override order: `mode_models["demo-build.<phase>"]` → `mode_models["demo-build"]`
+    → hardcoded `_PHASE_DEFAULTS[phase]`.
     """
     try:
         app_settings = await load_settings()
-        mc = app_settings.mode_models.get("demo-build")
+        mc = app_settings.mode_models.get(f"demo-build.{phase}") or app_settings.mode_models.get(
+            "demo-build"
+        )
     except Exception:
         mc = None
     provider = (mc.provider if mc else None) or "azure"
-    model_override = (mc.model if mc else "") or ""
+    model_override = (mc.model if mc else "") or _PHASE_DEFAULTS.get(phase, "")
     client, deployment = openai_service.resolve_client_and_model(
         mode="demo-build", provider=provider, model=model_override
     )
@@ -354,7 +383,7 @@ async def _phase_recommendations(state: dict[str, Any]) -> AsyncGenerator[dict, 
         return
     try:
         prompt = RECOMMENDATIONS_PROMPT(json.dumps(state["spec"], default=str))
-        result = await _llm_json(prompt, max_tokens=2000)
+        result = await _llm_json(prompt, max_tokens=2000, phase="recommendations")
         recs = result.get("recommendations", []) or []
         state["recommendations"] = recs
         yield _phase_event("recommendations", "complete", recommendation_count=len(recs))
@@ -379,7 +408,9 @@ async def _phase_architecture_design(
         # Reasoning models can run 60–180s with no visible output. Race the
         # LLM call against a heartbeat ticker so the SSE stream emits a
         # progress event every 10s and the UI doesn't look frozen.
-        design_task = asyncio.create_task(_llm_json(prompt, max_tokens=3500))
+        design_task = asyncio.create_task(
+            _llm_json(prompt, max_tokens=3500, phase="architecture_design")
+        )
         elapsed = 0
         while not design_task.done():
             try:
@@ -405,7 +436,9 @@ async def _phase_architecture_design(
 
 async def _lane(name: str, prompt: str, files: dict[str, str]) -> tuple[str, int]:
     """Run one build lane. Returns (lane_name, files_added). Raises on failure."""
-    payload = await _llm_json(prompt, max_tokens=8000)
+    # Lane name is "build.<phase>"; extract the phase for per-phase model routing.
+    phase = name.split(".", 1)[1] if "." in name else name
+    payload = await _llm_json(prompt, max_tokens=8000, phase=phase)
     added = _merge_files(files, payload, lane=name)
     return name, added
 

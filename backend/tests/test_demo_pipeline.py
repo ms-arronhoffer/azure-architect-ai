@@ -60,7 +60,13 @@ def _stub_llm_responses(monkeypatch, lane_failures: set[str] | None = None):
 
     lane_failures = lane_failures or set()
 
-    async def fake_llm_json(prompt: str, *, max_tokens: int = 4000, retry_on_parse: bool = True):
+    async def fake_llm_json(
+        prompt: str,
+        *,
+        max_tokens: int = 4000,
+        retry_on_parse: bool = True,
+        phase: str = "default",
+    ):
         if "improvement patterns" in prompt.lower() or "improvement pattern catalog" in prompt.lower():
             return {
                 "recommendations": [
@@ -226,3 +232,48 @@ async def test_mermaid_extracted(monkeypatch):
     # Prefers design.diagrams (2 entries) over fallback ARCHITECTURE.md scrape.
     assert len(final["diagrams"]) >= 1
     assert any("mermaid" in d and d["mermaid"] for d in final["diagrams"])
+
+
+@pytest.mark.asyncio
+async def test_phase_routes_to_distinct_models(monkeypatch):
+    """recommendations → mini, architecture_design → pro, build lanes → gpt-5.4."""
+    from services import demo_pipeline as dp_mod
+
+    captured: list[tuple[str, str]] = []
+
+    async def fake_load_settings():
+        return SimpleNamespace(mode_models={})
+
+    monkeypatch.setattr(dp_mod, "load_settings", fake_load_settings)
+
+    def fake_resolve(*, mode, provider, model, **_kw):
+        captured.append((mode, model))
+        return SimpleNamespace(), model or "fallback"
+
+    monkeypatch.setattr(
+        dp_mod.openai_service, "resolve_client_and_model", fake_resolve
+    )
+    # Short-circuit the actual LLM call after model resolution.
+    monkeypatch.setattr(
+        dp_mod.openai_service, "call_with_retry", lambda *a, **kw: None
+    )
+    monkeypatch.setattr(dp_mod, "_extract_responses_text", lambda _r: "{}")
+    monkeypatch.setattr(
+        dp_mod.openai_service, "get_responses_client", lambda _d: SimpleNamespace()
+    )
+
+    # Drive _llm_json directly with each phase and inspect the resolved model.
+    for phase, expected in [
+        ("recommendations", "gpt-5.4-mini"),
+        ("architecture_design", "gpt-5.4-pro"),
+        ("code", "gpt-5.4"),
+        ("infra", "gpt-5.4"),
+        ("docs", "gpt-5.4"),
+    ]:
+        captured.clear()
+        try:
+            await dp_mod._llm_json("{}", phase=phase, retry_on_parse=False)
+        except Exception:
+            pass  # we only care about the resolved model, not the (stubbed) call
+        assert captured, f"resolve not called for phase {phase}"
+        assert captured[0][1] == expected, f"{phase} → {captured[0][1]} (want {expected})"
