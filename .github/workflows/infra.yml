@@ -21,7 +21,7 @@ env:
 
 jobs:
   setenv:
-    runs-on: ${{ github.ref == 'refs/heads/dev' && 'self-hosted' || 'ubuntu-latest' }}
+    runs-on: ${{ github.ref == 'refs/heads/dev' && 'ubuntu-server-2' || 'ubuntu-latest' }}
     outputs:
       gh_env: ${{ steps.pick.outputs.gh_env }}
       gh_env_apply: ${{ steps.pick.outputs.gh_env_apply }}
@@ -52,7 +52,7 @@ jobs:
   whatif:
     needs: [setenv]
     if: github.event_name == 'pull_request'
-    runs-on: ${{ github.ref == 'refs/heads/dev' && 'self-hosted' || 'ubuntu-latest' }}
+    runs-on: ${{ github.ref == 'refs/heads/dev' && 'ubuntu-server-2' || 'ubuntu-latest' }}
     environment: ${{ needs.setenv.outputs.gh_env }}
     steps:
       - uses: actions/checkout@v6
@@ -79,7 +79,7 @@ jobs:
   apply:
     needs: [setenv]
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
-    runs-on: ${{ github.ref == 'refs/heads/dev' && 'self-hosted' || 'ubuntu-latest' }}
+    runs-on: ${{ github.ref == 'refs/heads/dev' && 'ubuntu-server-2' || 'ubuntu-latest' }}
     environment: ${{ needs.setenv.outputs.gh_env_apply }}  # gate with required reviewers in repo settings
     steps:
       - uses: actions/checkout@v6

@@ -28,7 +28,7 @@ env:
 
 jobs:
   setenv:
-    runs-on: ${{ github.ref == 'refs/heads/dev' && 'self-hosted' || 'ubuntu-latest' }}
+    runs-on: ${{ github.ref == 'refs/heads/dev' && 'ubuntu-server-2' || 'ubuntu-latest' }}
     outputs:
       target_env: ${{ steps.pick.outputs.target_env }}
       gh_env: ${{ steps.pick.outputs.gh_env }}
@@ -58,7 +58,7 @@ jobs:
   infra:
     needs: [setenv]
     if: github.event_name == 'workflow_dispatch' && inputs.deploy_infra == 'true'
-    runs-on: ${{ github.ref == 'refs/heads/dev' && 'self-hosted' || 'ubuntu-latest' }}
+    runs-on: ${{ github.ref == 'refs/heads/dev' && 'ubuntu-server-2' || 'ubuntu-latest' }}
     environment: ${{ needs.setenv.outputs.gh_env }}
     steps:
       - uses: actions/checkout@v6
@@ -84,7 +84,7 @@ jobs:
   detect:
     needs: [setenv, infra]
     if: always() && (needs.infra.result == 'success' || needs.infra.result == 'skipped')
-    runs-on: ${{ github.ref == 'refs/heads/dev' && 'self-hosted' || 'ubuntu-latest' }}
+    runs-on: ${{ github.ref == 'refs/heads/dev' && 'ubuntu-server-2' || 'ubuntu-latest' }}
     outputs:
       backend: ${{ steps.changes.outputs.backend }}
       frontend: ${{ steps.changes.outputs.frontend }}
@@ -152,7 +152,7 @@ jobs:
       always() &&
       (needs.infra.result == 'success' || needs.infra.result == 'skipped') &&
       (needs.detect.outputs.backend == 'true' || github.event_name == 'workflow_dispatch')
-    runs-on: ${{ github.ref == 'refs/heads/dev' && 'self-hosted' || 'ubuntu-latest' }}
+    runs-on: ${{ github.ref == 'refs/heads/dev' && 'ubuntu-server-2' || 'ubuntu-latest' }}
     environment: ${{ needs.setenv.outputs.gh_env }}
     steps:
       - uses: actions/checkout@v6
@@ -181,7 +181,7 @@ jobs:
       always() &&
       (needs.infra.result == 'success' || needs.infra.result == 'skipped') &&
       (needs.detect.outputs.frontend == 'true' || github.event_name == 'workflow_dispatch')
-    runs-on: ${{ github.ref == 'refs/heads/dev' && 'self-hosted' || 'ubuntu-latest' }}
+    runs-on: ${{ github.ref == 'refs/heads/dev' && 'ubuntu-server-2' || 'ubuntu-latest' }}
     environment: ${{ needs.setenv.outputs.gh_env }}
     steps:
       - uses: actions/checkout@v6
@@ -214,7 +214,7 @@ jobs:
   smoke:
     needs: [detect, backend, frontend]
     if: always() && (needs.backend.result == 'success' || needs.frontend.result == 'success')
-    runs-on: ${{ github.ref == 'refs/heads/dev' && 'self-hosted' || 'ubuntu-latest' }}
+    runs-on: ${{ github.ref == 'refs/heads/dev' && 'ubuntu-server-2' || 'ubuntu-latest' }}
     steps:
       - uses: azure/login@v2
         with:
