@@ -430,20 +430,42 @@ async def _phase_build(
     yield _phase_event("build.infra", "started")
     yield _phase_event("build.docs", "started")
 
-    results = await asyncio.gather(
-        *(_lane(name, prompt, files) for name, prompt in lanes.items()),
-        return_exceptions=True,
-    )
-
+    # Each lane is a long reasoning call. Launch concurrently, then drain
+    # completions as they finish so the SSE stream emits per-lane events in
+    # real time and a 10s heartbeat keeps the UI alive while lanes are still
+    # running.
+    lane_tasks = {
+        name: asyncio.create_task(_lane(name, prompt, files))
+        for name, prompt in lanes.items()
+    }
+    pending = set(lane_tasks.values())
+    name_by_task = {task: name for name, task in lane_tasks.items()}
     failures = 0
-    for lane_name, result in zip(lanes.keys(), results, strict=True):
-        if isinstance(result, Exception):
-            failures += 1
-            log.warning("demo_pipeline.lane_failed", lane=lane_name, error=str(result))
-            yield _phase_event(lane_name, "failed", error=str(result))
-        else:
-            _name, added = result
-            yield _phase_event(lane_name, "complete", files_added=added)
+    elapsed = 0
+    while pending:
+        done, pending = await asyncio.wait(
+            pending, timeout=10.0, return_when=asyncio.FIRST_COMPLETED
+        )
+        if not done:
+            elapsed += 10
+            yield _phase_event(
+                "build",
+                "progress",
+                elapsed_s=elapsed,
+                lanes_remaining=[name_by_task[t] for t in pending],
+            )
+            continue
+        for task in done:
+            lane_name = name_by_task[task]
+            try:
+                _name, added = task.result()
+                yield _phase_event(lane_name, "complete", files_added=added)
+            except Exception as exc:
+                failures += 1
+                log.warning(
+                    "demo_pipeline.lane_failed", lane=lane_name, error=str(exc)
+                )
+                yield _phase_event(lane_name, "failed", error=str(exc))
 
     if failures == len(lanes):
         yield _phase_event("build", "failed", error="all_lanes_failed")
