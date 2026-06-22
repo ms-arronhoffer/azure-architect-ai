@@ -10,6 +10,7 @@
 // eagerly (they are tiny) while loading the panel components on demand.
 
 import type { Mode } from "../types";
+import { getUnifiedAgents } from "../config/runtimeFlags";
 
 export const ADVISOR_MODES: Mode[] = [
   "qa", "situation", "certprep", "regional", "compare",
@@ -71,11 +72,11 @@ export function isAgentToken(m: Mode): m is AgentToken {
   return (AGENT_TOKENS as Mode[]).includes(m);
 }
 
-// The 5-agent surface is the intended default experience. It is opt-out:
-// set VITE_UNIFIED_AGENTS=false to fall back to the legacy 84-mode navigation
-// during the deprecation window. Anything other than an explicit falsey value
-// (or an unset variable) resolves to the unified surface.
+// The 5-agent surface is the intended default experience. The flag is resolved
+// at runtime (user override → server config → build-time env) so it can be
+// toggled without a rebuild — see config/runtimeFlags.ts. This synchronous
+// helper is kept for non-reactive call sites; React components that must update
+// when the flag changes should use the useUnifiedAgents() hook instead.
 export function unifiedAgentsEnabled(): boolean {
-  const raw = (import.meta.env.VITE_UNIFIED_AGENTS ?? "").trim().toLowerCase();
-  return !["false", "0", "no", "off"].includes(raw);
+  return getUnifiedAgents();
 }

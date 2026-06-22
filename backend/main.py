@@ -21,6 +21,7 @@ from routes.architecture import router as arch_router  # noqa: E402
 from routes.auth import router as auth_router  # noqa: E402
 from routes.chat import router as chat_router  # noqa: E402
 from routes.codegen import router as codegen_router  # noqa: E402
+from routes.config import router as config_router  # noqa: E402
 from routes.conversations import router as conversations_router  # noqa: E402
 from routes.cost import router as cost_router  # noqa: E402
 from routes.demo import router as demo_router  # noqa: E402
@@ -133,6 +134,7 @@ app.add_middleware(
 )
 
 app.include_router(health_router, prefix="/api")
+app.include_router(config_router, prefix="/api")
 app.include_router(chat_router, prefix="/api")
 app.include_router(arch_router, prefix="/api")
 app.include_router(reference_router, prefix="/api")
