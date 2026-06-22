@@ -76,6 +76,8 @@ import { track } from "./utils/telemetry";
 import { setErrorNotifier } from "./config/api";
 import { loadRuntimeConfig } from "./config/runtimeFlags";
 import { useUnifiedAgents } from "./hooks/useUnifiedAgents";
+import { TOASTER_ID } from "./constants/toaster";
+import { DemoBuildProvider } from "./contexts/DemoBuildContext";
 import type { Mode, ConversationRecord, ChatMessage, ContinueInSeed } from "./types";
 
 const useStyles = makeStyles({
@@ -164,7 +166,6 @@ export default function App() {
     try { localStorage.setItem(LAST_MODE_KEY, home); } catch { /* ignore */ }
   }
 
-  const TOASTER_ID = "app-toaster";
   const { dispatchToast } = useToastController(TOASTER_ID);
   useEffect(() => {
     setErrorNotifier((message) => {
@@ -510,6 +511,7 @@ export default function App() {
 
   return (
     <FluentProvider theme={darkMode ? azureDarkTheme : azureLightTheme}>
+      <DemoBuildProvider>
       <div className={styles.root}>
         <SideNav
           mode={mode}
@@ -599,6 +601,7 @@ export default function App() {
         <OnboardingTour onClose={() => { markOnboardingSeen(); setOnboardingOpen(false); }} />
       )}
       <Toaster toasterId={TOASTER_ID} position="top-end" />
+      </DemoBuildProvider>
     </FluentProvider>
   );
 }

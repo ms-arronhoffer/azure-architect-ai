@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   makeStyles,
   tokens,
@@ -25,21 +25,18 @@ import {
   RocketRegular,
   ArrowDownloadRegular,
   DocumentRegular,
+  CloudRegular,
+  CheckmarkCircleFilled,
+  DismissCircleRegular,
 } from "@fluentui/react-icons";
-import { apiFetch } from "../config/api";
-import type { DemoBuilt, DemoFileManifestEntry } from "../types";
+import type { DemoFileManifestEntry } from "../types";
 import { useWorkloadSpec } from "../hooks/useWorkloadSpec";
 import { useSettings } from "../hooks/useSettings";
-import {
-  hashDemoRequest,
-  loadDemoState,
-  saveDemoState,
-  clearDemoState,
-  newDemoState,
-  type DemoPhase,
-  type DemoPhaseEvent,
-  type DemoPipelineRequestShape,
-  type DemoPipelineState,
+import { useDemoBuild } from "../contexts/DemoBuildContext";
+import type {
+  DemoPhase,
+  DemoPhaseEvent,
+  DemoPipelineRequestShape,
 } from "../utils/demoPipelineState";
 
 const PHASE_ORDER: DemoPhase[] = [
@@ -136,6 +133,29 @@ const useStyles = makeStyles({
     marginLeft: "24px",
     background: tokens.colorNeutralBackground2,
   },
+  servicesGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))",
+    gap: "10px",
+  },
+  serviceCard: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "6px",
+    padding: "12px",
+    borderRadius: "6px",
+    border: `1px solid ${tokens.colorNeutralStroke2}`,
+    background: tokens.colorNeutralBackground1,
+  },
+  serviceHead: {
+    display: "flex",
+    alignItems: "center",
+    gap: "8px",
+  },
+  serviceRole: {
+    fontSize: "12px",
+    color: tokens.colorNeutralForeground3,
+  },
   fileLayout: {
     display: "grid",
     gridTemplateColumns: "260px 1fr",
@@ -183,6 +203,11 @@ const useStyles = makeStyles({
     fontSize: "12px",
     whiteSpace: "pre-wrap",
   },
+  prose: {
+    whiteSpace: "pre-wrap",
+    fontFamily: "inherit",
+    margin: 0,
+  },
   diagramBlock: {
     border: `1px solid ${tokens.colorNeutralStroke2}`,
     borderRadius: "4px",
@@ -195,17 +220,22 @@ const useStyles = makeStyles({
   },
 });
 
-type PhaseStatus = "pending" | "started" | "complete" | "skipped" | "failed";
+type PhaseStatus = "pending" | "started" | "complete" | "skipped" | "failed" | "progress";
 
-function statusBadge(status: PhaseStatus, reason?: string, error?: string) {
+function statusBadge(status: PhaseStatus, reason?: string, error?: string, degraded?: boolean) {
   switch (status) {
     case "complete":
-      return <Badge appearance="filled" color="success">complete</Badge>;
+      return (
+        <Badge appearance="filled" color={degraded ? "warning" : "success"}>
+          {degraded ? "complete (fallback)" : "complete"}
+        </Badge>
+      );
     case "skipped":
       return <Badge appearance="tint" color="warning">skipped{reason ? ` · ${reason}` : ""}</Badge>;
     case "failed":
       return <Badge appearance="tint" color="danger">failed{error ? ` · ${error}` : ""}</Badge>;
     case "started":
+    case "progress":
       return <Badge appearance="tint" color="brand">running</Badge>;
     default:
       return <Badge appearance="outline">pending</Badge>;
@@ -220,15 +250,57 @@ function slugify(s: string): string {
     .slice(0, 60);
 }
 
-interface FileMapState {
-  // path -> content (only populated during a live run; final ZIP is server-side)
-  [path: string]: string;
+// Furthest "behind the scenes" stage the Azure services have reached, derived
+// from the pipeline events. Drives the live provisioning view.
+type ServiceStage = "pending" | "planning" | "designed" | "provisioned" | "verified";
+
+function deriveServiceStage(events: DemoPhaseEvent[]): ServiceStage {
+  const has = (phase: DemoPhase, type: DemoPhaseEvent["type"]) =>
+    events.some((e) => e.phase === phase && e.type === type);
+  const verifyOk = events.some(
+    (e) => e.phase === "verify" && e.type === "complete",
+  );
+  if (verifyOk) return "verified";
+  if (has("build.infra", "complete")) return "provisioned";
+  if (has("architecture_design", "complete")) return "designed";
+  if (has("recommendations", "started") || has("architecture_design", "started"))
+    return "planning";
+  return "pending";
 }
+
+const STAGE_LABEL: Record<ServiceStage, string> = {
+  pending: "Pending",
+  planning: "Planning",
+  designed: "Designed",
+  provisioned: "Provisioned (Bicep)",
+  verified: "Verified",
+};
+
+const STAGE_COLOR: Record<ServiceStage, "informative" | "brand" | "success"> = {
+  pending: "informative",
+  planning: "brand",
+  designed: "brand",
+  provisioned: "success",
+  verified: "success",
+};
 
 export default function DemoBuildPanel() {
   const styles = useStyles();
   const { spec } = useWorkloadSpec();
   const { githubTokenConfigured } = useSettings();
+  const {
+    status,
+    events,
+    result,
+    azureServices,
+    isRunning,
+    downloadError,
+    start,
+    stop,
+    reset,
+    downloadZip,
+  } = useDemoBuild();
+
   const initialSlug = useMemo(() => slugify(spec.name || "my-azure-demo"), [spec.name]);
 
   const [demoSlug, setDemoSlug] = useState(initialSlug);
@@ -241,7 +313,8 @@ export default function DemoBuildPanel() {
   const [azureServicesText, setAzureServicesText] = useState("Azure OpenAI, App Service");
   const [publish, setPublish] = useState(false);
   const [publishTouched, setPublishTouched] = useState(false);
-  const [downloadError, setDownloadError] = useState<string | null>(null);
+  const [selectedFile, setSelectedFile] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<"talk" | "readme" | "files" | "diagrams" | "verify">("talk");
 
   // Default the Publish switch ON once we know a PAT is configured, but never
   // override an explicit user toggle (publishTouched).
@@ -249,95 +322,46 @@ export default function DemoBuildPanel() {
     if (!publishTouched && githubTokenConfigured) setPublish(true);
   }, [githubTokenConfigured, publishTouched]);
 
-  // Auto-clear download error after a few seconds (no toaster wired up).
   useEffect(() => {
-    if (!downloadError) return;
-    const t = setTimeout(() => setDownloadError(null), 6000);
-    return () => clearTimeout(t);
-  }, [downloadError]);
-
-  const [isRunning, setIsRunning] = useState(false);
-  const [events, setEvents] = useState<DemoPhaseEvent[]>([]);
-  const [result, setResult] = useState<DemoBuilt | null>(null);
-  const [files, setFiles] = useState<FileMapState>({});
-  const [selectedFile, setSelectedFile] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<"readme" | "files" | "diagrams" | "verify">("readme");
-  const [resumable, setResumable] = useState<DemoPipelineState | null>(null);
-  const abortRef = useRef<AbortController | null>(null);
+    if (result && result.manifest.length > 0 && !selectedFile) {
+      setSelectedFile(result.manifest[0].path);
+    }
+  }, [result, selectedFile]);
 
   const keyFeatures = useMemo(
     () => keyFeaturesText.split(",").map((s) => s.trim()).filter(Boolean),
     [keyFeaturesText],
   );
-  const azureServices = useMemo(
+  const azureServicesInput = useMemo(
     () => azureServicesText.split(",").map((s) => s.trim()).filter(Boolean),
     [azureServicesText],
   );
 
-  const reqShape: DemoPipelineRequestShape = useMemo(
-    () => ({
-      demo_slug: demoSlug,
-      demo_title: demoTitle,
-      description,
-      audience,
-      duration_minutes: durationMinutes,
-      target_persona: targetPersona,
-      key_features: keyFeatures,
-      azure_services: azureServices,
-    }),
-    [demoSlug, demoTitle, description, audience, durationMinutes, targetPersona, keyFeatures, azureServices],
-  );
-
-  useEffect(() => {
-    const state = loadDemoState();
-    if (!state) {
-      setResumable(null);
-      return;
-    }
-    if (state.request_hash === hashDemoRequest(reqShape)) {
-      setResumable(state);
-    } else {
-      setResumable(null);
-    }
-  }, [reqShape]);
-
-  function phaseStatus(phase: DemoPhase): { status: PhaseStatus; reason?: string; error?: string } {
+  function phaseStatus(phase: DemoPhase): {
+    status: PhaseStatus;
+    reason?: string;
+    error?: string;
+    degraded?: boolean;
+  } {
     let current: PhaseStatus = "pending";
     let reason: string | undefined;
     let error: string | undefined;
+    let degraded: boolean | undefined;
     for (const ev of events) {
       if (ev.phase !== phase) continue;
+      if (ev.type === "progress" && current !== "pending") continue;
       current = ev.type;
       reason = ev.reason;
       error = ev.error;
+      degraded = ev.degraded;
     }
-    return { status: current, reason, error };
-  }
-
-  function handleStop() {
-    abortRef.current?.abort();
-    abortRef.current = null;
-    setIsRunning(false);
+    return { status: current, reason, error, degraded };
   }
 
   async function handleRun() {
     if (!demoSlug || !demoTitle) return;
-    setIsRunning(true);
-    setEvents([]);
-    setResult(null);
-    setFiles({});
     setSelectedFile(null);
-    clearDemoState();
-
-    const ctrl = new AbortController();
-    abortRef.current = ctrl;
-
-    const hash = hashDemoRequest(reqShape);
-    let state = newDemoState(hash);
-    saveDemoState(state);
-
-    const body = {
-      spec,
+    const requestShape: DemoPipelineRequestShape = {
       demo_slug: demoSlug,
       demo_title: demoTitle,
       description,
@@ -345,128 +369,20 @@ export default function DemoBuildPanel() {
       duration_minutes: durationMinutes,
       target_persona: targetPersona,
       key_features: keyFeatures,
-      azure_services: azureServices,
-      publish,
+      azure_services: azureServicesInput,
     };
-
-    try {
-      const res = await apiFetch("/api/demo/build", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-        signal: ctrl.signal,
-      });
-      const reader = res.body!.getReader();
-      const decoder = new TextDecoder();
-      let buf = "";
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buf += decoder.decode(value, { stream: true });
-        const lines = buf.split("\n");
-        buf = lines.pop() ?? "";
-
-        for (const line of lines) {
-          if (!line.startsWith("data: ")) continue;
-          try {
-            const obj = JSON.parse(line.slice(6));
-            const t = obj.type as string | undefined;
-            if (typeof t === "string" && t.startsWith("phase_")) {
-              const phase = obj.phase as DemoPhase | undefined;
-              if (!phase) continue;
-              const eventType = t.replace("phase_", "") as DemoPhaseEvent["type"];
-              const ev: DemoPhaseEvent = {
-                phase,
-                type: eventType,
-                reason: obj.reason,
-                error: obj.error,
-                extra: obj.extra,
-              };
-              setEvents((prev) => {
-                const next = [...prev, ev];
-                state = { ...state, events: next };
-                saveDemoState(state);
-                return next;
-              });
-            } else if (t === "demo_built") {
-              const payload = obj as DemoBuilt;
-              setResult(payload);
-              state = { ...state, result: payload };
-              saveDemoState(state);
-              // Build a placeholder filemap from the manifest (paths only).
-              // Content is fetched lazily via the ZIP endpoint — for inline
-              // preview we just show the path until the user downloads.
-              setFiles(
-                Object.fromEntries(
-                  payload.manifest.map((m) => [m.path, `(${m.size} bytes · ${m.kind})`]),
-                ),
-              );
-              if (payload.manifest.length > 0) setSelectedFile(payload.manifest[0].path);
-            } else if (t === "done") {
-              setIsRunning(false);
-            }
-          } catch {
-            // ignore parse errors on partial lines
-          }
-        }
-      }
-    } catch (err: unknown) {
-      if (!(err instanceof DOMException && err.name === "AbortError")) {
-        console.error("demo pipeline error", err);
-      }
-    } finally {
-      setIsRunning(false);
-      abortRef.current = null;
-    }
+    await start({
+      body: { ...requestShape, spec, publish },
+      requestShape,
+      publish,
+    });
   }
 
-  function handleResume() {
-    if (!resumable) return;
-    setEvents(resumable.events);
-    setResult(resumable.result);
-    if (resumable.result) {
-      setFiles(
-        Object.fromEntries(
-          resumable.result.manifest.map((m) => [m.path, `(${m.size} bytes · ${m.kind})`]),
-        ),
-      );
-      if (resumable.result.manifest.length > 0) {
-        setSelectedFile(resumable.result.manifest[0].path);
-      }
-    }
-    setResumable(null);
-  }
-
-  function handleDiscardResume() {
-    clearDemoState();
-    setResumable(null);
-  }
-
-  async function handleDownloadZip() {
-    if (!result?.job_id) return;
-    setDownloadError(null);
-    try {
-      const res = await apiFetch(`/api/demo/${result.job_id}/zip`);
-      if (!res.ok) {
-        const text = await res.text().catch(() => "");
-        throw new Error(`Download failed (${res.status})${text ? `: ${text.slice(0, 200)}` : ""}`);
-      }
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `${demoSlug || "demo"}.zip`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err);
-      setDownloadError(msg);
-      console.error("demo zip download failed", err);
-    }
-  }
+  const stage = deriveServiceStage(events);
+  const serviceList = azureServices.length > 0 ? azureServices : azureServicesInput;
+  const behindTheScenes = result?.behind_the_scenes ?? [];
+  const roleFor = (svc: string) =>
+    behindTheScenes.find((b) => b.service.toLowerCase() === svc.toLowerCase())?.role;
 
   const filesByKind = useMemo(() => {
     const groups: Record<string, DemoFileManifestEntry[]> = { code: [], infra: [], docs: [], config: [] };
@@ -478,7 +394,6 @@ export default function DemoBuildPanel() {
     return groups;
   }, [result]);
 
-  const selectedContent = selectedFile ? files[selectedFile] : null;
   const selectedIsDoc = selectedFile?.endsWith(".md");
 
   return (
@@ -488,6 +403,11 @@ export default function DemoBuildPanel() {
         <Text size={200}>
           6-phase pipeline: intake → recommendations → architecture design → parallel build (code / infra / docs) → verify → publish. Produces a clone-and-run Azure demo.
         </Text>
+        <MessageBar intent="info">
+          <MessageBarBody>
+            Builds run in the background — you can switch tools or close this page. A toast will let you know when the demo is ready to download{publish ? " and pushed to GitHub" : ""}.
+          </MessageBarBody>
+        </MessageBar>
         <div className={styles.formGrid}>
           <Field label="Slug">
             <Input value={demoSlug} onChange={(_, d) => setDemoSlug(slugify(d.value))} placeholder="my-azure-demo" />
@@ -539,12 +459,12 @@ export default function DemoBuildPanel() {
         </Field>
         <div className={styles.controls}>
           {isRunning ? (
-            <Button appearance="secondary" icon={<StopRegular />} onClick={handleStop}>Stop</Button>
+            <Button appearance="secondary" icon={<StopRegular />} onClick={() => void stop()}>Stop</Button>
           ) : (
             <Button
               appearance="primary"
               icon={<PlayRegular />}
-              onClick={handleRun}
+              onClick={() => void handleRun()}
               disabled={!demoSlug || !demoTitle}
             >
               Run
@@ -570,7 +490,7 @@ export default function DemoBuildPanel() {
             />
           </Tooltip>
           {result?.job_id && !isRunning && (
-            <Button appearance="secondary" icon={<ArrowDownloadRegular />} onClick={handleDownloadZip}>
+            <Button appearance="secondary" icon={<ArrowDownloadRegular />} onClick={() => void downloadZip()}>
               Download ZIP
             </Button>
           )}
@@ -579,18 +499,14 @@ export default function DemoBuildPanel() {
               Open repo
             </Button>
           )}
+          {(result || status !== "idle") && !isRunning && (
+            <Button appearance="subtle" onClick={reset}>New build</Button>
+          )}
         </div>
         {downloadError && (
           <MessageBar intent="error">
             <MessageBarBody>ZIP download failed: {downloadError}</MessageBarBody>
           </MessageBar>
-        )}
-        {resumable && !isRunning && (
-          <div className={styles.controls}>
-            <Text size={200}>Previous run available.</Text>
-            <Button size="small" onClick={handleResume}>Resume</Button>
-            <Button size="small" appearance="subtle" onClick={handleDiscardResume}>Discard</Button>
-          </div>
         )}
       </div>
 
@@ -599,12 +515,12 @@ export default function DemoBuildPanel() {
           <Text weight="semibold">Phases</Text>
           <div className={styles.timeline}>
             {PHASE_ORDER.map((phase) => {
-              const { status, reason, error } = phaseStatus(phase);
+              const { status: pStatus, reason, error, degraded } = phaseStatus(phase);
               const rows = [
                 <div key={phase} className={styles.phaseRow}>
                   <RocketRegular />
                   <Text weight="semibold" style={{ minWidth: "180px" }}>{PHASE_LABELS[phase]}</Text>
-                  {statusBadge(status, reason, error)}
+                  {statusBadge(pStatus, reason, error, degraded)}
                 </div>,
               ];
               if (phase === "build") {
@@ -614,7 +530,7 @@ export default function DemoBuildPanel() {
                     <div key={child} className={`${styles.phaseRow} ${styles.phaseRowChild}`}>
                       <DocumentRegular />
                       <Text style={{ minWidth: "160px" }}>{PHASE_LABELS[child]}</Text>
-                      {statusBadge(cs.status, cs.reason, cs.error)}
+                      {statusBadge(cs.status, cs.reason, cs.error, cs.degraded)}
                     </div>,
                   );
                 }
@@ -624,21 +540,75 @@ export default function DemoBuildPanel() {
           </div>
         </Card>
 
+        {serviceList.length > 0 && (
+          <Card className={styles.card}>
+            <div className={styles.serviceHead}>
+              <CloudRegular />
+              <Text weight="semibold">Behind the scenes — Azure services</Text>
+            </div>
+            <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
+              What each Azure service is doing as the demo is designed, provisioned (Bicep) and verified.
+            </Text>
+            <div className={styles.servicesGrid}>
+              {serviceList.map((svc) => {
+                const role = roleFor(svc);
+                return (
+                  <div key={svc} className={styles.serviceCard}>
+                    <div className={styles.serviceHead}>
+                      {stage === "verified" || stage === "provisioned" ? (
+                        <CheckmarkCircleFilled style={{ color: tokens.colorPaletteGreenForeground1 }} />
+                      ) : (
+                        <CloudRegular />
+                      )}
+                      <Text weight="semibold">{svc}</Text>
+                    </div>
+                    <Badge appearance="tint" color={STAGE_COLOR[stage]}>{STAGE_LABEL[stage]}</Badge>
+                    {role && <Text className={styles.serviceRole}>{role}</Text>}
+                  </div>
+                );
+              })}
+            </div>
+          </Card>
+        )}
+
         {result && (
           <Card className={styles.card}>
             <TabList selectedValue={activeTab} onTabSelect={(_, d) => setActiveTab(d.value as typeof activeTab)}>
+              <Tab value="talk">Talk track</Tab>
               <Tab value="readme">Readme</Tab>
               <Tab value="files">Files ({result.manifest.length})</Tab>
               <Tab value="diagrams">Diagrams ({result.diagrams.length})</Tab>
               <Tab value="verify">Verify</Tab>
             </TabList>
 
+            {activeTab === "talk" && (
+              <div className={styles.viewer}>
+                {result.talk_track ? (
+                  <pre className={styles.prose}>{result.talk_track}</pre>
+                ) : (
+                  <Text>
+                    No talk track was produced. Open DEMO_SCRIPT.md in the Files tab for the presenter narrative.
+                  </Text>
+                )}
+                {behindTheScenes.length > 0 && (
+                  <div style={{ marginTop: 12 }}>
+                    <Text weight="semibold">How it works behind the scenes</Text>
+                    <ul style={{ marginTop: 6 }}>
+                      {behindTheScenes.map((b, i) => (
+                        <li key={i}>
+                          <Text weight="semibold">{b.service}</Text>: {b.role}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            )}
+
             {activeTab === "readme" && (
               <div className={styles.viewer}>
                 {result.readme_md ? (
-                  <pre style={{ whiteSpace: "pre-wrap", fontFamily: "inherit", margin: 0 }}>
-                    {result.readme_md}
-                  </pre>
+                  <pre className={styles.prose}>{result.readme_md}</pre>
                 ) : (
                   <Text>README.md was not produced. Check the docs lane in the timeline.</Text>
                 )}
@@ -670,7 +640,7 @@ export default function DemoBuildPanel() {
                     <>
                       <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>{selectedFile}</Text>
                       <div style={{ marginTop: 8 }}>
-                        {selectedContent ?? "Download the ZIP to view file contents."}
+                        Download the ZIP to view file contents.
                       </div>
                       {selectedIsDoc && (
                         <Text size={100} style={{ color: tokens.colorNeutralForeground3, marginTop: 8 }}>
@@ -705,7 +675,14 @@ export default function DemoBuildPanel() {
                 )}
                 {result.verify && "ok" in result.verify && (
                   <>
-                    <Text>az bicep build: {result.verify.ok ? "PASS" : "FAIL"}</Text>
+                    <Text>
+                      az bicep build: {result.verify.ok ? "PASS" : "FAIL"}{" "}
+                      {result.verify.ok ? (
+                        <CheckmarkCircleFilled style={{ color: tokens.colorPaletteGreenForeground1, verticalAlign: "middle" }} />
+                      ) : (
+                        <DismissCircleRegular style={{ color: tokens.colorPaletteRedForeground1, verticalAlign: "middle" }} />
+                      )}
+                    </Text>
                     <div style={{ marginTop: 8 }}>{result.verify.output}</div>
                   </>
                 )}

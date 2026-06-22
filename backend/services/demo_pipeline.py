@@ -327,6 +327,45 @@ async def _llm_json(
         return json.loads(raw2)
 
 
+def _fallback_design(spec: dict[str, Any], recommendations: list | None) -> dict:
+    """Synthesize a minimal but valid design from the intake spec.
+
+    Used when the architecture_design phase fails so the build lanes can still
+    run end-to-end instead of the whole demo being discarded. The result mirrors
+    the architecture_design JSON schema closely enough for the code/infra/docs
+    prompts to produce a coherent, runnable demo.
+    """
+    services = list(spec.get("azure_services") or []) or ["Azure OpenAI", "App Service"]
+    features = list(spec.get("key_features") or [])
+    title = spec.get("title") or "Azure Demo"
+    rec_names = [r.get("name") for r in (recommendations or []) if isinstance(r, dict) and r.get("name")]
+    return {
+        "slug": spec.get("slug") or "demo",
+        "title": title,
+        "tech_stack": "flask_sse",
+        "azure_services": services,
+        "app_files": [
+            {"path": "app.py", "purpose": "Flask + SSE entry point"},
+            {"path": "templates/index.html", "purpose": "single-page UI"},
+        ],
+        "bicep_resources": ["Microsoft.CognitiveServices/accounts", "Microsoft.Web/sites"],
+        "env_vars": ["AZURE_OPENAI_ENDPOINT", "AZURE_OPENAI_DEPLOYMENT"],
+        "key_features": features,
+        "wow_moment_implementation": (
+            spec.get("description")
+            or "Token-by-token streaming response rendered live in the browser."
+        ),
+        "summary_bullets": [f"Showcases {title}", *([f"Applies: {n}" for n in rec_names[:3]])],
+        "diagrams": [
+            {
+                "name": "component",
+                "mermaid": "graph LR\n  A[Browser] --> B[App Service]\n  B --> C[Azure OpenAI]",
+            }
+        ],
+        "degraded": True,
+    }
+
+
 def _merge_files(target: dict[str, str], payload: dict, *, lane: str) -> int:
     """Merge `{"files": [{path, content}, ...]}` into target. Returns count."""
     added = 0
@@ -426,12 +465,26 @@ async def _phase_architecture_design(
             "architecture_design",
             "complete",
             tech_stack=design.get("tech_stack"),
+            azure_services=design.get("azure_services") or [],
             service_count=len(design.get("azure_services") or []),
             diagram_count=len(design.get("diagrams") or []),
         )
     except Exception as exc:
+        # Do not discard the whole demo when design fails — synthesize a
+        # fallback design from the intake spec so the build still runs fully.
         log.warning("demo_pipeline.architecture_failed", error=str(exc))
-        yield _phase_event("architecture_design", "failed", error=str(exc))
+        fallback = _fallback_design(state.get("spec") or {}, state.get("recommendations"))
+        state["design"] = fallback
+        yield _phase_event(
+            "architecture_design",
+            "complete",
+            degraded=True,
+            error=str(exc),
+            tech_stack=fallback.get("tech_stack"),
+            azure_services=fallback.get("azure_services") or [],
+            service_count=len(fallback.get("azure_services") or []),
+            diagram_count=len(fallback.get("diagrams") or []),
+        )
 
 
 async def _lane(name: str, prompt: str, files: dict[str, str]) -> tuple[str, int]:
@@ -452,6 +505,7 @@ async def _phase_build(
         yield _phase_event("build", "skipped", reason="no_design")
         return
 
+    azure_services = design.get("azure_services") or []
     design_json = json.dumps(design, default=str)
     spec_json = json.dumps(state.get("spec") or {}, default=str)
 
@@ -462,7 +516,7 @@ async def _phase_build(
     }
 
     yield _phase_event("build.code", "started")
-    yield _phase_event("build.infra", "started")
+    yield _phase_event("build.infra", "started", azure_services=azure_services)
     yield _phase_event("build.docs", "started")
 
     # Each lane is a long reasoning call. Launch concurrently, then drain
@@ -654,6 +708,9 @@ async def stream_demo_pipeline(
         "generated_at": dt.datetime.now(dt.UTC).isoformat(),
         "engagement_id": getattr(engagement, "id", None) if engagement else None,
         "spec": state.get("spec"),
+        "azure_services": (state.get("design") or {}).get("azure_services") or [],
+        "behind_the_scenes": (state.get("design") or {}).get("behind_the_scenes") or [],
+        "talk_track": (state.get("design") or {}).get("talk_track") or "",
         "manifest": manifest(files),
         "diagrams": diagrams,
         "verify": state.get("verify"),
