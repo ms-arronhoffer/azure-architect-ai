@@ -14,9 +14,73 @@ import {
 } from "@fluentui/react-components";
 import { AddRegular, ArrowClockwiseRegular } from "@fluentui/react-icons";
 import { useDemos } from "../hooks/useDemos";
-import type { Demo } from "../types";
+import type { Demo, Mode, DemoBuilderSeed } from "../types";
 import { DemoCard } from "./DemoCard";
 import { DemoFormDialog } from "./DemoFormDialog";
+
+// Recognizable Azure service names we can opportunistically lift out of a demo's
+// tags or description so the Demo Builder lands prefilled with a sensible stack.
+const KNOWN_AZURE_SERVICES = [
+  "Azure OpenAI",
+  "App Service",
+  "Azure Functions",
+  "Container Apps",
+  "Azure Kubernetes Service",
+  "AKS",
+  "Cosmos DB",
+  "Azure SQL",
+  "Azure Storage",
+  "Blob Storage",
+  "Azure AI Search",
+  "Cognitive Search",
+  "Service Bus",
+  "Event Hubs",
+  "Event Grid",
+  "API Management",
+  "Key Vault",
+  "Azure Monitor",
+  "Application Insights",
+  "Azure Cache for Redis",
+  "Azure Front Door",
+  "Azure Databricks",
+  "Azure Data Factory",
+  "Microsoft Fabric",
+  "Logic Apps",
+  "Azure Container Registry",
+  "Azure Virtual Machines",
+];
+
+function slugify(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 60) || "azure-demo";
+}
+
+function extractAzureServices(demo: Demo): string[] {
+  const haystack = `${demo.title} ${demo.description} ${demo.tags.join(" ")}`.toLowerCase();
+  const found: string[] = [];
+  for (const svc of KNOWN_AZURE_SERVICES) {
+    if (haystack.includes(svc.toLowerCase()) && !found.includes(svc)) {
+      found.push(svc);
+    }
+  }
+  return found;
+}
+
+/** Map a showcase Demo into editable Demo Builder defaults. Demos are
+ * "starting points" — every field is a best-effort suggestion the user
+ * refines before running the build pipeline. */
+function seedFromDemo(demo: Demo): DemoBuilderSeed {
+  return {
+    demo_slug: slugify(demo.title),
+    demo_title: demo.title,
+    description: demo.description,
+    key_features: demo.tags.slice(0, 6),
+    azure_services: extractAzureServices(demo),
+  };
+}
 
 const useStyles = makeStyles({
   root: {
@@ -76,7 +140,11 @@ const useStyles = makeStyles({
   },
 });
 
-export default function DemoShowcasePanel() {
+interface DemoShowcasePanelProps {
+  onContinueIn?: (mode: Mode, seed: { demoSeed: DemoBuilderSeed }) => void;
+}
+
+export default function DemoShowcasePanel({ onContinueIn }: DemoShowcasePanelProps) {
   const styles = useStyles();
   const {
     visible,
@@ -121,6 +189,11 @@ export default function DemoShowcasePanel() {
     if (!deleteTarget) return;
     await remove(deleteTarget.id);
     setDeleteTarget(null);
+  }
+
+  function handleUseAsStarting(demo: Demo) {
+    if (!onContinueIn) return;
+    onContinueIn("demo-build", { demoSeed: seedFromDemo(demo) });
   }
 
   return (
@@ -190,6 +263,7 @@ export default function DemoShowcasePanel() {
               demo={d}
               onEdit={openEdit}
               onDelete={(demo) => setDeleteTarget(demo)}
+              onUseAsStarting={onContinueIn ? handleUseAsStarting : undefined}
             />
           ))}
         </div>
