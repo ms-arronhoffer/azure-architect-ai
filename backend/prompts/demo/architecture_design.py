@@ -19,35 +19,54 @@ def render_architecture_design_prompt(
         "has provided a spec and a set of accepted improvement patterns. "
         "Produce a tight architecture summary plus the component and data-flow "
         "diagrams that will drive the parallel build phase.\n\n"
+        "This demo must be world-class: a modern UI that visibly explains, live, "
+        "what each Azure service is doing behind the scenes. Your design is the "
+        "contract that makes that possible — pick a demo_archetype and author a "
+        "live_activity script the running UI will animate.\n\n"
         "Reply with strict JSON only. No prose, no markdown fences. Mermaid "
         "code goes inside the JSON string values (no fenced blocks).\n\n"
         "Schema:\n"
         '{\n'
         '  "slug": "<kebab-case, matches the spec slug>",\n'
         '  "title": "<human readable>",\n'
-        '  "tech_stack": "flask_sse | react_ts | flask_sse+react_ts",\n'
+        '  "demo_archetype": "chat | rag | vision | agentic | data",\n'
+        '  "tech_stack": "react_ts | flask_sse | flask_sse+react_ts",\n'
         '  "azure_services": ["<service>", ...],\n'
-        '  "app_files": [{"path": "app.py", "purpose": "..."}, ...],\n'
+        '  "app_files": [{"path": "src/App.tsx", "purpose": "..."}, ...],\n'
         '  "bicep_resources": ["Microsoft.CognitiveServices/accounts", ...],\n'
         '  "env_vars": ["AZURE_OPENAI_ENDPOINT", ...],\n'
         '  "key_features": ["..."],\n'
         '  "wow_moment_implementation": "<how the single most impressive moment is delivered>",\n'
         '  "talk_track": "<2-3 sentence narrative a presenter uses to explain this demo in plain language>",\n'
         '  "behind_the_scenes": [\n'
-        '    {"service": "Azure OpenAI", "role": "<what this service does in the live request flow>"}\n'
+        '    {"service": "Azure OpenAI", "role": "<plain-language: what this service does in the live request flow>"}\n'
+        '  ],\n'
+        '  "live_activity": [\n'
+        '    {"step_id": "embed", "service": "Azure OpenAI", "stage": "Generating embeddings",\n'
+        '     "detail": "<one sentence shown live in the Activity Panel>", "duration_ms": 800}\n'
         '  ],\n'
         '  "summary_bullets": ["...", "..."],\n'
         '  "diagrams": [\n'
-        '    {"name": "component", "mermaid": "graph LR\\n  A[Browser] --> B[Flask]\\n  ..."},\n'
+        '    {"name": "component", "mermaid": "graph LR\\n  embed[Azure OpenAI]\\n  ..."},\n'
         '    {"name": "flow", "mermaid": "sequenceDiagram\\n  ..."}\n'
         '  ]\n'
         '}\n\n'
         "Rules:\n"
+        "- Choose demo_archetype from {chat, rag, vision, agentic, data} — it drives "
+        "the entire UX. Default tech_stack to react_ts for customer-facing demos.\n"
         "- Prefer DefaultAzureCredential / managed identity over keys.\n"
-        "- Match the user's chosen tech_stack from the spec; do not invent a stack.\n"
-        "- Cite at least 2 diagrams (component + flow).\n"
+        "- Match the user's chosen tech_stack from the spec when they specify one; "
+        "otherwise default to react_ts. Do not invent an unrelated stack.\n"
+        "- Cite at least 2 diagrams (component + flow). In the component diagram, the "
+        "node id for each Azure service MUST equal the matching live_activity step_id "
+        "so the running UI can highlight nodes as services fire.\n"
         "- Populate behind_the_scenes with one entry per azure_services item so the "
         "UI can show what each service does while the demo runs.\n"
+        "- live_activity is the ORDERED script of the live request flow: one step per "
+        "Azure call, each with a stable step_id, the service, a short stage label, a "
+        "one-sentence plain-language detail, and an approximate duration_ms. This "
+        "drives the in-app Azure Activity Panel AND the no-backend ?mock=1 preview, so "
+        "it must read as a coherent, impressive narrative on its own.\n"
         "- env_vars must be the exact strings the app code will read.\n\n"
         f"Demo spec:\n{spec_json}\n\n"
         f"Accepted recommendations:\n{recommendations_json}\n"
