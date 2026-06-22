@@ -201,7 +201,7 @@ async def _stream_chat_impl(mode: str, messages: list[dict], provider: str = "az
             # to the legacy mode mapping so the assistant still has tools.
             tools = get_tools_for_mode(mode)
         with contextlib.suppress(Exception):
-            yield f"data: {json.dumps({'type': 'agent_route', 'agent': agent_name, 'domain_fragments': routing.get('domain_fragments', []), 'reason': routing.get('reason', ''), 'engagement_scoped': bool(preamble)})}\n\n"
+            yield f"data: {json.dumps({'type': 'agent_route', 'agent': agent_name, 'domain_fragments': routing.get('domain_fragments', []), 'recommended_tool': routing.get('recommended_tool', ''), 'reason': routing.get('reason', ''), 'engagement_scoped': bool(preamble)})}\n\n"
     else:
         system = get_system_prompt(mode)
         tools = [] if model in TOOL_INCOMPATIBLE_MODELS else get_tools_for_mode(mode)
