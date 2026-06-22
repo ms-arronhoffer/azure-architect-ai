@@ -193,6 +193,14 @@ const UNIFIED_NAV_SECTIONS: NavSectionDef[] = [
   },
   NAV_SECTIONS.find((s) => s.label === "Agents")!,
   {
+    label: "Tools",
+    items: [
+      NAV_SECTIONS.find((s) => s.label === "Design")!.items.find(
+        (i) => !isSubheading(i) && i.mode === "demo-build",
+      )!,
+    ],
+  },
+  {
     label: "Library",
     items: [
       NAV_SECTIONS.find((s) => s.label === "Updates")!.items.find(
