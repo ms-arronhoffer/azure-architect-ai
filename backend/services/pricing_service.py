@@ -94,32 +94,61 @@ def _normalize_sku(sku: str) -> str:
     return sku
 
 
+def _odata_escape(value: str) -> str:
+    """Escape single quotes for an OData string literal."""
+    return value.replace("'", "''")
+
+
 async def get_price(
     service: str,
     sku_name: str = "",
     region: str = "eastus",
     currency: str = "USD",
+    *,
+    meter_name: str = "",
+    product_name: str = "",
+    unit_of_measure: str = "",
 ) -> list[dict]:
     """Query Azure Retail Pricing API. Retries without SKU filter if no results.
-    Results are cached for 6 hours keyed by (service, sku_name, region, currency)."""
+
+    Results are cached for 6 hours keyed by every filter argument. The optional
+    ``meter_name`` / ``product_name`` / ``unit_of_measure`` arguments let the
+    meter-aware pricing engine disambiguate the many records a single service
+    publishes (e.g. SQL Database vCore compute vs. data storage vs. backup)."""
     service_normalized = SERVICE_NAME_MAP.get(service.lower().strip(), service)
     region = region or "eastus"
     effective_sku = _normalize_sku(sku_name)
 
     async def _query(include_sku: bool) -> list[dict]:
-        cache_key = (service_normalized, effective_sku if include_sku else "", region, currency)
+        cache_key = (
+            service_normalized,
+            effective_sku if include_sku else "",
+            region,
+            currency,
+            meter_name.lower(),
+            product_name.lower(),
+            unit_of_measure.lower(),
+        )
         cached = _price_cache.get(cache_key)
         if cached and (time.monotonic() - cached[1]) < _PRICE_CACHE_TTL:
             return cached[0]
 
         filters = [
-            f"serviceName eq '{service_normalized}'",
-            f"armRegionName eq '{region}'",
+            f"serviceName eq '{_odata_escape(service_normalized)}'",
+            f"armRegionName eq '{_odata_escape(region)}'",
             "priceType eq 'Consumption'",
         ]
         if include_sku and effective_sku:
-            filters.append(f"contains(tolower(skuName), '{effective_sku.lower()}')")
-        params = {"$filter": " and ".join(filters), "currencyCode": currency, "$top": 20}
+            filters.append(f"contains(tolower(skuName), '{_odata_escape(effective_sku.lower())}')")
+        if meter_name:
+            filters.append(f"contains(tolower(meterName), '{_odata_escape(meter_name.lower())}')")
+        if product_name:
+            filters.append(f"contains(tolower(productName), '{_odata_escape(product_name.lower())}')")
+        if unit_of_measure:
+            filters.append(
+                f"contains(tolower(unitOfMeasure), '{_odata_escape(unit_of_measure.lower())}')"
+            )
+        params = {"$filter": " and ".join(filters), "currencyCode": currency, "$top": 50}
         try:
             async with httpx.AsyncClient(timeout=10.0) as client:
                 resp = await client.get(PRICING_API, params=params)

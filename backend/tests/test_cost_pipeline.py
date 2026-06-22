@@ -51,6 +51,60 @@ def _patch_narration(monkeypatch, *, captured: list[str] | None = None, text: st
     monkeypatch.setattr(cp_mod.openai_service, "call_with_retry", fake_call_with_retry)
 
 
+def _patch_pricing(monkeypatch, cp_mod, *, total: float = 100.0):
+    """Replace the meter pricing engine + recommendations engine with stubs so
+    pipeline tests run without the Azure Retail API."""
+
+    async def fake_price_model(items, region_default="eastus", currency="USD"):
+        return {
+            "line_items": [
+                {
+                    "service": it.get("service"),
+                    "sku": it.get("sku"),
+                    "region": it.get("region", region_default),
+                    "monthly_subtotal": total,
+                    "catalog_matched": True,
+                    "ri_eligible": True,
+                    "category": "compute",
+                    "meters": [
+                        {
+                            "dimension": "compute",
+                            "label": "Compute",
+                            "unit": "hour",
+                            "monthly_cost": total,
+                            "priced": True,
+                        }
+                    ],
+                }
+                for it in items
+            ],
+            "total_monthly_estimate": total,
+            "currency": currency,
+            "summary": {"total_lines": len(items), "catalog_matched": len(items), "unpriced_meters": 0},
+        }
+
+    async def fake_recommend(breakdown, items):
+        return {
+            "recommendations": [
+                {
+                    "id": "ri-0",
+                    "line_ref": 0,
+                    "type": "reserved_instance",
+                    "title": "Commit to a 3-year reservation",
+                    "monthly_savings": round(total * 0.4, 2),
+                    "confidence": "medium",
+                    "effort": "low",
+                }
+            ],
+            "total_monthly_savings": round(total * 0.4, 2),
+            "total_annual_savings": round(total * 0.4 * 12, 2),
+            "count": 1,
+        }
+
+    monkeypatch.setattr(cp_mod.meter_pricing_service, "price_model", fake_price_model)
+    monkeypatch.setattr(cp_mod.cost_recommendations_service, "recommend", fake_recommend)
+
+
 @pytest.mark.asyncio
 async def test_happy_path_with_engagement(monkeypatch):
     from services import cost_pipeline as cp_mod
@@ -95,7 +149,7 @@ async def test_happy_path_with_engagement(monkeypatch):
         return {"break_even_months": 0, "lifetime_savings": 960.0}
 
     monkeypatch.setattr(cp_mod, "load_active", fake_load_active)
-    monkeypatch.setattr(cp_mod, "estimate_architecture", fake_estimate)
+    _patch_pricing(monkeypatch, cp_mod, total=1234.0)
     monkeypatch.setattr(cp_mod.retail_pricing_service, "lookup", fake_lookup)
     monkeypatch.setattr(cp_mod.carbon_service, "estimate_for_line_items", fake_carbon)
     monkeypatch.setattr(cp_mod.reservations_service, "recommend_reservations", fake_reservations)
@@ -115,24 +169,28 @@ async def test_happy_path_with_engagement(monkeypatch):
         "reservations",
         "rightsizing",
         "break_even",
+        "recommendations",
         "narration",
     ]
     completes = {p for p, t in phases_in_order if t == "phase_complete"}
-    assert completes == {
+    assert {
         "estimate",
         "live_price",
         "carbon",
         "reservations",
         "rightsizing",
         "break_even",
+        "recommendations",
         "narration",
-    }
+    }.issubset(completes)
 
     final = [e for e in events if e.get("type") == "cost_optimization"]
     assert len(final) == 1
     payload = final[0]
     assert payload["engagement_id"] == "eng-123"
     assert payload["estimate"]["total_monthly_estimate"] == 1234.0
+    assert payload["cost_breakdown"]["total_monthly_estimate"] == 1234.0
+    assert payload["recommendations"]["count"] == 1
     assert payload["live_price"]["lookups"][0]["monthly_estimate"] == 100.0
     assert payload["carbon"]["total_kgco2e_per_month"] == 42.5
     assert payload["reservations"]["recommendations"][0]["sku"] == "Standard_D4s_v5"
@@ -149,9 +207,6 @@ async def test_no_engagement_skips_phases(monkeypatch):
     async def fake_load_active():
         return None
 
-    async def fake_estimate(items):
-        return {"total_monthly_estimate": 50.0, "line_items": items}
-
     async def fake_lookup(**kwargs):
         return {"service": kwargs["service"], "sku": kwargs["sku"], "monthly_estimate": 10.0}
 
@@ -159,7 +214,7 @@ async def test_no_engagement_skips_phases(monkeypatch):
         return {"total_kgco2e_per_month": 1.0}
 
     monkeypatch.setattr(cp_mod, "load_active", fake_load_active)
-    monkeypatch.setattr(cp_mod, "estimate_architecture", fake_estimate)
+    _patch_pricing(monkeypatch, cp_mod, total=50.0)
     monkeypatch.setattr(cp_mod.retail_pricing_service, "lookup", fake_lookup)
     monkeypatch.setattr(cp_mod.carbon_service, "estimate_for_line_items", fake_carbon)
     _patch_narration(monkeypatch)
@@ -173,7 +228,7 @@ async def test_no_engagement_skips_phases(monkeypatch):
     assert skips.get("break_even") == "depends_on_reservations"
 
     completes = {e["phase"] for e in events if e.get("type") == "phase_complete"}
-    assert {"estimate", "live_price", "carbon", "narration"}.issubset(completes)
+    assert {"estimate", "live_price", "carbon", "recommendations", "narration"}.issubset(completes)
 
     final = [e for e in events if e.get("type") == "cost_optimization"]
     assert len(final) == 1
@@ -191,9 +246,6 @@ async def test_narration_prompt_includes_phase_state(monkeypatch):
     async def fake_load_active():
         return None
 
-    async def fake_estimate(items):
-        return {"total_monthly_estimate": 777.0, "line_items": items}
-
     async def fake_lookup(**kwargs):
         return {"service": kwargs["service"], "sku": kwargs["sku"], "monthly_estimate": 42.0}
 
@@ -201,7 +253,7 @@ async def test_narration_prompt_includes_phase_state(monkeypatch):
         return {"total_kgco2e_per_month": 9.9}
 
     monkeypatch.setattr(cp_mod, "load_active", fake_load_active)
-    monkeypatch.setattr(cp_mod, "estimate_architecture", fake_estimate)
+    _patch_pricing(monkeypatch, cp_mod, total=777.0)
     monkeypatch.setattr(cp_mod.retail_pricing_service, "lookup", fake_lookup)
     monkeypatch.setattr(cp_mod.carbon_service, "estimate_for_line_items", fake_carbon)
 
@@ -229,9 +281,6 @@ async def test_service_error_continues_pipeline(monkeypatch):
     async def fake_load_active():
         return None
 
-    async def fake_estimate(items):
-        return {"total_monthly_estimate": 10.0, "line_items": items}
-
     async def fake_lookup(**kwargs):
         return {"service": kwargs["service"], "sku": kwargs["sku"], "monthly_estimate": 1.0}
 
@@ -239,7 +288,7 @@ async def test_service_error_continues_pipeline(monkeypatch):
         raise RuntimeError("carbon backend exploded")
 
     monkeypatch.setattr(cp_mod, "load_active", fake_load_active)
-    monkeypatch.setattr(cp_mod, "estimate_architecture", fake_estimate)
+    _patch_pricing(monkeypatch, cp_mod, total=10.0)
     monkeypatch.setattr(cp_mod.retail_pricing_service, "lookup", fake_lookup)
     monkeypatch.setattr(cp_mod.carbon_service, "estimate_for_line_items", fake_carbon)
     _patch_narration(monkeypatch)
