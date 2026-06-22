@@ -41,6 +41,7 @@ opentelemetry-instrumentation-sqlalchemy>=0.48b0
 slowapi>=0.1.9
 apscheduler>=3.10.4
 rapidfuzz>=3.9
+PyYAML>=6.0
 azure-monitor-query>=1.2
 pytest>=8.0
 pytest-asyncio>=0.23
