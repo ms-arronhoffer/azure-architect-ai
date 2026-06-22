@@ -1,0 +1,7 @@
+name,display_name,sku,region,quantity,hours_per_month,commitment,storage_gb,backup_gb,capacity_gb,write_ops_10k,read_ops_10k,executions_millions,gb_seconds,os_disk_gb,egress_gb
+App Service,Prod API plan,P1v3,eastus,2,730,3yr_ri,,,,,,,,,
+SQL Database,Orders DB,GP_Gen5_4,eastus,1,730,none,256,100,,,,,,,
+Storage,Media blobs,Hot LRS,eastus,1,730,none,,,5120,50,800,,,,
+Azure Functions,Image processor,,eastus,1,730,none,,,,,,12,6,,
+Virtual Machines,Batch worker,Standard_D4s_v5,eastus,1,200,none,,,,,,,,128,
+Bandwidth,Outbound transfer,,eastus,1,730,none,,,,,,,,,1024

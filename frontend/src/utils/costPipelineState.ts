@@ -9,6 +9,7 @@ export type CostPhase =
   | "reservations"
   | "rightsizing"
   | "break_even"
+  | "recommendations"
   | "narration";
 
 export interface CostPipelineRequestShape {

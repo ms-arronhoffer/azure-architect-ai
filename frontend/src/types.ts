@@ -1263,16 +1263,132 @@ export type ContinueInSeed =
 
 // ── Cost optimization pipeline ───────────────────────────────────────────────
 
+// ── Cost Optimize (meter-aware live pricing) ─────────────────────────────────
+
+export interface CostCatalogDimension {
+  key: string;
+  label: string;
+  unit: string;
+  quantity_field: string;
+  default_quantity: number;
+  included_free: number;
+  required: boolean;
+  instance_scaled: boolean;
+}
+
+export interface CostCatalogService {
+  service: string;
+  label: string;
+  aliases: string[];
+  category: string;
+  sku_field: string;
+  ri_eligible: boolean;
+  dimensions: CostCatalogDimension[];
+}
+
+export interface CostCatalog {
+  version: number;
+  currency_default: string;
+  region_default: string;
+  services: CostCatalogService[];
+}
+
+export interface CostMeter {
+  dimension: string;
+  label: string;
+  unit: string | null;
+  quantity?: number;
+  included_free?: number;
+  billable_quantity?: number;
+  unit_price: number | null;
+  unit_of_measure?: string | null;
+  monthly_cost: number | null;
+  meter_id?: string | null;
+  meter_name?: string | null;
+  priced: boolean;
+  note?: string;
+  source?: string;
+}
+
+export interface CostBreakdownLine {
+  service: string;
+  display_name: string;
+  category?: string;
+  sku: string;
+  region: string;
+  catalog_matched: boolean;
+  ri_eligible?: boolean;
+  tags?: string[];
+  meters: CostMeter[];
+  monthly_subtotal: number;
+  currency: string;
+}
+
+export interface CostBreakdown {
+  line_items: CostBreakdownLine[];
+  total_monthly_estimate: number;
+  currency: string;
+  summary?: { total_lines: number; catalog_matched: number; unpriced_meters: number };
+  data_source?: string;
+  disclaimer?: string;
+}
+
+export interface CostRecommendation {
+  id: string;
+  line_ref: number | null;
+  service?: string | null;
+  type: "reserved_instance" | "storage_tier" | "idle_resource" | "region_shift" | string;
+  title: string;
+  rationale: string;
+  current_monthly: number | null;
+  proposed_monthly: number | null;
+  monthly_savings: number;
+  confidence: string;
+  effort: string;
+  break_even?: Record<string, unknown>;
+  carbon_kgco2e_per_month?: number;
+}
+
+export interface CostRecommendations {
+  recommendations: CostRecommendation[];
+  total_monthly_savings: number;
+  total_annual_savings: number;
+  count: number;
+}
+
+export interface CostTemplateParseResult {
+  model_name?: string;
+  region?: string;
+  currency?: string;
+  items: CostTemplateLineItem[];
+  warnings: string[];
+  error: string | null;
+}
+
+export interface CostTemplateLineItem {
+  service: string;
+  display_name?: string;
+  sku?: string;
+  region?: string;
+  quantity?: number;
+  hours_per_month?: number;
+  dimensions?: Record<string, number>;
+  tags?: string[];
+  commitment?: string;
+}
+
 export interface CostOptimization {
   type: "cost_optimization";
   generated_at: string;
   engagement_id: string | null;
   estimate: Record<string, unknown> | null;
+  cost_breakdown: CostBreakdown | null;
   live_price: Record<string, unknown> | null;
   carbon: Record<string, unknown> | null;
   reservations: Record<string, unknown> | null;
   rightsizing: Record<string, unknown> | null;
   break_even: Record<string, unknown> | null;
+  recommendations: CostRecommendations | null;
   report: string;
 }
 

@@ -1,0 +1,56 @@
+{
+  "model_name": "Contoso Web Platform",
+  "default_region": "eastus",
+  "currency": "USD",
+  "services": [
+    {
+      "name": "App Service",
+      "display_name": "Prod API plan",
+      "sku": "P1v3",
+      "region": "eastus",
+      "quantity": 2,
+      "hours_per_month": 730,
+      "tags": ["cost-center-1234", "prod"],
+      "commitment": "3yr_ri"
+    },
+    {
+      "name": "SQL Database",
+      "display_name": "Orders DB",
+      "sku": "GP_Gen5_4",
+      "region": "eastus",
+      "quantity": 1,
+      "hours_per_month": 730,
+      "dimensions": { "storage_gb": 256, "backup_gb": 100 },
+      "tags": ["prod"]
+    },
+    {
+      "name": "Storage",
+      "display_name": "Media blobs",
+      "sku": "Hot LRS",
+      "region": "eastus",
+      "dimensions": { "capacity_gb": 5120, "write_ops_10k": 50, "read_ops_10k": 800 }
+    },
+    {
+      "name": "Azure Functions",
+      "display_name": "Image processor",
+      "region": "eastus",
+      "dimensions": { "executions_millions": 12, "gb_seconds": 6 }
+    },
+    {
+      "name": "Virtual Machines",
+      "display_name": "Batch worker",
+      "sku": "Standard_D4s_v5",
+      "region": "eastus",
+      "quantity": 1,
+      "hours_per_month": 200,
+      "dimensions": { "os_disk_gb": 128 },
+      "commitment": "none"
+    },
+    {
+      "name": "Bandwidth",
+      "display_name": "Outbound transfer",
+      "region": "eastus",
+      "dimensions": { "egress_gb": 1024 }
+    }
+  ]
+}
