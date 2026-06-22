@@ -67,13 +67,15 @@ async def lifespan(app: FastAPI):
         configure_telemetry(app)
         if settings.mcp_enabled:
             await init_mcp(stack)
-        if settings.rag_enabled:
+
+        async def _warmup_rag() -> None:
             try:
                 from services.rag_service import reindex_reference_archs
                 await reindex_reference_archs()
             except Exception as exc:
                 from middleware.logging import get_logger
                 get_logger("startup").warning("rag.warmup_failed", error=str(exc))
+
         try:
             from services.scheduler import shutdown_scheduler, start_scheduler
             start_scheduler()
@@ -92,8 +94,22 @@ async def lifespan(app: FastAPI):
                 from middleware.logging import get_logger
                 get_logger("startup").warning("whats_new.seed_failed", error=str(exc))
 
+        # Run network-bound warmups in the background so they never delay
+        # readiness — the RAG reindex in particular used to be awaited inline.
+        # References are retained on app.state so the tasks are not garbage
+        # collected mid-flight.
         import asyncio
-        asyncio.create_task(_seed_whats_new())
+        background_tasks: set[asyncio.Task] = set()
+        app.state.startup_tasks = background_tasks
+
+        def _spawn(coro) -> None:
+            task = asyncio.create_task(coro)
+            background_tasks.add(task)
+            task.add_done_callback(background_tasks.discard)
+
+        if settings.rag_enabled:
+            _spawn(_warmup_rag())
+        _spawn(_seed_whats_new())
         yield
 
 

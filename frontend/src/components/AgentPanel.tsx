@@ -1,24 +1,12 @@
 import ChatPanel from "./ChatPanel";
 import type { Mode, ChatMessage, ModelConfig, WorkloadContext } from "../types";
+import { AGENT_TOKENS, isAgentToken } from "../constants/modeGroups";
+import type { AgentToken } from "../constants/modeGroups";
 
-export type AgentToken =
-  | "architect"
-  | "cost"
-  | "operations"
-  | "compliance"
-  | "engagement";
-
-export const AGENT_TOKENS: AgentToken[] = [
-  "architect",
-  "cost",
-  "operations",
-  "compliance",
-  "engagement",
-];
-
-export function isAgentToken(m: Mode): m is AgentToken {
-  return (AGENT_TOKENS as Mode[]).includes(m);
-}
+// Re-exported for backward compatibility; the canonical definitions now live in
+// constants/modeGroups so they can be imported without pulling in ChatPanel.
+export { AGENT_TOKENS, isAgentToken };
+export type { AgentToken };
 
 interface AgentPanelProps {
   agent: AgentToken;

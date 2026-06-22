@@ -1,53 +1,69 @@
-import { useEffect, useRef, useState } from "react";
-import { FluentProvider, makeStyles, tokens, Toaster, useToastController, Toast, ToastTitle, ToastBody } from "@fluentui/react-components";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { FluentProvider, makeStyles, tokens, Spinner, Toaster, useToastController, Toast, ToastTitle, ToastBody } from "@fluentui/react-components";
 import { azureDarkTheme, azureLightTheme } from "./theme";
+// Shell chrome — always mounted, kept eager so the app paints immediately.
 import SideNav from "./components/SideNav";
 import Header from "./components/Header";
 import HistoryDrawer from "./components/HistoryDrawer";
 import CommandPalette from "./components/CommandPalette";
 import KeyboardShortcutsDialog from "./components/KeyboardShortcutsDialog";
 import OnboardingTour, { shouldShowOnboarding, markOnboardingSeen } from "./components/OnboardingTour";
-import AdvisorPanel, { ADVISOR_MODES } from "./components/AdvisorPanel";
-import NetworkDeskPanel, { NETWORK_DESK_MODES } from "./components/NetworkDeskPanel";
-import ComputeDeskPanel, { COMPUTE_DESK_MODES } from "./components/ComputeDeskPanel";
-import AIDeskPanel, { AI_DESK_MODES } from "./components/AIDeskPanel";
-import DataDeskPanel, { DATA_DESK_MODES } from "./components/DataDeskPanel";
-import ArchitecturePanel from "./components/ArchitecturePanel";
-import WAFPanel from "./components/WAFPanel";
-import ReviewPanel from "./components/ReviewPanel";
-import DRBCPanel from "./components/DRBCPanel";
-import ReferenceLibrary from "./components/ReferenceLibrary";
-import StrategyPanel from "./components/StrategyPanel";
-import PresentationPanel from "./components/PresentationPanel";
 import SettingsDrawer from "./components/SettingsDrawer";
 import HowToDrawer from "./components/HowToDrawer";
-import CodegenPanel from "./components/CodegenPanel";
-import LearningPlanPanel from "./components/LearningPlanPanel";
-import PipelineForgePanel from "./components/PipelineForgePanel";
-import RunbookStudioPanel from "./components/RunbookStudioPanel";
-import NamingStandardsPanel from "./components/NamingStandardsPanel";
 import WorkloadContextPanel from "./components/WorkloadContextPanel";
-import IntakePanel from "./components/IntakePanel";
-import IntakeChatPanel from "./components/IntakeChatPanel";
-import AnalysisPanel from "./components/AnalysisPanel";
-import CostOptimizePanel from "./components/CostOptimizePanel";
-import DemoBuildPanel from "./components/DemoBuildPanel";
-import LandingZonePanel from "./components/LandingZonePanel";
-import ThreatModelPanel from "./components/ThreatModelPanel";
-import ReliabilityPanel from "./components/ReliabilityPanel";
-import TroubleshootingPanel from "./components/TroubleshootingPanel";
-import WhatsNewPanel from "./components/WhatsNewPanel";
-import ServiceHealthPanel from "./components/ServiceHealthPanel";
-import ModelLifecyclePanel from "./components/ModelLifecyclePanel";
-import ModelMigrationPanel from "./components/ModelMigrationPanel";
-import MetricsDashboard from "./components/MetricsDashboard";
 import TelemetryDebugDrawer from "./components/TelemetryDebugDrawer";
-import FabricPlannerPanel from "./components/FabricPlannerPanel";
-import AdfPipelinePanel from "./components/AdfPipelinePanel";
-import MedallionDesignerPanel from "./components/MedallionDesignerPanel";
-import DemoShowcasePanel from "./components/DemoShowcasePanel";
-import RefArchPanel from "./components/RefArchPanel";
-import AgentPanel, { isAgentToken } from "./components/AgentPanel";
+import EngagementDrawer from "./components/EngagementDrawer";
+// Mode panels — code-split so a visitor only downloads the panel they open.
+// Heavy transitive deps (docx, xlsx, jspdf, jszip, react-syntax-highlighter)
+// ride along in each panel's chunk instead of the initial bundle.
+const AdvisorPanel = lazy(() => import("./components/AdvisorPanel"));
+const NetworkDeskPanel = lazy(() => import("./components/NetworkDeskPanel"));
+const ComputeDeskPanel = lazy(() => import("./components/ComputeDeskPanel"));
+const AIDeskPanel = lazy(() => import("./components/AIDeskPanel"));
+const DataDeskPanel = lazy(() => import("./components/DataDeskPanel"));
+const ArchitecturePanel = lazy(() => import("./components/ArchitecturePanel"));
+const WAFPanel = lazy(() => import("./components/WAFPanel"));
+const ReviewPanel = lazy(() => import("./components/ReviewPanel"));
+const DRBCPanel = lazy(() => import("./components/DRBCPanel"));
+const ReferenceLibrary = lazy(() => import("./components/ReferenceLibrary"));
+const StrategyPanel = lazy(() => import("./components/StrategyPanel"));
+const PresentationPanel = lazy(() => import("./components/PresentationPanel"));
+const CodegenPanel = lazy(() => import("./components/CodegenPanel"));
+const LearningPlanPanel = lazy(() => import("./components/LearningPlanPanel"));
+const PipelineForgePanel = lazy(() => import("./components/PipelineForgePanel"));
+const RunbookStudioPanel = lazy(() => import("./components/RunbookStudioPanel"));
+const NamingStandardsPanel = lazy(() => import("./components/NamingStandardsPanel"));
+const IntakePanel = lazy(() => import("./components/IntakePanel"));
+const IntakeChatPanel = lazy(() => import("./components/IntakeChatPanel"));
+const AnalysisPanel = lazy(() => import("./components/AnalysisPanel"));
+const CostOptimizePanel = lazy(() => import("./components/CostOptimizePanel"));
+const DemoBuildPanel = lazy(() => import("./components/DemoBuildPanel"));
+const LandingZonePanel = lazy(() => import("./components/LandingZonePanel"));
+const ThreatModelPanel = lazy(() => import("./components/ThreatModelPanel"));
+const ReliabilityPanel = lazy(() => import("./components/ReliabilityPanel"));
+const TroubleshootingPanel = lazy(() => import("./components/TroubleshootingPanel"));
+const WhatsNewPanel = lazy(() => import("./components/WhatsNewPanel"));
+const ServiceHealthPanel = lazy(() => import("./components/ServiceHealthPanel"));
+const ModelLifecyclePanel = lazy(() => import("./components/ModelLifecyclePanel"));
+const ModelMigrationPanel = lazy(() => import("./components/ModelMigrationPanel"));
+const MetricsDashboard = lazy(() => import("./components/MetricsDashboard"));
+const FabricPlannerPanel = lazy(() => import("./components/FabricPlannerPanel"));
+const AdfPipelinePanel = lazy(() => import("./components/AdfPipelinePanel"));
+const MedallionDesignerPanel = lazy(() => import("./components/MedallionDesignerPanel"));
+const DemoShowcasePanel = lazy(() => import("./components/DemoShowcasePanel"));
+const RefArchPanel = lazy(() => import("./components/RefArchPanel"));
+const AgentPanel = lazy(() => import("./components/AgentPanel"));
+import {
+  ADVISOR_MODES,
+  ARCH_MODES,
+  NETWORK_DESK_MODES,
+  COMPUTE_DESK_MODES,
+  AI_DESK_MODES,
+  DATA_DESK_MODES,
+  PANEL_MODES,
+  isAgentToken,
+  unifiedAgentsEnabled,
+} from "./constants/modeGroups";
 import { useConversationHistory } from "./hooks/useConversationHistory";
 import { useWorkloadContext } from "./hooks/useWorkloadContext";
 import { useSettings } from "./hooks/useSettings";
@@ -55,7 +71,6 @@ import { useServiceHealth } from "./hooks/useServiceHealth";
 import { useEngagements } from "./hooks/useEngagements";
 import { useWorkloadSpec } from "./hooks/useWorkloadSpec";
 import { useFavorites } from "./hooks/useFavorites";
-import EngagementDrawer from "./components/EngagementDrawer";
 import { track } from "./utils/telemetry";
 import { setErrorNotifier } from "./config/api";
 import type { Mode, ConversationRecord, ChatMessage, ContinueInSeed } from "./types";
@@ -80,12 +95,15 @@ const useStyles = makeStyles({
     display: "flex",
     flexDirection: "column",
   },
+  panelFallback: {
+    flex: 1,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+  },
 });
 
-const ARCH_MODES: Mode[] = ["architecture", "network", "aiarchitecture", "dataplatform", "apim"];
-const PANEL_MODES: Mode[] = [...ARCH_MODES, "waf", "review", "drbc", "threatmodel", "reliability", "landingzone", "troubleshoot", "strategy", "pipelineforge", "runbookstudio", "namingstandards", "cost-optimize", "demo-build"];
-
-const UNIFIED_AGENTS = import.meta.env.VITE_UNIFIED_AGENTS === "true";
+const UNIFIED_AGENTS = unifiedAgentsEnabled();
 const DEFAULT_MODE: Mode = UNIFIED_AGENTS ? "architect" : "qa";
 const LAST_MODE_KEY = "azure_last_mode";
 
@@ -495,7 +513,11 @@ export default function App() {
             onSelectEngagement={engagementsApi.setActiveId}
             onOpenEngagements={() => setEngagementsOpen(true)}
           />
-          <div className={styles.content}>{renderMode()}</div>
+          <div className={styles.content}>
+            <Suspense fallback={<div className={styles.panelFallback}><Spinner label="Loading…" /></div>}>
+              {renderMode()}
+            </Suspense>
+          </div>
         </div>
       </div>
       <HistoryDrawer

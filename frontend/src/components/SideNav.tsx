@@ -44,6 +44,7 @@ import {
   PinRegular,
 } from "@fluentui/react-icons";
 import type { Mode } from "../types";
+import { unifiedAgentsEnabled } from "../constants/modeGroups";
 import { useAuth } from "../auth/AuthProvider";
 
 interface NavItemDef {
@@ -469,7 +470,7 @@ export default function SideNav({ mode, onModeChange, collapsed, onToggleCollaps
           </div>
         )}
 
-        {(import.meta.env.VITE_UNIFIED_AGENTS === "true"
+        {(unifiedAgentsEnabled()
           ? UNIFIED_NAV_SECTIONS
           : NAV_SECTIONS.filter((s) => s.label !== "Agents")
         ).map((section, si) => {
