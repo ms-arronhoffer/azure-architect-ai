@@ -7,7 +7,7 @@ import Header from "./components/Header";
 import HistoryDrawer from "./components/HistoryDrawer";
 import CommandPalette from "./components/CommandPalette";
 import KeyboardShortcutsDialog from "./components/KeyboardShortcutsDialog";
-import OnboardingTour, { shouldShowOnboarding, markOnboardingSeen } from "./components/OnboardingTour";
+import OnboardingTour, { shouldShowOnboarding } from "./components/OnboardingTour";
 import SettingsDrawer from "./components/SettingsDrawer";
 import HowToDrawer from "./components/HowToDrawer";
 import WorkloadContextPanel from "./components/WorkloadContextPanel";
@@ -78,7 +78,7 @@ import { loadRuntimeConfig } from "./config/runtimeFlags";
 import { useUnifiedAgents } from "./hooks/useUnifiedAgents";
 import { TOASTER_ID } from "./constants/toaster";
 import { DemoBuildProvider } from "./contexts/DemoBuildContext";
-import type { Mode, ConversationRecord, ChatMessage, ContinueInSeed } from "./types";
+import type { Mode, ConversationRecord, ChatMessage, ContinueInSeed, DemoBuilderSeed } from "./types";
 
 const useStyles = makeStyles({
   root: {
@@ -150,6 +150,7 @@ export default function App() {
   const { favorites, toggleFavorite } = useFavorites();
   const { enabled: unifiedAgents, setEnabled: setUnifiedAgents } = useUnifiedAgents();
   const [analyzeAutoStart, setAnalyzeAutoStart] = useState(false);
+  const [demoBuildSeed, setDemoBuildSeed] = useState<DemoBuilderSeed | null>(null);
 
   // Fetch runtime feature flags once at startup so the unified-agents surface
   // reflects the server default without a frontend rebuild.
@@ -292,6 +293,7 @@ export default function App() {
       setRefinementSeed({ id: crypto.randomUUID(), messages: [seedMsg] });
       setAnalyzeAutoStart(false);
     } else {
+      if (seed.demoSeed) setDemoBuildSeed(seed.demoSeed);
       if (seed.spec) setWorkloadSpec(seed.spec);
       setRefinementSeed(null);
       setAnalyzeAutoStart(Boolean(seed.autoStart));
@@ -354,7 +356,7 @@ export default function App() {
       return <CostOptimizePanel key="cost-optimize" />;
     }
     if (mode === "demo-build") {
-      return <DemoBuildPanel key="demo-build" />;
+      return <DemoBuildPanel key="demo-build" initialSeed={demoBuildSeed} onSeedConsumed={() => setDemoBuildSeed(null)} />;
     }
     if (ARCH_MODES.includes(mode)) {
       return (
@@ -407,7 +409,7 @@ export default function App() {
     if (mode === "fabricplanner") return <FabricPlannerPanel key="fabricplanner" />;
     if (mode === "adfpipeline") return <AdfPipelinePanel key="adfpipeline" />;
     if (mode === "medalliondesigner") return <MedallionDesignerPanel key="medalliondesigner" />;
-    if (mode === "showcase") return <DemoShowcasePanel key="showcase" />;
+    if (mode === "showcase") return <DemoShowcasePanel key="showcase" onContinueIn={handleContinueIn} />;
     if (mode === "refarch") return <RefArchPanel key="refarch" onContinueIn={handleContinueIn} />;
     if (mode === "intakechat") return <IntakeChatPanel key="intakechat" onContinueIn={handleContinueIn} />;
     if (mode === "presentation") return <PresentationPanel key="presentation" />;
@@ -598,7 +600,7 @@ export default function App() {
         onClose={() => setShortcutsDialogOpen(false)}
       />
       {onboardingOpen && (
-        <OnboardingTour onClose={() => { markOnboardingSeen(); setOnboardingOpen(false); }} />
+        <OnboardingTour onClose={() => setOnboardingOpen(false)} />
       )}
       <Toaster toasterId={TOASTER_ID} position="top-end" />
       </DemoBuildProvider>

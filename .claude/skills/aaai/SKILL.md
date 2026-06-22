@@ -75,7 +75,7 @@ FastAPI + React + Azure OpenAI + draw.io. Local Docker Compose. Stack: Python 3.
 - `routes/architecture.py` and `routes/chat.py` `estimate_costs` paths apply `apply_reservation_discounts` after `estimate_architecture` when the active engagement declares `reservation_commitments`. Adds `reservation_adjustments` + `reservation_monthly_savings` to the `cost_estimate` SSE payload.
 
 ### 5-agent surface + Engagement scope (Theme 4)
-- Feature flag: `VITE_UNIFIED_AGENTS=true` (frontend) and `UNIFIED_AGENTS=true` (backend). Both must match; legacy 84-mode path still wired during the migration window.
+- Feature flag: `VITE_UNIFIED_AGENTS=true` (frontend) and `UNIFIED_AGENTS=true` (backend). The unified surface is **opt-in** — both must be explicitly truthy (`true`/`1`/`yes`/`on`) to enable it; unset/anything else uses the legacy 84-mode path.
 - Agents: `architect`, `cost`, `operations`, `compliance`, `engagement`. Defined in `frontend/src/components/AgentPanel.tsx` (`AGENT_TOKENS`, `isAgentToken`). `App.tsx::renderMode()` dispatches via `isAgentToken(mode)` before any legacy panel branches.
 - `SideNav.tsx` filters NAV_SECTIONS by flag; default-expands only the `Agents` section.
 - `Header.tsx::MODE_LABELS` includes labels for the 5 agent tokens.
