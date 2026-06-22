@@ -10,6 +10,7 @@ import { SearchRegular, DismissRegular, StarFilled } from "@fluentui/react-icons
 import type { Mode } from "../types";
 
 const MODE_LABELS: Record<Mode, string> = {
+  ask: "Ask",
   qa: "Expert Q&A",
   architecture: "Architecture Design",
   reference: "Reference Library",

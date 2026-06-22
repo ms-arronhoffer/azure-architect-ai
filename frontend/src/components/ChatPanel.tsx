@@ -31,6 +31,7 @@ import {
   ServerRegular,
   SparkleRegular,
   DataBarVerticalRegular,
+  ArrowForwardRegular,
 } from "@fluentui/react-icons";
 import ChatMessage from "./ChatMessage";
 import ContextStrip from "./ContextStrip";
@@ -58,7 +59,33 @@ interface ModeConfig {
   icon: React.ReactNode;
 }
 
+// Human labels for the bespoke structured tools the router can recommend.
+// The token is a real `Mode`, so launching is just `onContinueIn(tool, seed)`.
+const TOOL_LABELS: Partial<Record<Mode, string>> = {
+  "cost-optimize": "Open Cost Optimizer",
+  threatmodel: "Open Threat Model",
+  drbc: "Design DR / BC Strategy",
+  reliability: "Open Reliability Designer",
+  runbookstudio: "Open Runbook Studio",
+  intake: "Start Requirements Intake",
+  presentation: "Open Presentation Builder",
+  landingzone: "Open Landing Zone Designer",
+  namingstandards: "Open Naming Standards",
+};
+
 const MODE_CONFIG: Partial<Record<Mode, ModeConfig>> = {
+  ask: {
+    icon: <SparkleRegular />,
+    placeholder: "Ask anything Azure — design, cost, operations, security, or engagement…",
+    emptyHeading: "Ask",
+    emptySubtitle: "One front door. The router picks the right agent and offers a guided tool when it helps.",
+    examples: [
+      "Design a hub-and-spoke landing zone for a healthcare ISV across two regions",
+      "Right-size my AKS node pools and cut monthly spend",
+      "Run a STRIDE threat model on this payment service",
+      "We need a disaster recovery plan with RTO/RPO targets",
+    ],
+  },
   qa: {
     icon: <ChatRegular />,
     placeholder: "Ask any Azure architecture question…",
@@ -1010,7 +1037,7 @@ export default function ChatPanel({ mode, conversationId: savedId, initialMessag
   const [activeTopic, setActiveTopic] = useState<Mode>(subtopics?.[0]?.mode ?? mode);
   const effectiveMode: Mode = subtopics ? activeTopic : mode;
   const { spec } = useWorkloadSpec();
-  const { messages, sendMessage, isStreaming, cancel, reset } = useChat(
+  const { messages, sendMessage, isStreaming, cancel, reset, agentRoute } = useChat(
     effectiveMode,
     convId,
     onSave ? (msgs) => onSave(convId, effectiveMode, msgs) : undefined,
@@ -1170,6 +1197,24 @@ export default function ChatPanel({ mode, conversationId: savedId, initialMessag
       </div>
 
       <div className={styles.inputArea}>
+        {onContinueIn && agentRoute?.recommendedTool && TOOL_LABELS[agentRoute.recommendedTool] && !isStreaming && (
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", padding: "4px 0 8px", alignItems: "center" }}>
+            <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
+              Guided tool suggested:
+            </Text>
+            <Button
+              size="small"
+              appearance="primary"
+              icon={<ArrowForwardRegular />}
+              onClick={() => {
+                const lastUser = [...messages].reverse().find((m) => m.role === "user");
+                onContinueIn(agentRoute.recommendedTool as Mode, lastUser?.content ?? "");
+              }}
+            >
+              {TOOL_LABELS[agentRoute.recommendedTool]}
+            </Button>
+          </div>
+        )}
         {suggestedReplies && suggestedReplies.length > 0 && !isStreaming && (
           <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", padding: "4px 0 8px" }}>
             {suggestedReplies.map((reply, i) => (

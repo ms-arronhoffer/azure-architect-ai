@@ -9,7 +9,7 @@ export { AGENT_TOKENS, isAgentToken };
 export type { AgentToken };
 
 interface AgentPanelProps {
-  agent: AgentToken;
+  agent: AgentToken | "ask";
   conversationId?: string;
   initialMessages?: ChatMessage[];
   suggestedReplies?: string[];

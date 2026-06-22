@@ -64,6 +64,7 @@ import {
   isAgentToken,
   unifiedAgentsEnabled,
 } from "./constants/modeGroups";
+import type { AgentToken } from "./constants/modeGroups";
 import { useConversationHistory } from "./hooks/useConversationHistory";
 import { useWorkloadContext } from "./hooks/useWorkloadContext";
 import { useSettings } from "./hooks/useSettings";
@@ -104,7 +105,7 @@ const useStyles = makeStyles({
 });
 
 const UNIFIED_AGENTS = unifiedAgentsEnabled();
-const DEFAULT_MODE: Mode = UNIFIED_AGENTS ? "architect" : "qa";
+const DEFAULT_MODE: Mode = UNIFIED_AGENTS ? "ask" : "qa";
 const LAST_MODE_KEY = "azure_last_mode";
 
 function loadInitialMode(): Mode {
@@ -303,11 +304,11 @@ export default function App() {
         />
       );
     }
-    if (isAgentToken(mode)) {
+    if (mode === "ask" || isAgentToken(mode)) {
       return (
         <AgentPanel
           key={chatKey}
-          agent={mode}
+          agent={mode as AgentToken | "ask"}
           conversationId={selectedConversation?.id}
           initialMessages={initialMessages}
           suggestedReplies={refinementSeed?.suggestedReplies}

@@ -24,6 +24,7 @@ import { useAuth } from "../auth/AuthProvider";
 import EngagementSelector from "./EngagementSelector";
 
 const MODE_LABELS: Record<Mode, string> = {
+  ask: "Ask",
   qa: "Expert Q&A",
   architecture: "Architecture Design",
   reference: "Reference Library",
