@@ -1295,11 +1295,23 @@ export interface DemoBuilt {
   job_id: string;
   spec: DemoSpec | null;
   azure_services: string[];
+  demo_archetype: string;
   behind_the_scenes: Array<{ service: string; role: string }>;
+  live_activity: DemoLiveActivityStep[];
   talk_track: string;
   manifest: DemoFileManifestEntry[];
   diagrams: Array<{ name: string; mermaid: string }>;
   verify: DemoVerifyResult | null;
   repo_url: string | null;
   readme_md: string;
+}
+
+/** One ordered step in the live Azure request flow, authored by the design
+ *  phase. Drives the in-app Azure Activity Panel and the mocked preview. */
+export interface DemoLiveActivityStep {
+  step_id: string;
+  service: string;
+  stage: string;
+  detail?: string;
+  duration_ms?: number;
 }

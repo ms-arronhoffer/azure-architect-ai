@@ -30,6 +30,7 @@ import {
   DismissCircleRegular,
 } from "@fluentui/react-icons";
 import type { DemoFileManifestEntry } from "../types";
+import { DemoActivityPreview } from "./DemoActivityPreview";
 import { useWorkloadSpec } from "../hooks/useWorkloadSpec";
 import { useSettings } from "../hooks/useSettings";
 import { useDemoBuild } from "../contexts/DemoBuildContext";
@@ -314,7 +315,7 @@ export default function DemoBuildPanel() {
   const [publish, setPublish] = useState(false);
   const [publishTouched, setPublishTouched] = useState(false);
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<"talk" | "readme" | "files" | "diagrams" | "verify">("talk");
+  const [activeTab, setActiveTab] = useState<"preview" | "talk" | "readme" | "files" | "diagrams" | "verify">("preview");
 
   // Default the Publish switch ON once we know a PAT is configured, but never
   // override an explicit user toggle (publishTouched).
@@ -381,6 +382,8 @@ export default function DemoBuildPanel() {
   const stage = deriveServiceStage(events);
   const serviceList = azureServices.length > 0 ? azureServices : azureServicesInput;
   const behindTheScenes = result?.behind_the_scenes ?? [];
+  const liveActivity = result?.live_activity ?? [];
+  const demoArchetype = result?.demo_archetype ?? "";
   const roleFor = (svc: string) =>
     behindTheScenes.find((b) => b.service.toLowerCase() === svc.toLowerCase())?.role;
 
@@ -574,12 +577,24 @@ export default function DemoBuildPanel() {
         {result && (
           <Card className={styles.card}>
             <TabList selectedValue={activeTab} onTabSelect={(_, d) => setActiveTab(d.value as typeof activeTab)}>
+              <Tab value="preview">Live preview</Tab>
               <Tab value="talk">Talk track</Tab>
               <Tab value="readme">Readme</Tab>
               <Tab value="files">Files ({result.manifest.length})</Tab>
               <Tab value="diagrams">Diagrams ({result.diagrams.length})</Tab>
               <Tab value="verify">Verify</Tab>
             </TabList>
+
+            {activeTab === "preview" && (
+              <div className={styles.viewer} style={{ fontFamily: "inherit", whiteSpace: "normal" }}>
+                {demoArchetype && (
+                  <Badge appearance="tint" color="brand" style={{ marginBottom: 8 }}>
+                    {demoArchetype} demo
+                  </Badge>
+                )}
+                <DemoActivityPreview steps={liveActivity} roles={behindTheScenes} />
+              </div>
+            )}
 
             {activeTab === "talk" && (
               <div className={styles.viewer}>
