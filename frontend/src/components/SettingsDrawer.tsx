@@ -9,6 +9,7 @@ import {
   DrawerHeaderTitle,
   DrawerBody,
   Select,
+  Switch,
   Divider,
 } from "@fluentui/react-components";
 import { DismissRegular, EyeRegular, EyeOffRegular, SaveRegular, SignOutRegular } from "@fluentui/react-icons";
@@ -133,6 +134,8 @@ interface SettingsDrawerProps {
   githubTokenConfigured: boolean;
   onSaveGithubToken: (token: string) => Promise<void>;
   onClearGithubToken: () => Promise<void>;
+  unifiedAgents: boolean;
+  onToggleUnifiedAgents: (value: boolean) => void;
 }
 
 export default function SettingsDrawer({
@@ -143,6 +146,8 @@ export default function SettingsDrawer({
   githubTokenConfigured,
   onSaveGithubToken,
   onClearGithubToken,
+  unifiedAgents,
+  onToggleUnifiedAgents,
 }: SettingsDrawerProps) {
   const styles = useStyles();
   const { account, logout, enabled: authEnabled } = useAuth();
@@ -243,6 +248,26 @@ export default function SettingsDrawer({
               <Divider />
             </>
           )}
+
+          {/* Experience / feature flags */}
+          <div className={styles.section}>
+            <Text className={styles.sectionTitle}>Experience</Text>
+            <div className={styles.modeRow}>
+              <Text className={styles.modeLabel}>
+                Unified agents (5-agent surface)
+              </Text>
+              <Switch
+                checked={unifiedAgents}
+                onChange={(_, d) => onToggleUnifiedAgents(d.checked)}
+              />
+            </div>
+            <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
+              On: the streamlined 5-agent navigation. Off: the legacy 84-mode
+              navigation. Applies instantly in this browser — no rebuild needed.
+            </Text>
+          </div>
+
+          <Divider />
 
           {/* GitHub PAT */}
           <div className={styles.section}>

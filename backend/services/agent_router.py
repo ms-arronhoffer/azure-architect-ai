@@ -67,6 +67,7 @@ matching this schema:
   "agent": "architect" | "cost" | "operations" | "compliance" | "engagement",
   "domain_fragments": [string, ...],   // 0-3, drawn from the provided list
   "suggested_tools": [string, ...],    // optional, hint at tool names that might be useful
+  "recommended_tool": string,           // optional structured-tool token, see list below, or ""
   "reason": string                      // one short sentence
 }
 
@@ -77,7 +78,116 @@ Agent meanings:
 - compliance: posture, threat model, DevSecOps, regulatory framework mapping.
 - engagement: intake, RFP, exec content, learning plans, "what's new" briefings.
 
+recommended_tool — set ONLY when the user clearly wants a guided, structured flow,
+and it must belong to the chosen agent. Otherwise use "". Allowed values:
+- "cost-optimize"   (cost)        — right-sizing / cost optimization workflow
+- "threatmodel"     (compliance)  — STRIDE threat modeling
+- "drbc"            (operations)  — disaster recovery / business continuity design
+- "reliability"     (operations)  — reliability / SLO design
+- "runbookstudio"   (operations)  — operational runbook authoring
+- "intake"          (engagement)  — requirements intake wizard
+- "presentation"    (engagement)  — executive presentation builder
+- "landingzone"     (architect)   — landing zone designer
+- "namingstandards" (architect)   — naming standards generator
+
 Prefer fewer fragments — only include one when it adds real depth."""
+
+
+# ── Structured-tool recommendation ─────────────────────────────────────────
+#
+# The five agents handle most requests through chat, but several flows are far
+# more intuitive in their bespoke, guided panels (structured questions, wizards,
+# split-pane editors). When the user's intent clearly maps to one of those
+# surfaces, the router recommends it so the frontend can offer a one-click
+# launch chip — chat stays the default, structure is one click away.
+#
+# Each tool is owned by exactly one agent so a recommendation is only surfaced
+# when it is coherent with the resolved agent (e.g. we never suggest the
+# threat-model tool while the cost agent is active).
+_TOOL_AGENT: dict[str, str] = {
+    "cost-optimize": "cost",
+    "threatmodel": "compliance",
+    "drbc": "operations",
+    "reliability": "operations",
+    "runbookstudio": "operations",
+    "intake": "engagement",
+    "presentation": "engagement",
+    "landingzone": "architect",
+    "namingstandards": "architect",
+}
+
+# Ordered keyword bag — first match wins. Phrases are matched as substrings of
+# the lower-cased message, so multi-word phrases are preferred over loose tokens.
+_TOOL_KEYWORDS: list[tuple[str, tuple[str, ...]]] = [
+    ("cost-optimize", (
+        "right-size", "rightsize", "right size", "rightsizing",
+        "optimize cost", "optimise cost", "cost optimization", "cost optimisation",
+        "reduce spend", "reduce cost", "lower cost", "savings plan", "reservation",
+    )),
+    ("threatmodel", (
+        "threat model", "threat-model", "threatmodel", "stride",
+        "attack surface", "threat register", "attack tree",
+    )),
+    ("drbc", (
+        "disaster recovery", "dr plan", "dr strategy", "business continuity",
+        "rto", "rpo", "failover", "backup and restore",
+    )),
+    ("reliability", (
+        "reliability", "resiliency", "resilience", "availability zone",
+        "slo", "sla target", "error budget",
+    )),
+    ("runbookstudio", (
+        "runbook", "operational procedure", "incident playbook",
+    )),
+    ("intake", (
+        "intake", "requirements gathering", "gather requirements",
+        "scope a project", "new engagement", "discovery call", "rfp",
+    )),
+    ("presentation", (
+        "presentation", "exec deck", "executive deck", "slide deck",
+        "pitch deck", "briefing deck", "powerpoint", "pptx",
+    )),
+    ("landingzone", (
+        "landing zone", "management group", "enterprise scale", "caf landing",
+    )),
+    ("namingstandards", (
+        "naming convention", "naming standard", "resource naming",
+    )),
+]
+
+# Direct legacy-mode → structured-tool mapping for the shim fast path.
+_MODE_TOOL: dict[str, str] = {
+    "finops": "cost-optimize",
+    "cost": "cost-optimize",
+    "rightsizing": "cost-optimize",
+    "reservations": "cost-optimize",
+    "threatmodel": "threatmodel",
+    "securityposture": "threatmodel",
+    "drbc": "drbc",
+    "reliability": "reliability",
+    "runbook": "runbookstudio",
+    "intake": "intake",
+    "rfp": "intake",
+    "presentation": "presentation",
+    "exec": "presentation",
+    "landingzone": "landingzone",
+}
+
+
+def recommend_tool(message: str, agent: str) -> str:
+    """Return a bespoke structured-tool token the user likely wants, or "".
+
+    Only returns a tool whose owning agent matches ``agent`` so the suggestion
+    is always coherent with the resolved agent. Returns "" when no keyword
+    matches or the match belongs to a different agent.
+    """
+    text = (message or "").lower()
+    for tool, keywords in _TOOL_KEYWORDS:
+        if _TOOL_AGENT.get(tool) != agent:
+            continue
+        if any(kw in text for kw in keywords):
+            return tool
+    return ""
 
 
 def _build_user_prompt(message: str, history_hint: str) -> str:
@@ -110,10 +220,13 @@ def _parse_response(raw: str) -> dict[str, Any]:
     if not isinstance(tools, list):
         tools = []
     tools = [str(t) for t in tools if isinstance(t, str)][:6]
+    rec_tool = obj.get("recommended_tool")
+    rec_tool = rec_tool if isinstance(rec_tool, str) and rec_tool in _TOOL_AGENT else ""
     return {
         "agent": agent,
         "domain_fragments": frags,
         "suggested_tools": tools,
+        "recommended_tool": rec_tool,
         "reason": str(obj.get("reason") or ""),
     }
 
@@ -161,6 +274,13 @@ def route(
         log.warning("agent_router.fallback", error=str(exc))
         parsed = _fallback(message)
 
+    # Keyword recommender backstops the LLM: if the classifier didn't name a
+    # coherent structured tool, derive one from the message + resolved agent.
+    if not parsed.get("recommended_tool"):
+        parsed["recommended_tool"] = recommend_tool(
+            message, parsed.get("agent", DEFAULT_AGENT)
+        )
+
     _cache[key] = (now, parsed)
     return parsed
 
@@ -176,6 +296,7 @@ def shim_legacy_mode(mode: str) -> dict[str, Any] | None:
         "agent": table[0],
         "domain_fragments": list(table[1]),
         "suggested_tools": [],
+        "recommended_tool": _MODE_TOOL.get(mode, ""),
         "reason": f"legacy mode={mode}",
     }
 
@@ -231,4 +352,4 @@ _LEGACY_MODE_SHIM: dict[str, tuple[str, tuple[str, ...]]] = {
 }
 
 
-__all__ = ["route", "shim_legacy_mode"]
+__all__ = ["recommend_tool", "route", "shim_legacy_mode"]

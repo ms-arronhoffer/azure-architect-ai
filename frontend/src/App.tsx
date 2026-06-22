@@ -64,6 +64,7 @@ import {
   isAgentToken,
   unifiedAgentsEnabled,
 } from "./constants/modeGroups";
+import type { AgentToken } from "./constants/modeGroups";
 import { useConversationHistory } from "./hooks/useConversationHistory";
 import { useWorkloadContext } from "./hooks/useWorkloadContext";
 import { useSettings } from "./hooks/useSettings";
@@ -73,6 +74,8 @@ import { useWorkloadSpec } from "./hooks/useWorkloadSpec";
 import { useFavorites } from "./hooks/useFavorites";
 import { track } from "./utils/telemetry";
 import { setErrorNotifier } from "./config/api";
+import { loadRuntimeConfig } from "./config/runtimeFlags";
+import { useUnifiedAgents } from "./hooks/useUnifiedAgents";
 import type { Mode, ConversationRecord, ChatMessage, ContinueInSeed } from "./types";
 
 const useStyles = makeStyles({
@@ -103,16 +106,20 @@ const useStyles = makeStyles({
   },
 });
 
-const UNIFIED_AGENTS = unifiedAgentsEnabled();
-const DEFAULT_MODE: Mode = UNIFIED_AGENTS ? "architect" : "qa";
 const LAST_MODE_KEY = "azure_last_mode";
+
+// Home mode for the currently active navigation surface. Resolved at runtime so
+// it follows the unified-agents flag without a rebuild (see config/runtimeFlags).
+function defaultMode(): Mode {
+  return unifiedAgentsEnabled() ? "ask" : "qa";
+}
 
 function loadInitialMode(): Mode {
   try {
     const saved = localStorage.getItem(LAST_MODE_KEY) as Mode | null;
     if (saved) return saved;
   } catch { /* ignore */ }
-  return DEFAULT_MODE;
+  return defaultMode();
 }
 
 export default function App() {
@@ -139,7 +146,23 @@ export default function App() {
   const engagementsApi = useEngagements();
   const { setSpec: setWorkloadSpec } = useWorkloadSpec();
   const { favorites, toggleFavorite } = useFavorites();
+  const { enabled: unifiedAgents, setEnabled: setUnifiedAgents } = useUnifiedAgents();
   const [analyzeAutoStart, setAnalyzeAutoStart] = useState(false);
+
+  // Fetch runtime feature flags once at startup so the unified-agents surface
+  // reflects the server default without a frontend rebuild.
+  useEffect(() => {
+    void loadRuntimeConfig();
+  }, []);
+
+  // Toggle the unified-agents surface and jump to the new surface's home mode so
+  // the user never lands on a mode that no longer has a nav entry.
+  function handleToggleUnifiedAgents(value: boolean) {
+    setUnifiedAgents(value);
+    const home: Mode = value ? "ask" : "qa";
+    setMode(home);
+    try { localStorage.setItem(LAST_MODE_KEY, home); } catch { /* ignore */ }
+  }
 
   const TOASTER_ID = "app-toaster";
   const { dispatchToast } = useToastController(TOASTER_ID);
@@ -303,11 +326,11 @@ export default function App() {
         />
       );
     }
-    if (isAgentToken(mode)) {
+    if (mode === "ask" || isAgentToken(mode)) {
       return (
         <AgentPanel
           key={chatKey}
-          agent={mode}
+          agent={mode as AgentToken | "ask"}
           conversationId={selectedConversation?.id}
           initialMessages={initialMessages}
           suggestedReplies={refinementSeed?.suggestedReplies}
@@ -536,6 +559,8 @@ export default function App() {
         githubTokenConfigured={githubTokenConfigured}
         onSaveGithubToken={setGithubToken}
         onClearGithubToken={clearGithubToken}
+        unifiedAgents={unifiedAgents}
+        onToggleUnifiedAgents={handleToggleUnifiedAgents}
       />
       <HowToDrawer
         open={howToOpen}

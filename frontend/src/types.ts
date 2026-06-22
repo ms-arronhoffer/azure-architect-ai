@@ -95,7 +95,10 @@ export type Mode =
   // the same name, so we only add the three new ones here.
   | "architect"
   | "operations"
-  | "engagement";
+  | "engagement"
+  // Unified single front door — posts to /api/chat without pre-selecting an
+  // agent so the backend router classifies and dispatches.
+  | "ask";
 
 // ── Demo showcase ────────────────────────────────────────────────────────────
 
@@ -1233,6 +1236,7 @@ export type SseEvent =
   | { type: "arb_condition_action"; action: "clear" | "waive"; payload: ArbConditionActionPayload }
   | { type: "arb_status_transition"; transition: ArbStatusTransitionProposal }
   | { type: "done" }
+  | { type: "agent_route"; agent: string; domain_fragments?: string[]; recommended_tool?: string; reason?: string; engagement_scoped?: boolean }
   | { type: "status"; message: string }
   | { type: "error"; message: string };
 

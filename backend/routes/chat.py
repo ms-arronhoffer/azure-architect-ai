@@ -6,7 +6,6 @@ Tool calls are dispatched and their structured results emitted as typed SSE even
 import asyncio
 import contextlib
 import json
-import os
 import traceback
 from collections.abc import AsyncGenerator
 
@@ -25,6 +24,7 @@ from prompts.domain_fragments import get_fragments
 from prompts.system_prompt import get_system_prompt
 from services import agent_router, engagement_context
 from services.error_sanitizer import sanitize_openai_error
+from services.feature_flags import unified_agents_enabled
 from services.mcp_service import call_mcp_tool, is_mcp_tool
 from services.openai_service import (
     TOOL_INCOMPATIBLE_MODELS,
@@ -40,11 +40,8 @@ router = APIRouter()
 log = get_logger("chat")
 
 
-def _unified_agents_enabled() -> bool:
-    # The 5-agent surface is the default experience; it is opt-out. Set
-    # UNIFIED_AGENTS=false (or 0/no/off) to fall back to the legacy 84-mode
-    # routing during the deprecation window.
-    return os.getenv("UNIFIED_AGENTS", "").strip().lower() not in {"0", "false", "no", "off"}
+# Backwards-compatible alias; canonical reader lives in services.feature_flags.
+_unified_agents_enabled = unified_agents_enabled
 
 # Modes that use the architecture route instead (handled by architecture.py)
 ARCH_ROUTE_MODES = {"architecture", "waf", "review", "drbc"}
@@ -201,7 +198,7 @@ async def _stream_chat_impl(mode: str, messages: list[dict], provider: str = "az
             # to the legacy mode mapping so the assistant still has tools.
             tools = get_tools_for_mode(mode)
         with contextlib.suppress(Exception):
-            yield f"data: {json.dumps({'type': 'agent_route', 'agent': agent_name, 'domain_fragments': routing.get('domain_fragments', []), 'reason': routing.get('reason', ''), 'engagement_scoped': bool(preamble)})}\n\n"
+            yield f"data: {json.dumps({'type': 'agent_route', 'agent': agent_name, 'domain_fragments': routing.get('domain_fragments', []), 'recommended_tool': routing.get('recommended_tool', ''), 'reason': routing.get('reason', ''), 'engagement_scoped': bool(preamble)})}\n\n"
     else:
         system = get_system_prompt(mode)
         tools = [] if model in TOOL_INCOMPATIBLE_MODELS else get_tools_for_mode(mode)

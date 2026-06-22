@@ -185,6 +185,12 @@ const NAV_SECTIONS: NavSectionDef[] = [
 // specialist panels via chat-based flow; only a handful of standalone
 // browser/discovery surfaces are kept alongside (per the trusted-oracle plan).
 const UNIFIED_NAV_SECTIONS: NavSectionDef[] = [
+  {
+    label: "Start here",
+    items: [
+      { mode: "ask", label: "Ask", icon: <SparkleRegular />, description: "One front door — the router picks the right agent and offers a guided tool when it helps" },
+    ],
+  },
   NAV_SECTIONS.find((s) => s.label === "Agents")!,
   {
     label: "Library",

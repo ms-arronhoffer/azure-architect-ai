@@ -2,6 +2,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ChatMessage, Mode, ModelConfig, StructuredResult } from "../types";
 import { useSSE } from "./useSSE";
 
+export interface AgentRouteInfo {
+  agent: string;
+  recommendedTool: Mode | null;
+  reason: string;
+}
+
 export function useChat(mode: Mode, _conversationId?: string, onSave?: (msgs: ChatMessage[]) => void, initialMessages?: ChatMessage[], modelConfig?: ModelConfig, onDiagram?: (xml: string) => void) {
   // If the last initialMessage is a user message, auto-send it on mount.
   // useMemo with [] deps so this only computes once (stable across renders).
@@ -16,6 +22,10 @@ export function useChat(mode: Mode, _conversationId?: string, onSave?: (msgs: Ch
   }, []); // intentionally empty — computed once from initial prop value
 
   const [messages, setMessages] = useState<ChatMessage[]>(initMsgs);
+  // Last router decision for the in-flight/most-recent turn. Drives the
+  // "open the structured tool" launch chip when the router is confident the
+  // user wants a guided, bespoke flow rather than free-text chat.
+  const [agentRoute, setAgentRoute] = useState<AgentRouteInfo | null>(null);
   const { stream, isStreaming, cancel } = useSSE();
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -53,6 +63,7 @@ export function useChat(mode: Mode, _conversationId?: string, onSave?: (msgs: Ch
       };
 
       setMessages((prev) => [...prev, userMsg, assistantMsg]);
+      setAgentRoute(null);
 
       const apiMessages = [...messages, userMsg].map((m) => ({
         role: m.role,
@@ -67,6 +78,15 @@ export function useChat(mode: Mode, _conversationId?: string, onSave?: (msgs: Ch
       }, (event) => {
         if (event.type === "diagram" && typeof event.xml === "string") {
           onDiagram?.(event.xml);
+          return;
+        }
+        if (event.type === "agent_route") {
+          const tool = typeof event.recommended_tool === "string" ? event.recommended_tool : "";
+          setAgentRoute({
+            agent: typeof event.agent === "string" ? event.agent : "",
+            recommendedTool: tool ? (tool as Mode) : null,
+            reason: typeof event.reason === "string" ? event.reason : "",
+          });
           return;
         }
         setMessages((prev) =>
@@ -116,9 +136,9 @@ export function useChat(mode: Mode, _conversationId?: string, onSave?: (msgs: Ch
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const reset = useCallback(() => setMessages([]), []);
+  const reset = useCallback(() => { setMessages([]); setAgentRoute(null); }, []);
 
-  return { messages, sendMessage, isStreaming, cancel, reset, loadMessages };
+  return { messages, sendMessage, isStreaming, cancel, reset, loadMessages, agentRoute };
 }
 
 function _toStructuredResult(event: { type: string; [key: string]: unknown }): StructuredResult | null {
