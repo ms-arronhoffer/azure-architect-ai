@@ -1294,6 +1294,9 @@ export interface DemoBuilt {
   engagement_id: string | null;
   job_id: string;
   spec: DemoSpec | null;
+  azure_services: string[];
+  behind_the_scenes: Array<{ service: string; role: string }>;
+  talk_track: string;
   manifest: DemoFileManifestEntry[];
   diagrams: Array<{ name: string; mermaid: string }>;
   verify: DemoVerifyResult | null;

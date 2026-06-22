@@ -13,6 +13,8 @@ export type DemoPhase =
   | "verify"
   | "publish";
 
+export type DemoJobStatus = "idle" | "running" | "done" | "error" | "cancelled";
+
 export interface DemoPipelineRequestShape {
   demo_slug: string;
   demo_title: string;
@@ -26,15 +28,24 @@ export interface DemoPipelineRequestShape {
 
 export interface DemoPhaseEvent {
   phase: DemoPhase;
-  type: "started" | "complete" | "skipped" | "failed";
+  type: "started" | "complete" | "skipped" | "failed" | "progress";
   reason?: string;
   error?: string;
+  degraded?: boolean;
+  azureServices?: string[];
+  filesAdded?: number;
+  elapsedS?: number;
   extra?: Record<string, unknown>;
 }
 
 export interface DemoPipelineState {
   request_hash: string;
   started_at: string;
+  job_id: string | null;
+  status: DemoJobStatus;
+  publish: boolean;
+  azure_services: string[];
+  request_shape: DemoPipelineRequestShape | null;
   events: DemoPhaseEvent[];
   result: DemoBuilt | null;
 }
@@ -69,7 +80,24 @@ export function loadDemoState(): DemoPipelineState | null {
     if (!parsed || typeof parsed !== "object") return null;
     if (typeof parsed.request_hash !== "string") return null;
     if (!Array.isArray(parsed.events)) return null;
-    return parsed as DemoPipelineState;
+    // Backfill fields added after the original schema so older persisted
+    // states still load cleanly.
+    return {
+      request_hash: parsed.request_hash,
+      started_at: parsed.started_at ?? new Date().toISOString(),
+      job_id: typeof parsed.job_id === "string" ? parsed.job_id : null,
+      status:
+        typeof parsed.status === "string"
+          ? parsed.status
+          : parsed.result
+            ? "done"
+            : "idle",
+      publish: Boolean(parsed.publish),
+      azure_services: Array.isArray(parsed.azure_services) ? parsed.azure_services : [],
+      request_shape: parsed.request_shape ?? null,
+      events: parsed.events,
+      result: parsed.result ?? null,
+    } as DemoPipelineState;
   } catch {
     return null;
   }
@@ -91,10 +119,18 @@ export function clearDemoState(): void {
   }
 }
 
-export function newDemoState(requestHash: string): DemoPipelineState {
+export function newDemoState(
+  requestHash: string,
+  opts?: { jobId?: string; publish?: boolean; requestShape?: DemoPipelineRequestShape },
+): DemoPipelineState {
   return {
     request_hash: requestHash,
     started_at: new Date().toISOString(),
+    job_id: opts?.jobId ?? null,
+    status: "running",
+    publish: opts?.publish ?? false,
+    azure_services: opts?.requestShape?.azure_services ?? [],
+    request_shape: opts?.requestShape ?? null,
     events: [],
     result: null,
   };
