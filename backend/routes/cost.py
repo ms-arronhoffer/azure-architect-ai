@@ -224,7 +224,9 @@ async def template_parse(request: Request, _=Depends(require_user)) -> dict:
         raise HTTPException(status_code=422, detail="Uploaded template is empty.")
     try:
         text = raw.decode("utf-8")
-    except UnicodeDecodeError as exc:
-        raise HTTPException(status_code=422, detail=f"Template must be UTF-8 text: {exc}") from exc
+    except UnicodeDecodeError:
+        raise HTTPException(
+            status_code=422, detail="Template must be UTF-8 encoded text."
+        ) from None
     return cost_template_service.parse_template(text, fmt)
 

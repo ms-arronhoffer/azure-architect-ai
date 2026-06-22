@@ -192,8 +192,12 @@ def parse_template(content: str, fmt: str = "") -> dict[str, Any]:
             raw = json.loads(text)
         else:
             raw = yaml.safe_load(text)
-    except (yaml.YAMLError, json.JSONDecodeError, csv.Error) as exc:
-        return {"items": [], "warnings": [], "error": f"could not parse template: {exc}"}
+    except (yaml.YAMLError, json.JSONDecodeError, csv.Error):
+        return {
+            "items": [],
+            "warnings": [],
+            "error": f"could not parse template as {fmt}; check the file is well-formed {fmt.upper()}.",
+        }
 
     if not isinstance(raw, dict):
         return {"items": [], "warnings": [], "error": "template root must be a mapping with a 'services' list."}
