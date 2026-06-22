@@ -14,7 +14,6 @@ import {
   GlobeRegular,
   SignOutRegular,
   QuestionCircleRegular,
-  SearchRegular,
 } from "@fluentui/react-icons";
 import type { Mode } from "../types";
 import type { WorkloadContext } from "../types";
@@ -323,7 +322,6 @@ interface HeaderProps {
   onOpenSettings: () => void;
   onOpenContext: () => void;
   onOpenHowTo: () => void;
-  onOpenCommandPalette?: () => void;
   workloadContext?: WorkloadContext;
   saveStatus?: SaveStatus;
   engagements?: Engagement[];
@@ -332,7 +330,7 @@ interface HeaderProps {
   onOpenEngagements?: () => void;
 }
 
-export default function Header({ mode, darkMode, onToggleDark, onOpenHistory, onOpenSettings, onOpenContext, onOpenHowTo, onOpenCommandPalette, workloadContext, saveStatus, engagements, activeEngagement, onSelectEngagement, onOpenEngagements }: HeaderProps) {
+export default function Header({ mode, darkMode, onToggleDark, onOpenHistory, onOpenSettings, onOpenContext, onOpenHowTo, workloadContext, saveStatus, engagements, activeEngagement, onSelectEngagement, onOpenEngagements }: HeaderProps) {
   const styles = useStyles();
   const section = MODE_SECTION[mode];
   const { account, logout, enabled: authEnabled } = useAuth();
@@ -391,15 +389,6 @@ export default function Header({ mode, darkMode, onToggleDark, onOpenHistory, on
               title="Sign out"
             />
           </>
-        )}
-        {onOpenCommandPalette && (
-          <Button
-            appearance="subtle"
-            size="small"
-            icon={<SearchRegular />}
-            onClick={onOpenCommandPalette}
-            title="Command palette (Ctrl+K)"
-          />
         )}
         <Button
           appearance="subtle"
