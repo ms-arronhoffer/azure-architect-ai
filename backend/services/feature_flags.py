@@ -8,14 +8,14 @@ a rebuild — only a backend restart with the new env value is required.
 
 import os
 
-_FALSEY = {"0", "false", "no", "off"}
+_TRUTHY = {"1", "true", "yes", "on"}
 
 
 def unified_agents_enabled() -> bool:
-    """Whether the 5-agent unified surface is active (opt-out default).
+    """Whether the 5-agent unified surface is active (opt-in default).
 
-    Set ``UNIFIED_AGENTS=false`` (or ``0``/``no``/``off``) to fall back to the
-    legacy 84-mode routing during the deprecation window. Anything else — including
-    an unset variable — resolves to the unified surface.
+    Set ``UNIFIED_AGENTS=true`` (or ``1``/``yes``/``on``) to enable the 5-agent
+    unified surface. Anything else — including an unset variable — resolves to
+    the legacy 84-mode routing.
     """
-    return os.getenv("UNIFIED_AGENTS", "").strip().lower() not in _FALSEY
+    return os.getenv("UNIFIED_AGENTS", "").strip().lower() in _TRUTHY

@@ -13,8 +13,8 @@ beforeEach(() => {
 });
 
 describe('runtimeFlags — unified agents', () => {
-  it('defaults to enabled (env fallback) when no override and no server value', () => {
-    expect(getUnifiedAgents()).toBe(true);
+  it('defaults to disabled (env fallback) when no override and no server value', () => {
+    expect(getUnifiedAgents()).toBe(false);
     expect(hasUnifiedAgentsOverride()).toBe(false);
   });
 

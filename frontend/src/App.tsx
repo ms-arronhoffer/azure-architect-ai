@@ -7,7 +7,7 @@ import Header from "./components/Header";
 import HistoryDrawer from "./components/HistoryDrawer";
 import CommandPalette from "./components/CommandPalette";
 import KeyboardShortcutsDialog from "./components/KeyboardShortcutsDialog";
-import OnboardingTour, { shouldShowOnboarding, markOnboardingSeen } from "./components/OnboardingTour";
+import OnboardingTour, { shouldShowOnboarding } from "./components/OnboardingTour";
 import SettingsDrawer from "./components/SettingsDrawer";
 import HowToDrawer from "./components/HowToDrawer";
 import WorkloadContextPanel from "./components/WorkloadContextPanel";
@@ -600,7 +600,7 @@ export default function App() {
         onClose={() => setShortcutsDialogOpen(false)}
       />
       {onboardingOpen && (
-        <OnboardingTour onClose={() => { markOnboardingSeen(); setOnboardingOpen(false); }} />
+        <OnboardingTour onClose={() => setOnboardingOpen(false)} />
       )}
       <Toaster toasterId={TOASTER_ID} position="top-end" />
       </DemoBuildProvider>
