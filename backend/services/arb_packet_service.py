@@ -265,7 +265,7 @@ def _render_cost_section(pdf, bundled: dict[str, Any]) -> None:
         pdf.set_font("Helvetica", "B", 8)
         pdf.set_fill_color(*_AZURE_RGB)
         pdf.set_text_color(255, 255, 255)
-        for h, w in zip(headers, widths):
+        for h, w in zip(headers, widths, strict=True):
             pdf.cell(w, 6, _sanitize_pdf(h), border=0, fill=True)
         pdf.ln(6)
         pdf.set_text_color(0, 0, 0)
@@ -456,7 +456,7 @@ def _render_reviewer_worksheet(pdf, conditions: list[dict[str, Any]]) -> None:
         pdf.set_font("Helvetica", "B", 8)
         pdf.set_fill_color(*_AZURE_RGB)
         pdf.set_text_color(255, 255, 255)
-        for h, w in zip(headers, widths):
+        for h, w in zip(headers, widths, strict=True):
             pdf.cell(w, 6, _sanitize_pdf(h), border=0, fill=True)
         pdf.ln(6)
         pdf.set_text_color(0, 0, 0)

@@ -49,6 +49,8 @@ router = APIRouter(tags=["arb"])
 
 _log = get_logger("arb")
 
+_background_tasks: set[asyncio.Task[Any]] = set()
+
 # Where the reviewer PDF lands. Stored on disk (not the DB) because the
 # packets can grow to several MB and PostgreSQL bytea isn't the right
 # storage for static artifacts. Path is configurable via env via
@@ -412,9 +414,11 @@ async def create_submission(
     )
 
     engagement_snapshot = _engagement_to_dict(engagement)
-    asyncio.create_task(
+    _packet_task = asyncio.create_task(
         _generate_packet_async(submission_id, uid, engagement_snapshot, inventory)
     )
+    _background_tasks.add(_packet_task)
+    _packet_task.add_done_callback(_background_tasks.discard)
 
     return _submission_to_dict(submission)
 

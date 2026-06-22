@@ -50,6 +50,8 @@ from services.report_document_service import (
 
 router = APIRouter(prefix="/model-migration", tags=["model-migration"])
 
+_background_tasks: set[asyncio.Task[Any]] = set()
+
 
 class ScoreRequest(BaseModel):
     source: str
@@ -237,7 +239,7 @@ async def create_job(
     session: AsyncSession = Depends(get_session),
     claims: dict[str, Any] | None = Depends(get_current_user),
 ) -> dict[str, Any]:
-    """Submit 1–N retirement-report CSVs; returns a job envelope immediately.
+    """Submit 1-N retirement-report CSVs; returns a job envelope immediately.
 
     The actual analysis + document build runs in the background. Poll
     `/jobs/{id}` or subscribe to `/jobs/{id}/events` to track progress.
@@ -277,7 +279,9 @@ async def create_job(
     await session.commit()
 
     queue = await register_queue(job_id)
-    asyncio.create_task(run_bundle_job(job_id, file_texts, fmts, queue))
+    _bundle_task = asyncio.create_task(run_bundle_job(job_id, file_texts, fmts, queue))
+    _background_tasks.add(_bundle_task)
+    _bundle_task.add_done_callback(_background_tasks.discard)
 
     return {
         "job_id": job_id,
@@ -309,7 +313,7 @@ async def _load_job(
 async def job_status(
     job_id: str,
     session: AsyncSession = Depends(get_session),
-    claims: dict[str, Any] | None = Depends(get_current_user),  # noqa: ARG001
+    claims: dict[str, Any] | None = Depends(get_current_user),
 ) -> dict[str, Any]:
     row = await _load_job(session, job_id, current_tenant_id())
     return _job_to_status(row)
@@ -319,7 +323,7 @@ async def job_status(
 async def job_events(
     job_id: str,
     session: AsyncSession = Depends(get_session),
-    claims: dict[str, Any] | None = Depends(get_current_user),  # noqa: ARG001
+    claims: dict[str, Any] | None = Depends(get_current_user),
 ) -> StreamingResponse:
     """SSE stream for a job. If the job is already finished, replay the
     terminal event from the DB row and close."""
@@ -367,7 +371,7 @@ async def job_events(
 async def job_bundle(
     job_id: str,
     session: AsyncSession = Depends(get_session),
-    claims: dict[str, Any] | None = Depends(get_current_user),  # noqa: ARG001
+    claims: dict[str, Any] | None = Depends(get_current_user),
 ) -> FileResponse:
     from pathlib import Path
 

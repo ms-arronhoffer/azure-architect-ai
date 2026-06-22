@@ -414,9 +414,9 @@ async def test_tenant_scoping_enforced(auth_client, monkeypatch):
     The tenant id comes from the JWT `tid` claim via TenantContextMiddleware.
     We patch that lookup so the two principals resolve to different tenants.
     """
+
     from auth.entra import get_current_user
     from db import tenant_id_var
-    from fastapi import Request
     from main import app
 
     async def tenant_aware(request: Request):

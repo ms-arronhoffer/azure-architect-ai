@@ -6,7 +6,6 @@ without Azure SDK or OpenAI calls.
 """
 from __future__ import annotations
 
-import json
 from collections.abc import AsyncGenerator
 from types import SimpleNamespace
 

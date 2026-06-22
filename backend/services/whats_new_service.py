@@ -69,7 +69,7 @@ _FEED_SET_KEY = "default"  # key on this string if we ever split feeds by audien
 
 
 async def _load_from_db() -> tuple[list[dict], dt.datetime | None]:
-    from db import WhatsNewCache, session_scope, select
+    from db import WhatsNewCache, select, session_scope
 
     async with session_scope() as s:
         row = (

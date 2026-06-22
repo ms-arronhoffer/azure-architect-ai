@@ -652,7 +652,13 @@ def analyze_retirement_reports(texts: list[str]) -> dict:
                 }
             else:
                 # Dedup deployments on (subscription_id, model, version)
-                key_of = lambda d: (d.get("subscription_id", ""), d.get("model", ""), d.get("version", ""))
+                def key_of(d):
+                    return (
+                        d.get("subscription_id", ""),
+                        d.get("model", ""),
+                        d.get("version", ""),
+                    )
+
                 by_key = {key_of(d): d for d in existing["deployments"]}
                 for d in c.get("deployments", []):
                     by_key[key_of(d)] = d  # last write wins

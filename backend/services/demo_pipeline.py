@@ -298,7 +298,7 @@ async def _llm_json(
         )
 
     # Reasoning models (gpt-5.x / o-series) can spend 10+ min on internal
-    # reasoning for large build prompts (~8k output tokens × 3 concurrent
+    # reasoning for large build prompts (~8k output tokens x 3 concurrent
     # lanes). Cap at 15 min so a true hang fails fast without aborting a
     # slow-but-progressing run.
     timeout_s = 900.0 if use_responses else 120.0
@@ -307,7 +307,7 @@ async def _llm_json(
         worker = _call_responses if use_responses else _call_chat
         try:
             return await asyncio.wait_for(asyncio.to_thread(worker, p), timeout=timeout_s)
-        except asyncio.TimeoutError as exc:
+        except TimeoutError as exc:
             raise RuntimeError(
                 f"Azure OpenAI '{deployment}' did not return within {int(timeout_s)}s"
             ) from exc
@@ -405,7 +405,7 @@ async def _phase_architecture_design(
             json.dumps(state.get("recommendations") or [], default=str),
             engagement_preamble,
         )
-        # Reasoning models can run 60–180s with no visible output. Race the
+        # Reasoning models can run 60-180s with no visible output. Race the
         # LLM call against a heartbeat ticker so the SSE stream emits a
         # progress event every 10s and the UI doesn't look frozen.
         design_task = asyncio.create_task(
@@ -415,7 +415,7 @@ async def _phase_architecture_design(
         while not design_task.done():
             try:
                 await asyncio.wait_for(asyncio.shield(design_task), timeout=10.0)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 elapsed += 10
                 yield _phase_event(
                     "architecture_design", "progress", elapsed_s=elapsed
@@ -553,7 +553,7 @@ async def _phase_verify(
                 returncode=proc.returncode,
                 output_tail=output[-400:],
             )
-    except asyncio.TimeoutError:
+    except TimeoutError:
         state["verify"] = {"ok": False, "output": "timeout after 60s"}
         yield _phase_event("verify", "failed", error="timeout")
     except Exception as exc:

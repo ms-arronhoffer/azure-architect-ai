@@ -218,12 +218,11 @@ async def hybrid_search(
     falls back to ``engagement_id_var`` so chat/architecture routes don't
     have to thread it manually.
     """
+    from rapidfuzz import fuzz
     from sqlalchemy import or_
 
     from db import RagDocument as _RagDocument
     from db import current_engagement_id
-
-    from rapidfuzz import fuzz
 
     floor = _DEFAULT_CONFIDENCE_FLOOR if confidence_floor is None else confidence_floor
     if not query.strip():
