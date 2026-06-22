@@ -45,6 +45,8 @@ import MedallionDesignerPanel from "./components/MedallionDesignerPanel";
 import DemoShowcasePanel from "./components/DemoShowcasePanel";
 import RefArchPanel from "./components/RefArchPanel";
 import AgentPanel, { isAgentToken } from "./components/AgentPanel";
+import CommandPalette from "./components/CommandPalette";
+import KeyboardShortcutsDialog from "./components/KeyboardShortcutsDialog";
 import { useConversationHistory } from "./hooks/useConversationHistory";
 import { useWorkloadContext } from "./hooks/useWorkloadContext";
 import { useSettings } from "./hooks/useSettings";
@@ -103,6 +105,8 @@ export default function App() {
   const [contextOpen, setContextOpen] = useState(false);
   const [engagementsOpen, setEngagementsOpen] = useState(false);
   const [telemetryOpen, setTelemetryOpen] = useState(false);
+  const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [howToOpen, setHowToOpen] = useState(false);
   const [selectedConversation, setSelectedConversation] = useState<ConversationRecord | null>(null);
   const [refinementSeed, setRefinementSeed] = useState<{ id: string; messages: ChatMessage[]; suggestedReplies?: string[] } | null>(null);
@@ -158,10 +162,30 @@ export default function App() {
         e.preventDefault();
         setTelemetryOpen((v) => !v);
       }
+      if (e.ctrlKey && !e.shiftKey && (e.key === "k" || e.key === "K")) {
+        e.preventDefault();
+        setCommandPaletteOpen((v) => !v);
+      }
+      if (e.ctrlKey && !e.shiftKey && e.key === "/") {
+        e.preventDefault();
+        setShortcutsOpen((v) => !v);
+      }
+      if (e.ctrlKey && !e.shiftKey && (e.key === "h" || e.key === "H") && !e.shiftKey) {
+        e.preventDefault();
+        setHistoryOpen((v) => !v);
+      }
+      if (e.ctrlKey && e.shiftKey && (e.key === "D" || e.key === "d")) {
+        e.preventDefault();
+        setDarkMode((v) => !v);
+      }
+      if (e.ctrlKey && e.shiftKey && (e.key === "N" || e.key === "n")) {
+        e.preventDefault();
+        handleModeChange(mode);
+      }
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, []);
+  }, [mode]);
 
   function handleLoadConversation(conv: ConversationRecord) {
     setMode(conv.mode);
@@ -441,6 +465,7 @@ export default function App() {
             onOpenSettings={() => setSettingsOpen(true)}
             onOpenContext={() => setContextOpen(true)}
             onOpenHowTo={() => setHowToOpen(true)}
+            onOpenCommandPalette={() => setCommandPaletteOpen(true)}
             workloadContext={workloadContext}
             saveStatus={saveStatus}
             engagements={engagementsApi.engagements}
@@ -490,6 +515,15 @@ export default function App() {
         onClear={() => { clearContext(); setContextOpen(false); }}
       />
       <TelemetryDebugDrawer open={telemetryOpen} onClose={() => setTelemetryOpen(false)} />
+      <CommandPalette
+        open={commandPaletteOpen}
+        onClose={() => setCommandPaletteOpen(false)}
+        onSelect={(m) => handleModeChange(m)}
+      />
+      <KeyboardShortcutsDialog
+        open={shortcutsOpen}
+        onClose={() => setShortcutsOpen(false)}
+      />
       <Toaster toasterId={TOASTER_ID} position="top-end" />
     </FluentProvider>
   );

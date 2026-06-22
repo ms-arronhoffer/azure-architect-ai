@@ -10,6 +10,7 @@ import {
   SendRegular,
   DeleteRegular,
   AttachRegular,
+  ArrowDownloadRegular,
   ChatRegular,
   PersonChatRegular,
   SlideTextRegular,
@@ -1132,6 +1133,30 @@ export default function ChatPanel({ mode, conversationId: savedId, initialMessag
     onBuildDeck(text);
   }
 
+  function handleExportMarkdown() {
+    const lines: string[] = [];
+    lines.push(`# Conversation — ${config?.emptyHeading ?? mode}`);
+    lines.push(`_Exported: ${new Date().toISOString()}_\n`);
+    for (const msg of messages) {
+      lines.push(`## ${msg.role === "user" ? "User" : "Assistant"}\n`);
+      lines.push(msg.content);
+      if (msg.citations && msg.citations.length > 0) {
+        lines.push("\n**Citations:**");
+        for (const c of msg.citations) {
+          lines.push(`- [${c.title}](${c.url})`);
+        }
+      }
+      lines.push("");
+    }
+    const blob = new Blob([lines.join("\n")], { type: "text/markdown" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `conversation-${mode}-${Date.now()}.md`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   const hasMessages = messages.length > 0;
 
   return (
@@ -1277,6 +1302,15 @@ export default function ChatPanel({ mode, conversationId: savedId, initialMessag
               <span className={styles.hint}>Enter to send · Shift+Enter for newline</span>
             </div>
             <div className={styles.inputFooterRight}>
+              {hasMessages && (
+                <Button
+                  appearance="subtle"
+                  size="small"
+                  icon={<ArrowDownloadRegular />}
+                  onClick={handleExportMarkdown}
+                  title="Export conversation as Markdown"
+                />
+              )}
               {hasMessages && (
                 <Button
                   appearance="subtle"
