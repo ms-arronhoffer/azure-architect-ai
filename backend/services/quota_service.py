@@ -182,7 +182,6 @@ async def check_quota_for_line_items(
         # Subscription fan-out: try each, keep the one with the most headroom.
         best_sub: str | None = None
         best_avail: int = -1
-        best_resp: dict[str, Any] = {}
         for sub in subscription_ids:
             resp = await _query_quota(sub, sku, region)
             avail = resp.get("available")
@@ -191,7 +190,6 @@ async def check_quota_for_line_items(
             if avail > best_avail:
                 best_avail = avail
                 best_sub = sub
-                best_resp = resp
 
         # Unknown → not a constraint
         if best_sub is None or best_avail < 0:
@@ -240,4 +238,4 @@ async def check_quota_for_line_items(
     }
 
 
-__all__ = ["check_quota_for_line_items", "QuotaServiceUnavailable"]
+__all__ = ["QuotaServiceUnavailable", "check_quota_for_line_items"]

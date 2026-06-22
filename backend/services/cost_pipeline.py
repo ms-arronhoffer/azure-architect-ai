@@ -20,6 +20,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+from middleware.logging import get_logger
 from prompts.cost_narration import COST_NARRATION_PROMPT
 from services import (
     carbon_service,
@@ -29,7 +30,6 @@ from services import (
     rightsizing_service,
 )
 from services.engagement_context import load_active
-from middleware.logging import get_logger
 from services.pricing_service import estimate_architecture
 
 log = get_logger("cost_pipeline")

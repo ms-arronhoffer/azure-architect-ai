@@ -206,7 +206,7 @@ async def run_bundle_job(
         )
         await _emit(queue, terminal)
 
-    except Exception as exc:  # noqa: BLE001 — top-level safety net
+    except Exception as exc:
         log.exception("model_iq_bundle: job %s failed", job_id)
         terminal = {
             "event": "job_failed",
@@ -221,7 +221,7 @@ async def run_bundle_job(
                 completed_at=_now_ms(),
                 terminal_event=terminal,
             )
-        except Exception:  # noqa: BLE001
+        except Exception:
             log.exception("model_iq_bundle: failed to record failure for %s", job_id)
         await _emit(queue, terminal)
 
@@ -268,7 +268,7 @@ async def purge_old_bundles(max_age_hours: int = 24) -> int:
                     p = Path(row.bundle_path)
                     if p.exists():
                         await asyncio.to_thread(p.unlink)
-                except Exception:  # noqa: BLE001
+                except Exception:
                     log.exception("model_iq_bundle: could not delete %s", row.bundle_path)
             await s.delete(row)
             removed += 1

@@ -181,10 +181,11 @@ def _advisor_to_doc(engagement_id: str, sub_id: str, rec: dict) -> dict[str, Any
     category = rec.get("category") or rec.get("Category") or "Advisor"
     impact = rec.get("impact") or rec.get("Impact") or "unknown"
     short = rec.get("shortDescription") or rec.get("description") or {}
-    if isinstance(short, dict):
-        problem = short.get("problem") or short.get("solution") or ""
-    else:
-        problem = str(short)
+    problem = (
+        (short.get("problem") or short.get("solution") or "")
+        if isinstance(short, dict)
+        else str(short)
+    )
     content = (
         f"Azure Advisor {category} recommendation (impact {impact}) on subscription "
         f"{sub_id}: {problem or 'see Advisor portal for details'}."

@@ -5,7 +5,7 @@ and external subprocess is stubbed so the pipeline runs hermetically.
 """
 from __future__ import annotations
 
-import json
+import contextlib
 from collections.abc import AsyncGenerator
 from types import SimpleNamespace
 
@@ -271,9 +271,7 @@ async def test_phase_routes_to_distinct_models(monkeypatch):
         ("docs", "gpt-5.4"),
     ]:
         captured.clear()
-        try:
+        with contextlib.suppress(Exception):
             await dp_mod._llm_json("{}", phase=phase, retry_on_parse=False)
-        except Exception:
-            pass  # we only care about the resolved model, not the (stubbed) call
         assert captured, f"resolve not called for phase {phase}"
         assert captured[0][1] == expected, f"{phase} → {captured[0][1]} (want {expected})"

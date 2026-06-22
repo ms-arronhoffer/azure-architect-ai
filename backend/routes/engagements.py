@@ -35,6 +35,8 @@ router = APIRouter(prefix="/engagements", tags=["engagements"])
 
 _log = get_logger("engagements")
 
+_background_tasks: set[asyncio.Task[Any]] = set()
+
 
 def _uid(claims: dict[str, Any] | None) -> str:
     return user_id_from_claims(claims)
@@ -110,7 +112,9 @@ async def create_engagement(
             created_at=row.created_at,
             updated_at=row.updated_at,
         )
-        asyncio.create_task(_background_scan(snapshot))
+        _scan_task = asyncio.create_task(_background_scan(snapshot))
+        _background_tasks.add(_scan_task)
+        _scan_task.add_done_callback(_background_tasks.discard)
     return engagement_context.to_dict(row)
 
 

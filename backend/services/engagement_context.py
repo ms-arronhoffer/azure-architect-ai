@@ -12,6 +12,7 @@ regulatory boundary applies.
 """
 from __future__ import annotations
 
+import contextlib
 from collections import Counter
 from typing import Any
 
@@ -123,10 +124,8 @@ async def inventory_snapshot(engagement_id: str) -> str | None:
             if (meta.get("impact") or "").lower() == "high":
                 advisor_high += 1
         elif kind == "cost_mtd":
-            try:
+            with contextlib.suppress(TypeError, ValueError):
                 cost_total += float(meta.get("total_cost") or 0.0)
-            except (TypeError, ValueError):
-                pass
             if not currency:
                 currency = meta.get("currency")
 
