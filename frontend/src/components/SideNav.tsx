@@ -39,6 +39,9 @@ import {
   SparkleRegular,
   DataBarVerticalRegular,
   BookRegular,
+  StarFilled,
+  StarRegular,
+  PinRegular,
 } from "@fluentui/react-icons";
 import type { Mode } from "../types";
 import { useAuth } from "../auth/AuthProvider";
@@ -350,9 +353,45 @@ interface SideNavProps {
   collapsed: boolean;
   onToggleCollapsed: () => void;
   badgeCounts?: Partial<Record<Mode, number>>;
+  favorites?: Mode[];
+  onToggleFavorite?: (mode: Mode) => void;
 }
 
-export default function SideNav({ mode, onModeChange, collapsed, onToggleCollapsed, badgeCounts = {} }: SideNavProps) {
+// Map from mode to its icon for pinned favorites rendering
+const MODE_ICON_MAP: Partial<Record<Mode, JSX.Element>> = {
+  qa: <ChatRegular />, architecture: <BuildingRegular />, waf: <ShieldCheckmarkRegular />,
+  review: <ClipboardTaskRegular />, drbc: <ArrowSyncRegular />, codegen: <CodeRegular />,
+  learningplan: <BoardRegular />, intake: <FormRegular />, analyze: <ChartMultipleRegular />,
+  landingzone: <LayerRegular />, threatmodel: <ShieldErrorRegular />, reliability: <HeartPulseRegular />,
+  troubleshoot: <WrenchScrewdriverRegular />, whatsnew: <MegaphoneLoudRegular />,
+  strategy: <TargetRegular />, "cost-optimize": <DataUsageRegular />, pipelineforge: <BranchForkRegular />,
+  runbookstudio: <DocumentBulletListRegular />, namingstandards: <TagRegular />,
+  "demo-build": <RocketRegular />, showcase: <PlayCircleRegular />, refarch: <BookRegular />,
+  netvnet: <GlobeRegular />, compsku: <ServerRegular />, aifoundry: <SparkleRegular />,
+  datalake: <DataBarVerticalRegular />, presentation: <SlideTextRegular />,
+  servicehealth: <HeartPulseRegular />, modellifecycle: <CalendarRegular />,
+  modelmigration: <ArrowSwapRegular />, network: <GlobeRegular />,
+  cost: <DataUsageRegular />, compliance: <ShieldCheckmarkRegular />,
+  architect: <BuildingRegular />, operations: <WrenchScrewdriverRegular />,
+  engagement: <FormRegular />,
+};
+
+const MODE_LABEL_MAP: Partial<Record<Mode, string>> = {
+  qa: "Expert Advisor", architecture: "Architecture Design", waf: "WAF Assessment",
+  review: "Architecture Review", drbc: "DR/BC Design", codegen: "Code Generator",
+  learningplan: "Learning Plan", intake: "Requirements Studio", analyze: "Workload Analysis",
+  landingzone: "Landing Zone", threatmodel: "Threat Model", reliability: "Reliability & SLO",
+  troubleshoot: "Troubleshoot", whatsnew: "What's New", strategy: "Strategy Builder",
+  "cost-optimize": "Cost Optimize", pipelineforge: "Pipeline Forge", runbookstudio: "Runbook Studio",
+  namingstandards: "Naming Standards", "demo-build": "Demo Builder", showcase: "Demo Showcase",
+  refarch: "Reference Architectures", netvnet: "Network Desk", compsku: "Compute Desk",
+  aifoundry: "AI Desk", datalake: "Data Desk", presentation: "Presentation Coach",
+  servicehealth: "Service Health", modellifecycle: "Model Lifecycle", modelmigration: "Model IQ",
+  network: "Network Design", cost: "Cost & FinOps", compliance: "Compliance & Security",
+  architect: "Architect", operations: "Operations", engagement: "Engagement Hub",
+};
+
+export default function SideNav({ mode, onModeChange, collapsed, onToggleCollapsed, badgeCounts = {}, favorites = [], onToggleFavorite }: SideNavProps) {
   const styles = useStyles();
   const { roles } = useAuth();
   const isMetricsAdmin = roles.includes("Metrics.Read");
@@ -382,6 +421,54 @@ export default function SideNav({ mode, onModeChange, collapsed, onToggleCollaps
       </div>
 
       <div className={styles.sections}>
+        {/* Favorites / Pinned Modes */}
+        {favorites.length > 0 && (
+          <div>
+            {!collapsed && <div className={styles.sectionLabel} style={{ cursor: "default" }}>Favorites</div>}
+            {favorites.map((fav) => {
+              const isActive = mode === fav;
+              const icon = MODE_ICON_MAP[fav] ?? <PinRegular />;
+              const label = MODE_LABEL_MAP[fav] ?? fav;
+              const itemEl = (
+                <div
+                  key={fav}
+                  className={
+                    collapsed
+                      ? `${styles.navItem} ${styles.navItemCollapsed} ${isActive ? styles.navItemCollapsedActive : ""}`
+                      : `${styles.navItem} ${isActive ? styles.navItemActive : ""}`
+                  }
+                  onClick={() => onModeChange(fav)}
+                >
+                  <span className={styles.navItemIconWrap}>
+                    <span className={`${styles.navItemIcon} ${isActive ? styles.navItemIconActive : ""}`}>
+                      {icon}
+                    </span>
+                  </span>
+                  {!collapsed && (
+                    <>
+                      <Text className={`${styles.navItemLabel} ${isActive ? styles.navItemLabelActive : ""}`}>
+                        {label}
+                      </Text>
+                      {onToggleFavorite && (
+                        <StarFilled
+                          style={{ fontSize: "12px", color: "#FFB900", cursor: "pointer", flexShrink: 0 }}
+                          onClick={(e) => { e.stopPropagation(); onToggleFavorite(fav); }}
+                        />
+                      )}
+                    </>
+                  )}
+                </div>
+              );
+              return collapsed ? (
+                <Tooltip key={fav} content={`${label} (Pinned)`} relationship="label" positioning="after">
+                  {itemEl}
+                </Tooltip>
+              ) : itemEl;
+            })}
+            {!collapsed && <div className={styles.sectionDivider} />}
+          </div>
+        )}
+
         {(import.meta.env.VITE_UNIFIED_AGENTS === "true"
           ? UNIFIED_NAV_SECTIONS
           : NAV_SECTIONS.filter((s) => s.label !== "Agents")
@@ -431,6 +518,19 @@ export default function SideNav({ mode, onModeChange, collapsed, onToggleCollaps
                     <Text className={`${styles.navItemLabel} ${isActive ? styles.navItemLabelActive : ""}`}>
                       {item.label}
                     </Text>
+                  )}
+                  {!collapsed && onToggleFavorite && (
+                    <span
+                      style={{ fontSize: "12px", cursor: "pointer", flexShrink: 0, opacity: favorites.includes(item.mode) ? 1 : 0, transition: "opacity 0.15s" }}
+                      onClick={(e) => { e.stopPropagation(); onToggleFavorite(item.mode); }}
+                      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.opacity = "1"; }}
+                      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.opacity = favorites.includes(item.mode) ? "1" : "0"; }}
+                    >
+                      {favorites.includes(item.mode)
+                        ? <StarFilled style={{ color: "#FFB900" }} />
+                        : <StarRegular style={{ color: tokens.colorNeutralForeground4 }} />
+                      }
+                    </span>
                   )}
                 </div>
               );

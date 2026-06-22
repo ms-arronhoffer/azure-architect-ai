@@ -54,11 +54,29 @@ export function useConversationHistory() {
   const upsert = useCallback(
     async (id: string, mode: Mode, messages: ChatMessage[], structuredResult?: unknown) => {
       if (messages.length === 0) return;
-      const title = messages.find((m) => m.role === "user")?.content.slice(0, 60) ?? "Untitled";
-      const now = Date.now();
       const existing = conversationsRef.current.find((c) => c.id === id);
+
+      // Auto-rename: after 3+ exchanges, derive a cleaner title from user
+      // messages rather than just the first message's first 60 chars.
+      const AUTO_RENAME_THRESHOLD = 3;
+      let title: string;
+      if (existing) {
+        // Keep existing title unless we cross the auto-rename threshold
+        const userMessages = messages.filter((m) => m.role === "user");
+        if (messages.length >= AUTO_RENAME_THRESHOLD && userMessages.length >= 2) {
+          // Combine first two user queries for a richer title
+          const combined = userMessages.slice(0, 2).map((m) => m.content).join(" — ");
+          title = combined.slice(0, 80);
+        } else {
+          title = existing.title;
+        }
+      } else {
+        title = messages.find((m) => m.role === "user")?.content.slice(0, 60) ?? "Untitled";
+      }
+
+      const now = Date.now();
       const record: ConversationRecord = existing
-        ? { ...existing, messages, updatedAt: now, ...(structuredResult !== undefined && { structuredResult }) }
+        ? { ...existing, title, messages, updatedAt: now, ...(structuredResult !== undefined && { structuredResult }) }
         : { id, mode, title, createdAt: now, updatedAt: now, messages, ...(structuredResult !== undefined && { structuredResult }) };
 
       setConversations((prev) => {

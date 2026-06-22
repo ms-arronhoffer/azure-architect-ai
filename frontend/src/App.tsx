@@ -4,6 +4,9 @@ import { azureDarkTheme, azureLightTheme } from "./theme";
 import SideNav from "./components/SideNav";
 import Header from "./components/Header";
 import HistoryDrawer from "./components/HistoryDrawer";
+import CommandPalette from "./components/CommandPalette";
+import KeyboardShortcutsDialog from "./components/KeyboardShortcutsDialog";
+import OnboardingTour, { shouldShowOnboarding, markOnboardingSeen } from "./components/OnboardingTour";
 import AdvisorPanel, { ADVISOR_MODES } from "./components/AdvisorPanel";
 import NetworkDeskPanel, { NETWORK_DESK_MODES } from "./components/NetworkDeskPanel";
 import ComputeDeskPanel, { COMPUTE_DESK_MODES } from "./components/ComputeDeskPanel";
@@ -51,6 +54,7 @@ import { useSettings } from "./hooks/useSettings";
 import { useServiceHealth } from "./hooks/useServiceHealth";
 import { useEngagements } from "./hooks/useEngagements";
 import { useWorkloadSpec } from "./hooks/useWorkloadSpec";
+import { useFavorites } from "./hooks/useFavorites";
 import EngagementDrawer from "./components/EngagementDrawer";
 import { track } from "./utils/telemetry";
 import { setErrorNotifier } from "./config/api";
@@ -104,6 +108,9 @@ export default function App() {
   const [engagementsOpen, setEngagementsOpen] = useState(false);
   const [telemetryOpen, setTelemetryOpen] = useState(false);
   const [howToOpen, setHowToOpen] = useState(false);
+  const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
+  const [shortcutsDialogOpen, setShortcutsDialogOpen] = useState(false);
+  const [onboardingOpen, setOnboardingOpen] = useState(shouldShowOnboarding);
   const [selectedConversation, setSelectedConversation] = useState<ConversationRecord | null>(null);
   const [refinementSeed, setRefinementSeed] = useState<{ id: string; messages: ChatMessage[]; suggestedReplies?: string[] } | null>(null);
   const [selectedPanelSession, setSelectedPanelSession] = useState<ConversationRecord | null>(null);
@@ -113,6 +120,7 @@ export default function App() {
   const { incidents: healthIncidents, incidentCount, loading: healthLoading, error: healthError, lastChecked: healthLastChecked, refresh: refreshHealth } = useServiceHealth();
   const engagementsApi = useEngagements();
   const { setSpec: setWorkloadSpec } = useWorkloadSpec();
+  const { favorites, toggleFavorite } = useFavorites();
   const [analyzeAutoStart, setAnalyzeAutoStart] = useState(false);
 
   const TOASTER_ID = "app-toaster";
@@ -154,14 +162,51 @@ export default function App() {
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
+      // Ctrl+Shift+T — Telemetry debug drawer
       if (e.ctrlKey && e.shiftKey && (e.key === "T" || e.key === "t")) {
         e.preventDefault();
         setTelemetryOpen((v) => !v);
+        return;
+      }
+      // Ctrl+Shift+D — Toggle dark mode
+      if (e.ctrlKey && e.shiftKey && (e.key === "D" || e.key === "d")) {
+        e.preventDefault();
+        setDarkMode((d) => !d);
+        return;
+      }
+      // Ctrl+Shift+N — New conversation (reset current mode)
+      if (e.ctrlKey && e.shiftKey && (e.key === "N" || e.key === "n")) {
+        e.preventDefault();
+        setSelectedConversation(null);
+        setSelectedPanelSession(null);
+        setRefinementSeed(null);
+        setAnalyzeAutoStart(false);
+        // Force re-render by toggling mode back to itself
+        handleModeChange(mode);
+        return;
+      }
+      // Ctrl+K — Command palette
+      if (e.ctrlKey && !e.shiftKey && (e.key === "k" || e.key === "K")) {
+        e.preventDefault();
+        setCommandPaletteOpen((v) => !v);
+        return;
+      }
+      // Ctrl+H — History drawer
+      if (e.ctrlKey && !e.shiftKey && (e.key === "h" || e.key === "H")) {
+        e.preventDefault();
+        setHistoryOpen((v) => !v);
+        return;
+      }
+      // Ctrl+/ — Keyboard shortcuts dialog
+      if (e.ctrlKey && !e.shiftKey && e.key === "/") {
+        e.preventDefault();
+        setShortcutsDialogOpen((v) => !v);
+        return;
       }
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, []);
+  }, [mode]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function handleLoadConversation(conv: ConversationRecord) {
     setMode(conv.mode);
@@ -431,6 +476,8 @@ export default function App() {
           collapsed={navCollapsed}
           onToggleCollapsed={() => setNavCollapsed((v) => !v)}
           badgeCounts={incidentCount > 0 ? { servicehealth: incidentCount } : {}}
+          favorites={favorites}
+          onToggleFavorite={toggleFavorite}
         />
         <div className={styles.main}>
           <Header
@@ -490,6 +537,20 @@ export default function App() {
         onClear={() => { clearContext(); setContextOpen(false); }}
       />
       <TelemetryDebugDrawer open={telemetryOpen} onClose={() => setTelemetryOpen(false)} />
+      <CommandPalette
+        open={commandPaletteOpen}
+        onClose={() => setCommandPaletteOpen(false)}
+        onSelect={handleModeChange}
+        currentMode={mode}
+        favorites={favorites}
+      />
+      <KeyboardShortcutsDialog
+        open={shortcutsDialogOpen}
+        onClose={() => setShortcutsDialogOpen(false)}
+      />
+      {onboardingOpen && (
+        <OnboardingTour onClose={() => { markOnboardingSeen(); setOnboardingOpen(false); }} />
+      )}
       <Toaster toasterId={TOASTER_ID} position="top-end" />
     </FluentProvider>
   );
