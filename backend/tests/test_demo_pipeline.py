@@ -291,6 +291,58 @@ async def test_phase_routes_to_distinct_models(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_responses_incomplete_stream_recovers_partial(monkeypatch):
+    """A truncated Responses stream (terminal `response.incomplete`, no
+    `response.completed`) must not raise "Didn't receive a `response.completed`
+    event." — the lane should recover the partial `output_text` so generated
+    code still reaches the build instead of the whole lane being discarded."""
+    from services import demo_pipeline as dp_mod
+
+    async def fake_load_settings():
+        return SimpleNamespace(mode_models={})
+
+    monkeypatch.setattr(dp_mod, "load_settings", fake_load_settings)
+    monkeypatch.setattr(
+        dp_mod.openai_service,
+        "resolve_client_and_model",
+        lambda **_kw: (SimpleNamespace(), "gpt-5.4"),
+    )
+    monkeypatch.setattr(
+        dp_mod.openai_service, "call_with_retry", lambda fn, **_kw: fn()
+    )
+
+    partial_json = '{"files": [{"path": "app.py", "content": "print(1)"}]}'
+    incomplete_resp = SimpleNamespace(
+        status="incomplete",
+        output_text=partial_json,
+        incomplete_details=SimpleNamespace(reason="max_output_tokens"),
+    )
+
+    class _Stream:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_a):
+            return False
+
+        def __iter__(self):
+            return iter([SimpleNamespace(type="response.incomplete", response=incomplete_resp)])
+
+        def get_final_response(self):  # SDK would raise here for an incomplete stream
+            raise RuntimeError("Didn't receive a `response.completed` event.")
+
+    fake_client = SimpleNamespace(
+        responses=SimpleNamespace(stream=lambda **_kw: _Stream())
+    )
+    monkeypatch.setattr(
+        dp_mod.openai_service, "get_responses_client", lambda _d: fake_client
+    )
+
+    out = await dp_mod._llm_json("{}", phase="code", retry_on_parse=False)
+    assert out == {"files": [{"path": "app.py", "content": "print(1)"}]}
+
+
+@pytest.mark.asyncio
 async def test_demo_built_carries_archetype_and_live_activity(monkeypatch):
     """The final demo_built payload exposes the archetype + live_activity script
     so the UI can render the in-app Activity Panel and mocked preview."""

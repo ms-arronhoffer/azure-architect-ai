@@ -69,7 +69,7 @@ const useStyles = makeStyles({
     flexDirection: "column",
     height: "100%",
     minHeight: 0,
-    overflow: "hidden",
+    overflowY: "auto",
     background: tokens.colorNeutralBackground2,
   },
   header: {
@@ -82,10 +82,6 @@ const useStyles = makeStyles({
     gap: "12px",
   },
   body: {
-    flex: 1,
-    minHeight: 0,
-    overflowY: "auto",
-    overflowX: "hidden",
     padding: "20px 28px",
     display: "flex",
     flexDirection: "column",
@@ -117,8 +113,6 @@ const useStyles = makeStyles({
     display: "flex",
     flexDirection: "column",
     gap: "6px",
-    maxHeight: "360px",
-    overflowY: "auto",
     paddingRight: "4px",
   },
   phaseRow: {
@@ -168,7 +162,6 @@ const useStyles = makeStyles({
     borderRadius: "4px",
     background: tokens.colorNeutralBackground1,
     overflow: "auto",
-    maxHeight: "520px",
   },
   fileGroup: {
     padding: "6px 10px",
@@ -199,7 +192,6 @@ const useStyles = makeStyles({
     background: tokens.colorNeutralBackground1,
     padding: "12px",
     overflow: "auto",
-    maxHeight: "520px",
     fontFamily: "Consolas, monospace",
     fontSize: "12px",
     whiteSpace: "pre-wrap",
