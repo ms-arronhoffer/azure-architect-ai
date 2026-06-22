@@ -1,6 +1,6 @@
 # Azure Architect AI
 
-A virtual Azure Solutions Architect web app: FastAPI + React + Azure OpenAI with 39 tools across 34 modes, draw.io diagrams, Bicep/Terraform/ARM emitters, RAG over Microsoft Learn, a live Azure scanner, and Container Apps deployment.
+A virtual Azure Solutions Architect web app: FastAPI + React + Azure OpenAI with 39 tools surfaced through 5 unified agents (architect, cost, operations, compliance, engagement) — with the legacy 84-mode navigation still available behind `UNIFIED_AGENTS=false` during the deprecation window — plus draw.io diagrams, Bicep/Terraform/ARM emitters, RAG over Microsoft Learn, a live Azure scanner, and Container Apps deployment.
 
 - Backend: `backend/` — FastAPI, Pydantic, SQLAlchemy 2 async, OpenTelemetry
 - Frontend: `frontend/` — React 18 + Vite + Fluent UI v9 + MSAL React
@@ -13,7 +13,7 @@ A virtual Azure Solutions Architect web app: FastAPI + React + Azure OpenAI with
 | --- | --- |
 | [docs/SETUP.md](docs/SETUP.md) | Local development setup, dependencies, env vars |
 | [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | Container Apps deploy + GitHub Actions workflows |
-| [docs/USER_GUIDE.md](docs/USER_GUIDE.md) | End-user guide with all 34 modes and worked examples |
+| [docs/USER_GUIDE.md](docs/USER_GUIDE.md) | End-user guide with the 5 unified agents (and legacy modes) plus worked examples |
 | [docs/FEATURES.md](docs/FEATURES.md) | All 39 tools grouped by domain |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | System architecture, data flow, auth, observability |
 | [docs/API.md](docs/API.md) | REST + SSE route reference and all SSE event kinds |

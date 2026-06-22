@@ -41,7 +41,10 @@ log = get_logger("chat")
 
 
 def _unified_agents_enabled() -> bool:
-    return os.getenv("UNIFIED_AGENTS", "").strip().lower() in {"1", "true", "yes", "on"}
+    # The 5-agent surface is the default experience; it is opt-out. Set
+    # UNIFIED_AGENTS=false (or 0/no/off) to fall back to the legacy 84-mode
+    # routing during the deprecation window.
+    return os.getenv("UNIFIED_AGENTS", "").strip().lower() not in {"0", "false", "no", "off"}
 
 # Modes that use the architecture route instead (handled by architecture.py)
 ARCH_ROUTE_MODES = {"architecture", "waf", "review", "drbc"}
