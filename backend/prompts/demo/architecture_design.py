@@ -32,6 +32,10 @@ def render_architecture_design_prompt(
         '  "env_vars": ["AZURE_OPENAI_ENDPOINT", ...],\n'
         '  "key_features": ["..."],\n'
         '  "wow_moment_implementation": "<how the single most impressive moment is delivered>",\n'
+        '  "talk_track": "<2-3 sentence narrative a presenter uses to explain this demo in plain language>",\n'
+        '  "behind_the_scenes": [\n'
+        '    {"service": "Azure OpenAI", "role": "<what this service does in the live request flow>"}\n'
+        '  ],\n'
         '  "summary_bullets": ["...", "..."],\n'
         '  "diagrams": [\n'
         '    {"name": "component", "mermaid": "graph LR\\n  A[Browser] --> B[Flask]\\n  ..."},\n'
@@ -42,6 +46,8 @@ def render_architecture_design_prompt(
         "- Prefer DefaultAzureCredential / managed identity over keys.\n"
         "- Match the user's chosen tech_stack from the spec; do not invent a stack.\n"
         "- Cite at least 2 diagrams (component + flow).\n"
+        "- Populate behind_the_scenes with one entry per azure_services item so the "
+        "UI can show what each service does while the demo runs.\n"
         "- env_vars must be the exact strings the app code will read.\n\n"
         f"Demo spec:\n{spec_json}\n\n"
         f"Accepted recommendations:\n{recommendations_json}\n"

@@ -1,56 +1,36 @@
 """Demo build SSE endpoint + ZIP download.
 
-`POST /api/demo/build` streams the 6-phase demo pipeline. The final
-`demo_built` event includes the in-memory file map keyed against the
-generated `job_id` so the frontend can call `GET /api/demo/{job_id}/zip`
-to download a clone-and-run package. ZIP cache is TTL-evicted at 15
-minutes; entries are also dropped on first successful download.
+`POST /api/demo/build` launches the 6-phase demo pipeline as a *detached*
+background job (see `services.demo_jobs`) and returns its `job_id` immediately.
+The build keeps running on the server independent of any client connection, so
+the user can navigate away from -- or reload -- the Demo Builder page without
+aborting it.
+
+Clients then:
+  - ``GET  /api/demo/{job_id}/events``  -- SSE: replays buffered events, then
+    streams live ones (reconnect-safe).
+  - ``GET  /api/demo/{job_id}/status``  -- JSON snapshot for reconnecting after
+    a full page reload.
+  - ``POST /api/demo/{job_id}/cancel``  -- stop a running build.
+  - ``GET  /api/demo/{job_id}/zip``     -- download the clone-and-run package.
 """
 from __future__ import annotations
 
 import io
 import json
-import time
-import uuid
 import zipfile
 from collections.abc import AsyncGenerator
-from threading import Lock
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 
 from auth import require_user, user_id_from_claims
 from middleware.logging import get_logger
-from services.demo_pipeline import DemoBuildRequest, stream_demo_pipeline
+from services import demo_jobs
+from services.demo_pipeline import DemoBuildRequest
 
 log = get_logger("demo")
 router = APIRouter(prefix="/demo", tags=["demo"])
-
-_ZIP_TTL_SECONDS = 15 * 60
-_ZIP_CACHE: dict[str, tuple[float, dict[str, str], str]] = {}  # job_id -> (expires_at, files, slug)
-_ZIP_LOCK = Lock()
-
-
-def _evict_expired(now: float | None = None) -> None:
-    cutoff = now or time.time()
-    with _ZIP_LOCK:
-        stale = [k for k, (exp, _, _) in _ZIP_CACHE.items() if exp < cutoff]
-        for k in stale:
-            _ZIP_CACHE.pop(k, None)
-
-
-def _cache_files(job_id: str, files: dict[str, str], slug: str) -> None:
-    with _ZIP_LOCK:
-        _ZIP_CACHE[job_id] = (time.time() + _ZIP_TTL_SECONDS, dict(files), slug)
-
-
-def _pop_cache(job_id: str) -> tuple[dict[str, str], str] | None:
-    with _ZIP_LOCK:
-        entry = _ZIP_CACHE.pop(job_id, None)
-    if not entry:
-        return None
-    _, files, slug = entry
-    return files, slug
 
 
 def _build_zip(files: dict[str, str]) -> bytes:
@@ -61,51 +41,58 @@ def _build_zip(files: dict[str, str]) -> bytes:
     return buf.getvalue()
 
 
-async def _stream(req: DemoBuildRequest, job_id: str, github_token: str) -> AsyncGenerator[str, None]:
-    """Wrap the pipeline so the final event includes job_id and the file map is
-    stashed in the ZIP cache instead of being shipped over the wire twice."""
-    try:
-        async for ev in stream_demo_pipeline(req, github_token=github_token):
-            if ev.get("type") == "demo_built":
-                files = ev.pop("files", {}) or {}
-                slug = (ev.get("spec") or {}).get("slug") or req.demo_slug
-                if files:
-                    _cache_files(job_id, files, slug)
-                ev["job_id"] = job_id
-            yield f"data: {json.dumps(ev, default=str)}\n\n"
-        yield 'data: {"type": "done"}\n\n'
-    except Exception as exc:  # pragma: no cover - defensive; pipeline already catches
-        log.exception("demo.stream_failed", error=str(exc))
-        yield f"data: {json.dumps({'type': 'phase_failed', 'phase': 'stream', 'error': str(exc)})}\n\n"
+async def _sse(job_id: str) -> AsyncGenerator[str, None]:
+    async for ev in demo_jobs.subscribe(job_id):
+        yield f"data: {json.dumps(ev, default=str)}\n\n"
 
 
 @router.post("/build")
 async def demo_build(
     req: DemoBuildRequest, claims=Depends(require_user)
-) -> StreamingResponse:
-    _evict_expired()
-    job_id = uuid.uuid4().hex
+) -> dict[str, str]:
+    """Start a detached demo build and return its job_id."""
     from db import session_scope
     from services.secret_store import get_secret
+
     user_id = user_id_from_claims(claims)
     async with session_scope() as session:
         github_token = await get_secret(session, user_id, "github_pat") or ""
+    job_id = demo_jobs.start_job(req, github_token=github_token)
+    return {"job_id": job_id}
+
+
+@router.get("/{job_id}/events")
+async def demo_events(job_id: str, _=Depends(require_user)) -> StreamingResponse:
+    if demo_jobs.get_job(job_id) is None:
+        raise HTTPException(status_code=404, detail="job_id not found or expired")
     return StreamingResponse(
-        _stream(req, job_id, github_token),
+        _sse(job_id),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
 
 
+@router.get("/{job_id}/status")
+async def demo_status(job_id: str, _=Depends(require_user)) -> dict:
+    job = demo_jobs.get_job(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="job_id not found or expired")
+    return job.snapshot()
+
+
+@router.post("/{job_id}/cancel")
+async def demo_cancel(job_id: str, _=Depends(require_user)) -> dict[str, bool]:
+    cancelled = await demo_jobs.cancel_job(job_id)
+    return {"cancelled": cancelled}
+
+
 @router.get("/{job_id}/zip")
 async def demo_zip(job_id: str, _=Depends(require_user)) -> StreamingResponse:
-    _evict_expired()
-    entry = _pop_cache(job_id)
-    if not entry:
+    job = demo_jobs.get_job(job_id)
+    if job is None or not job.files:
         raise HTTPException(status_code=404, detail="job_id not found or expired")
-    files, slug = entry
-    data = _build_zip(files)
-    filename = f"{slug}.zip"
+    data = _build_zip(job.files)
+    filename = f"{job.slug or 'demo'}.zip"
     return StreamingResponse(
         iter([data]),
         media_type="application/zip",

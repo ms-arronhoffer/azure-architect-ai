@@ -25,14 +25,22 @@ def render_docs_agent_prompt(design_json: str, spec_json: str) -> str:
         '    {"path": "README.md", "content": "..."},\n'
         '    {"path": "ARCHITECTURE.md", "content": "..."},\n'
         '    {"path": "DEPLOYMENT.md", "content": "..."},\n'
+        '    {"path": "DEMO_SCRIPT.md", "content": "..."},\n'
         '    {"path": ".env.example", "content": "..."},\n'
         '    {"path": ".gitignore", "content": "..."}\n'
         '  ]\n'
         '}\n\n'
         "Rules:\n"
-        "- README.md: title, features, prerequisites, quick start (<= 5 steps), usage, architecture link, API reference table, project structure.\n"
+        "- README.md: title, an \"Explain it in 60 seconds\" elevator paragraph, a "
+        "\"What happens behind the scenes\" section that names each Azure service "
+        "and the exact role it plays in the request flow, features, prerequisites, "
+        "quick start (<= 5 steps), usage, architecture link, API reference table, project structure.\n"
         "- ARCHITECTURE.md: include the diagrams from design.diagrams as fenced ```mermaid blocks; add component descriptions and an optional enterprise extension section.\n"
         "- DEPLOYMENT.md: step-by-step Azure setup, `az deployment group create` commands, env var capture from Bicep outputs, local run instructions.\n"
+        "- DEMO_SCRIPT.md: a presenter talk track timed to design.duration_minutes — "
+        "an opening hook, a beat-by-beat walkthrough that calls out what each Azure "
+        "service is doing live, the single wow moment, and likely Q&A. Written so a "
+        "first-time presenter can deliver a world-class demo without prep.\n"
         "- .env.example: every entry in design.env_vars with `# inline comment` explaining what it is and where it comes from. NO real values.\n"
         "- .gitignore: Python + Node + .env + IDE noise.\n\n"
         f"Architecture design (from phase 3):\n{design_json}\n\n"
