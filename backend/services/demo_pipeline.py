@@ -13,6 +13,7 @@ lane gets one retry with a strict reprompt; on second failure the lane emits
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import datetime as dt
 import hashlib
 import json
@@ -225,18 +226,37 @@ async def _llm_json(
         if is_reasoning:
             kwargs["reasoning"] = {"effort": "medium"}
             kwargs["text"] = {"format": {"type": "json_object"}}
-            # Generous safety cap so reasoning can't run unbounded. 16k is
-            # ~4x the chat budget and enough room for full JSON after
-            # medium-effort reasoning on the largest demo prompts.
+            # Generous safety cap so reasoning can't run unbounded while still
+            # leaving ample room for a full multi-file JSON payload after
+            # medium-effort reasoning on the largest demo prompts. Scales with
+            # the per-phase budget (build lanes pass 16k → 64k cap).
             kwargs["max_output_tokens"] = max(max_tokens * 4, 16000)
         else:
             kwargs["max_output_tokens"] = max_tokens
 
         def _stream_and_collect() -> Any:
+            # Capture the terminal response directly from the event stream.
+            # The SDK's `get_final_response()` only resolves on a
+            # `response.completed` event and raises "Didn't receive a
+            # `response.completed` event." when the model stops on
+            # `response.incomplete` (e.g. it hit `max_output_tokens`) — which
+            # would otherwise discard a fully- or partially-generated lane and
+            # mean no code files ever reach the build. Accept incomplete and
+            # failed terminal responses so their (partial) `output_text` is
+            # still usable downstream.
+            final_resp: Any = None
             with client.responses.stream(**kwargs) as stream:
-                for _ in stream:
-                    pass
-                return stream.get_final_response()
+                for event in stream:
+                    if getattr(event, "type", "") in (
+                        "response.completed",
+                        "response.incomplete",
+                        "response.failed",
+                    ):
+                        final_resp = getattr(event, "response", None)
+                if final_resp is None:
+                    with contextlib.suppress(Exception):
+                        final_resp = stream.get_final_response()
+            return final_resp
 
         try:
             resp = openai_service.call_with_retry(
@@ -254,6 +274,17 @@ async def _llm_json(
             raise RuntimeError(
                 f"Azure OpenAI Responses API 400 on '{deployment}': {msg}"
             ) from exc
+        # Surface a non-completed stop so truncated lanes are diagnosable.
+        status = getattr(resp, "status", None)
+        if status and status != "completed":
+            details = getattr(resp, "incomplete_details", None)
+            reason = getattr(details, "reason", None) if details else None
+            log.warning(
+                "demo_pipeline.responses_incomplete",
+                deployment=deployment,
+                status=status,
+                reason=reason,
+            )
         return _extract_responses_text(resp)
 
     def _call_chat(p: str) -> str:
@@ -342,6 +373,7 @@ def _fallback_design(spec: dict[str, Any], recommendations: list | None) -> dict
     return {
         "slug": spec.get("slug") or "demo",
         "title": title,
+        "demo_archetype": "chat",
         "tech_stack": "flask_sse",
         "azure_services": services,
         "app_files": [
@@ -356,10 +388,23 @@ def _fallback_design(spec: dict[str, Any], recommendations: list | None) -> dict
             or "Token-by-token streaming response rendered live in the browser."
         ),
         "summary_bullets": [f"Showcases {title}", *([f"Applies: {n}" for n in rec_names[:3]])],
+        "behind_the_scenes": [
+            {"service": s, "role": f"{s} participates in the live request flow."}
+            for s in services
+        ],
+        "live_activity": [
+            {
+                "step_id": "generate",
+                "service": services[0] if services else "Azure OpenAI",
+                "stage": "Generating response",
+                "detail": "Streaming a model response token-by-token to the browser.",
+                "duration_ms": 1200,
+            }
+        ],
         "diagrams": [
             {
                 "name": "component",
-                "mermaid": "graph LR\n  A[Browser] --> B[App Service]\n  B --> C[Azure OpenAI]",
+                "mermaid": "graph LR\n  browser[Browser] --> app[App Service]\n  app --> generate[Azure OpenAI]",
             }
         ],
         "degraded": True,
@@ -464,10 +509,12 @@ async def _phase_architecture_design(
         yield _phase_event(
             "architecture_design",
             "complete",
+            demo_archetype=design.get("demo_archetype"),
             tech_stack=design.get("tech_stack"),
             azure_services=design.get("azure_services") or [],
             service_count=len(design.get("azure_services") or []),
             diagram_count=len(design.get("diagrams") or []),
+            activity_step_count=len(design.get("live_activity") or []),
         )
     except Exception as exc:
         # Do not discard the whole demo when design fails — synthesize a
@@ -491,7 +538,10 @@ async def _lane(name: str, prompt: str, files: dict[str, str]) -> tuple[str, int
     """Run one build lane. Returns (lane_name, files_added). Raises on failure."""
     # Lane name is "build.<phase>"; extract the phase for per-phase model routing.
     phase = name.split(".", 1)[1] if "." in name else name
-    payload = await _llm_json(prompt, max_tokens=8000, phase=phase)
+    # Build lanes emit a full multi-file app as one JSON object, so they need a
+    # generous output budget — too small a cap truncates the response
+    # (`response.incomplete`) and no code files reach the build.
+    payload = await _llm_json(prompt, max_tokens=16000, phase=phase)
     added = _merge_files(files, payload, lane=name)
     return name, added
 
@@ -709,7 +759,9 @@ async def stream_demo_pipeline(
         "engagement_id": getattr(engagement, "id", None) if engagement else None,
         "spec": state.get("spec"),
         "azure_services": (state.get("design") or {}).get("azure_services") or [],
+        "demo_archetype": (state.get("design") or {}).get("demo_archetype") or "",
         "behind_the_scenes": (state.get("design") or {}).get("behind_the_scenes") or [],
+        "live_activity": (state.get("design") or {}).get("live_activity") or [],
         "talk_track": (state.get("design") or {}).get("talk_track") or "",
         "manifest": manifest(files),
         "diagrams": diagrams,

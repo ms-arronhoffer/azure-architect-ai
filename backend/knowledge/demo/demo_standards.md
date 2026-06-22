@@ -3,6 +3,33 @@
 Quality bar and conventions for all generated demos. The reference implementation is:
 `C:\Users\arronhoffer\OneDrive - Microsoft\TempPWD\DocumentClassification_SelfEvolving`
 
+The full quality bar is defined in `world_class_checklist.md`. Every demo must
+clear it.
+
+---
+
+## NON-NEGOTIABLE: Live Azure attribution
+
+Every generated demo with server-side processing **MUST**:
+
+1. Emit the **canonical SSE event schema** defined in `activity_protocol.md`
+   (`activity` events carrying `service`, `step_id`, `stage`, `detail`,
+   `status`, `latency_ms`, `tokens`) — NOT the legacy bare `{type: status}`.
+2. Render the **Azure Activity Panel** (service rail + live narrative feed +
+   "what this service does" affordance) so the audience can *see what Azure is
+   doing behind the scenes, live*.
+3. Render the **live architecture diagram** with nodes that highlight as each
+   service fires (`step_id` ties events ↔ diagram ↔ design `live_activity`).
+4. Render the final result with a **purpose-built, archetype-appropriate
+   renderer** — never `JSON.stringify`/`<pre>` as the primary output.
+
+A demo that only describes Azure in the README but does not surface it in the
+running UI does NOT meet the bar.
+
+The preferred customer-facing stack is **React + TypeScript + Fluent UI v9**
+(`react_ts_starter.md`). Bootstrap/Flask (`flask_sse_starter.md`) is acceptable
+for lighter demos but must hit the same Activity Panel bar.
+
 ---
 
 ## Project Structure

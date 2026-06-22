@@ -457,3 +457,112 @@ __pycache__/
 venv/
 output/
 ```
+
+---
+
+# REQUIRED: canonical activity events + Bootstrap Activity Panel
+
+The `{type: 'status'}` messages above are the legacy floor. A world-class demo
+MUST emit the **canonical event schema** from `activity_protocol.md` and render a
+Bootstrap **Azure Activity Panel** so the audience sees what Azure is doing live.
+
+## Backend — emit `activity` events instead of bare status
+
+Use the `Activity` helper from `activity_protocol.md` inside the worker. Each
+Azure call brackets an `active` then a `done` event carrying `service`,
+`step_id`, `stage`, `detail`, `latency_ms`, and `tokens`. Finish with one
+`result` (or `error`). `step_id` values must match the design's
+`live_activity[].step_id` (and the diagram node ids).
+
+```python
+def call_openai(file_bytes, filename, status_queue):
+    act = Activity(status_queue)
+    t = act.step("generate", "Azure OpenAI", "Analyzing", f"Reasoning over {filename}",
+                 deployment=DEPLOYMENT)
+    resp = client.chat.completions.create(model=DEPLOYMENT, messages=[...],
+                                          max_completion_tokens=1000)
+    t.done(tokens=getattr(resp.usage, "total_tokens", None))
+    return {"answer": resp.choices[0].message.content}
+```
+
+## Frontend — static/js/activity.js (Azure Activity Panel)
+
+```javascript
+// Service rail + live narrative feed driven by canonical activity events.
+const roles = window.SERVICE_ROLES || {};   // {service: "plain-language role"}
+const rail = document.getElementById('serviceRail');
+const feed = document.getElementById('narrativeFeed');
+const chips = {};
+
+function chipFor(ev) {
+  if (chips[ev.step_id]) return chips[ev.step_id];
+  const el = document.createElement('div');
+  el.className = 'activity-chip d-flex align-items-center gap-2 p-2 mb-2 rounded border';
+  el.innerHTML = `<i class="bi bi-cloud"></i>
+    <span><strong>${ev.service}</strong> <small class="text-secondary stage"></small></span>
+    <span class="ms-auto meta d-flex gap-2 align-items-center"></span>`;
+  if (roles[ev.service]) {
+    const info = document.createElement('i');
+    info.className = 'bi bi-info-circle ms-1';
+    info.tabIndex = 0; info.title = roles[ev.service];
+    el.querySelector('.meta').appendChild(info);
+  }
+  rail.appendChild(el);
+  return (chips[ev.step_id] = el);
+}
+
+function onActivity(ev) {
+  const el = chipFor(ev);
+  el.querySelector('.stage').textContent =
+    '· ' + ev.stage + (ev.deployment ? ` (${ev.deployment})` : '');
+  el.classList.toggle('chip-active', ev.status === 'active');
+  el.classList.toggle('chip-done', ev.status === 'done');
+  const meta = el.querySelector('.meta');
+  meta.querySelectorAll('.badge').forEach(b => b.remove());
+  if (ev.tokens != null) meta.insertAdjacentHTML('afterbegin', `<span class="badge text-bg-info">${ev.tokens} tok</span>`);
+  if (ev.latency_ms != null) meta.insertAdjacentHTML('afterbegin', `<span class="badge text-bg-secondary">${ev.latency_ms} ms</span>`);
+  if (ev.status === 'active' && ev.detail) {
+    const item = document.createElement('div');
+    item.className = 'feed-item small px-2 py-1 mb-1 rounded';
+    item.textContent = ev.detail;
+    feed.appendChild(item); feed.scrollTop = feed.scrollHeight;
+  }
+}
+
+async function runStream(url, body) {
+  const res = await fetch(url, { method: 'POST', body });
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buf = '';
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += decoder.decode(value, { stream: true });
+    const lines = buf.split('\n'); buf = lines.pop();
+    for (const line of lines) {
+      if (!line.startsWith('data: ')) continue;
+      const ev = JSON.parse(line.slice(6));
+      if (ev.type === 'activity') onActivity(ev);
+      if (ev.type === 'result') renderResult(ev.data);   // archetype-specific
+      if (ev.type === 'error') showError(ev.message);
+    }
+  }
+}
+```
+
+## static/css activity styles
+
+```css
+.activity-chip { transition: all .25s ease; }
+.chip-active { border-color: var(--bs-primary) !important; box-shadow: 0 0 0 3px rgba(40,153,245,.25); }
+.chip-done { border-color: var(--bs-success) !important; }
+.feed-item { border-left: 2px solid var(--bs-primary); background: var(--bs-secondary-bg);
+  animation: feedIn .25s ease; }
+@keyframes feedIn { from { opacity: 0; transform: translateX(-6px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .activity-chip, .feed-item { animation: none; transition: none; } }
+```
+
+`renderResult(data)` MUST be a purpose-built renderer for the demo archetype
+(chat bubbles, cited passages, annotated image, agent trace, table/chart) — never
+`JSON.stringify` into a `<pre>` as the primary output. Set `window.SERVICE_ROLES`
+from the design `behind_the_scenes[]` so each chip explains its service's role.
