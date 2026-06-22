@@ -5,14 +5,16 @@ from __future__ import annotations
 import asyncio
 import json
 
-from fastapi import APIRouter, Depends, HTTPException, Query
-from fastapi.responses import StreamingResponse
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel, Field
 
 from auth import require_user
 from services import (
     carbon_service,
+    cost_catalog,
     cost_service,
+    cost_template_service,
     reservations_service,
     retail_pricing_service,
     rightsizing_service,
@@ -181,4 +183,48 @@ async def cost_optimize(req: CostOptimizeRequest, _=Depends(require_user)) -> St
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+
+
+@router.get("/catalog")
+async def catalog(_=Depends(require_user)) -> dict:
+    """Service billing catalog: services + their billing dimensions, for the UI
+    to render dimension fields dynamically and validate input."""
+    return cost_catalog.public_catalog()
+
+
+@router.get("/template/sample")
+async def template_sample(
+    format: str = Query("yaml", pattern="^(yaml|json|csv)$"),
+    _=Depends(require_user),
+) -> Response:
+    """Download a documented sample cost-model template (yaml | json | csv)."""
+    try:
+        content, media, filename = cost_template_service.sample_template(format)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return Response(
+        content=content,
+        media_type=media,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.post("/template/parse")
+async def template_parse(request: Request, _=Depends(require_user)) -> dict:
+    """Parse + validate an uploaded cost-model template (yaml/json/csv body, or
+    pre-extracted text from an .xlsx via /api/parse). Returns a normalized
+    request shape plus per-entry validation warnings (never 500 on bad input)."""
+    fmt = (request.headers.get("X-Template-Format") or "").strip()
+    if not fmt:
+        filename = request.headers.get("X-Filename", "")
+        if "." in filename:
+            fmt = filename.rsplit(".", 1)[-1]
+    raw = await request.body()
+    if not raw:
+        raise HTTPException(status_code=422, detail="Uploaded template is empty.")
+    try:
+        text = raw.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise HTTPException(status_code=422, detail=f"Template must be UTF-8 text: {exc}") from exc
+    return cost_template_service.parse_template(text, fmt)
 
