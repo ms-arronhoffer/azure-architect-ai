@@ -1242,12 +1242,24 @@ export type SseEvent =
 
 // ── Cross-panel handoff seed ─────────────────────────────────────────────────
 
+/** Prefilled inputs handed to the Demo Builder when a Demo Showcase entry is
+ * used as a starting point. All fields are best-effort — the builder treats
+ * them as editable defaults the user refines before running. */
+export interface DemoBuilderSeed {
+  demo_slug: string;
+  demo_title: string;
+  description: string;
+  key_features: string[];
+  azure_services: string[];
+}
+
 /** Payload passed to `handleContinueIn(mode, seed)`. Strings are treated as a
  * user-message text seed (legacy behavior); objects carry richer context such
- * as a validated WorkloadSpec and an auto-start flag for pipeline panels. */
+ * as a validated WorkloadSpec and an auto-start flag for pipeline panels, or a
+ * Demo Builder seed when launching the demo-build pipeline. */
 export type ContinueInSeed =
   | string
-  | { spec?: WorkloadSpec; autoStart?: boolean };
+  | { spec?: WorkloadSpec; autoStart?: boolean; demoSeed?: DemoBuilderSeed };
 
 // ── Cost optimization pipeline ───────────────────────────────────────────────
 

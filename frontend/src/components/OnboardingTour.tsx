@@ -4,6 +4,7 @@ import {
   tokens,
   Button,
   Text,
+  Checkbox,
 } from "@fluentui/react-components";
 import { DismissRegular, ChevronRightRegular, ChevronLeftRegular } from "@fluentui/react-icons";
 
@@ -89,6 +90,9 @@ const useStyles = makeStyles({
     justifyContent: "space-between",
     padding: "12px 24px 20px",
   },
+  remember: {
+    padding: "0 24px 16px",
+  },
   dots: {
     display: "flex",
     gap: "6px",
@@ -131,9 +135,10 @@ export function markOnboardingSeen(): void {
 export default function OnboardingTour({ onClose }: OnboardingTourProps) {
   const styles = useStyles();
   const [step, setStep] = useState(0);
+  const [dontShowAgain, setDontShowAgain] = useState(true);
 
   function handleFinish() {
-    markOnboardingSeen();
+    if (dontShowAgain) markOnboardingSeen();
     onClose();
   }
 
@@ -147,6 +152,13 @@ export default function OnboardingTour({ onClose }: OnboardingTourProps) {
         <div className={styles.body}>
           <Text className={styles.title}>{STEPS[step].title}</Text>
           <Text className={styles.description}>{STEPS[step].body}</Text>
+        </div>
+        <div className={styles.remember}>
+          <Checkbox
+            checked={dontShowAgain}
+            onChange={(_, data) => setDontShowAgain(Boolean(data.checked))}
+            label="Don't show this again"
+          />
         </div>
         <div className={styles.footer}>
           <div className={styles.dots}>

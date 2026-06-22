@@ -3,6 +3,8 @@
 import io
 import json
 
+from typing import Literal
+
 from fastapi import APIRouter, File, Form, UploadFile
 from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel
@@ -24,6 +26,8 @@ class OutlineRequest(BaseModel):
 
 class BuildRequest(BaseModel):
     outline: dict
+    theme: Literal["light", "dark"] = "dark"
+    accent: str | None = None
 
 
 def _sse(payload: dict) -> str:
@@ -188,7 +192,7 @@ async def outline_endpoint(
 
 @router.post("/presentation/build")
 async def build_endpoint(req: BuildRequest):
-    pptx_bytes = build_presentation(req.outline)
+    pptx_bytes = build_presentation(req.outline, theme=req.theme, accent=req.accent)
     return Response(
         content=pptx_bytes,
         media_type="application/vnd.openxmlformats-officedocument.presentationml.presentation",

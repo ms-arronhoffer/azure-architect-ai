@@ -29,6 +29,32 @@ import { apiFetch } from "../config/api";
 const SLIDE_BG = "#1A2028";
 const SLIDE_MUTED = "#809AB0";
 
+const DECK_THEME_KEY = "azure_deck_theme";
+const DECK_ACCENT_KEY = "azure_deck_accent";
+const DEFAULT_ACCENT = "#0078D4";
+
+function loadDeckTheme(): "light" | "dark" {
+  try {
+    return localStorage.getItem(DECK_THEME_KEY) === "light" ? "light" : "dark";
+  } catch {
+    return "dark";
+  }
+}
+
+function loadDeckAccent(): string {
+  try {
+    return localStorage.getItem(DECK_ACCENT_KEY) || DEFAULT_ACCENT;
+  } catch {
+    return DEFAULT_ACCENT;
+  }
+}
+
+// Light/dark preview swatches mirror the backend Theme presets in pptx_service.py.
+const THEME_PREVIEW: Record<"light" | "dark", { bg: string; text: string }> = {
+  dark: { bg: "#1A2028", text: "#E0E8F0" },
+  light: { bg: "#FFFFFF", text: "#2D3A47" },
+};
+
 const useStyles = makeStyles({
   root: {
     display: "flex",
@@ -129,6 +155,49 @@ const useStyles = makeStyles({
     display: "grid",
     gridTemplateColumns: "1fr 1fr",
     gap: "12px",
+  },
+  themeRow: {
+    display: "flex",
+    flexWrap: "wrap",
+    gap: "16px",
+    alignItems: "flex-end",
+  },
+  themeChips: { display: "flex", gap: "8px" },
+  themeChip: {
+    display: "flex",
+    alignItems: "center",
+    gap: "8px",
+    padding: "8px 12px",
+    borderRadius: "8px",
+    border: `1px solid ${tokens.colorNeutralStroke1}`,
+    background: tokens.colorNeutralBackground1,
+    cursor: "pointer",
+    fontSize: "13px",
+    color: tokens.colorNeutralForeground1,
+  },
+  themeChipActive: {
+    border: `2px solid ${tokens.colorBrandStroke1}`,
+    background: tokens.colorBrandBackground2,
+  },
+  swatch: {
+    width: "22px",
+    height: "22px",
+    borderRadius: "5px",
+    border: `1px solid ${tokens.colorNeutralStroke2}`,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontSize: "11px",
+    fontWeight: 700,
+  },
+  accentPicker: {
+    width: "40px",
+    height: "32px",
+    padding: 0,
+    border: `1px solid ${tokens.colorNeutralStroke1}`,
+    borderRadius: "6px",
+    background: "transparent",
+    cursor: "pointer",
   },
   // ── file upload zone ────────────────────────────────────────────────────
   uploadZone: {
@@ -322,6 +391,8 @@ export default function PresentationPanel() {
   const [objectives, setObjectives] = useState("");
   const [numSlides, setNumSlides] = useState("10");
   const [conversationContext, setConversationContext] = useState("");
+  const [theme, setTheme] = useState<"light" | "dark">(loadDeckTheme);
+  const [accent, setAccent] = useState<string>(loadDeckAccent);
 
   // File upload state
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
@@ -448,13 +519,23 @@ export default function PresentationPanel() {
     }
   }
 
+  function changeTheme(next: "light" | "dark") {
+    setTheme(next);
+    try { localStorage.setItem(DECK_THEME_KEY, next); } catch { /* ignore */ }
+  }
+
+  function changeAccent(next: string) {
+    setAccent(next);
+    try { localStorage.setItem(DECK_ACCENT_KEY, next); } catch { /* ignore */ }
+  }
+
   async function handleBuild(outline: DeckOutline) {
     setPhase("building");
     try {
       const res = await apiFetch("/api/presentation/build", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ outline }),
+        body: JSON.stringify({ outline, theme, accent }),
       });
       if (!res.ok) throw new Error("Build failed");
       const blob = await res.blob();
@@ -626,6 +707,45 @@ export default function PresentationPanel() {
                 />
               </div>
 
+              {/* ── Deck theme ─────────────────────────────────────── */}
+              <div className={styles.fieldWrap}>
+                <Label>Deck Theme</Label>
+                <div className={styles.themeRow}>
+                  <div className={styles.themeChips} role="radiogroup" aria-label="Deck theme">
+                    {(["light", "dark"] as const).map((opt) => (
+                      <div
+                        key={opt}
+                        role="radio"
+                        aria-checked={theme === opt}
+                        tabIndex={0}
+                        className={`${styles.themeChip} ${theme === opt ? styles.themeChipActive : ""}`}
+                        onClick={() => changeTheme(opt)}
+                        onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && changeTheme(opt)}
+                      >
+                        <span
+                          className={styles.swatch}
+                          style={{ background: THEME_PREVIEW[opt].bg, color: accent }}
+                        >
+                          Aa
+                        </span>
+                        <span style={{ textTransform: "capitalize" }}>{opt}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <div className={styles.fieldWrap}>
+                    <Label size="small">Accent</Label>
+                    <input
+                      type="color"
+                      className={styles.accentPicker}
+                      value={accent}
+                      onChange={(e) => changeAccent(e.target.value)}
+                      aria-label="Deck accent color"
+                      title="Accent color"
+                    />
+                  </div>
+                </div>
+              </div>
+
               {/* ── Supporting document upload ─────────────────────── */}
               <div className={styles.fieldWrap}>
                 <Label>Supporting Documents <span style={{ fontWeight: 400, color: tokens.colorNeutralForeground3 }}>(optional)</span></Label>
@@ -760,6 +880,30 @@ export default function PresentationPanel() {
               )}
 
               <div className={styles.actionRow}>
+                <div className={styles.themeChips} role="radiogroup" aria-label="Deck theme">
+                  {(["light", "dark"] as const).map((opt) => (
+                    <div
+                      key={opt}
+                      role="radio"
+                      aria-checked={theme === opt}
+                      tabIndex={0}
+                      className={`${styles.themeChip} ${theme === opt ? styles.themeChipActive : ""}`}
+                      onClick={() => changeTheme(opt)}
+                      onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && changeTheme(opt)}
+                    >
+                      <span className={styles.swatch} style={{ background: THEME_PREVIEW[opt].bg, color: accent }}>Aa</span>
+                      <span style={{ textTransform: "capitalize" }}>{opt}</span>
+                    </div>
+                  ))}
+                </div>
+                <input
+                  type="color"
+                  className={styles.accentPicker}
+                  value={accent}
+                  onChange={(e) => changeAccent(e.target.value)}
+                  aria-label="Deck accent color"
+                  title="Accent color"
+                />
                 <Button appearance="primary" icon={<CheckmarkRegular />} onClick={applyRecommendations}>
                   Apply Recommendations &amp; Build
                 </Button>

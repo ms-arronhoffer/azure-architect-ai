@@ -29,7 +29,7 @@ import {
   CheckmarkCircleFilled,
   DismissCircleRegular,
 } from "@fluentui/react-icons";
-import type { DemoFileManifestEntry } from "../types";
+import type { DemoFileManifestEntry, DemoBuilderSeed } from "../types";
 import { DemoActivityPreview } from "./DemoActivityPreview";
 import { useWorkloadSpec } from "../hooks/useWorkloadSpec";
 import { useSettings } from "../hooks/useSettings";
@@ -277,7 +277,15 @@ const STAGE_COLOR: Record<ServiceStage, "informative" | "brand" | "success"> = {
   verified: "success",
 };
 
-export default function DemoBuildPanel() {
+interface DemoBuildPanelProps {
+  /** Prefilled defaults handed in when the user launches the builder from a
+   *  Demo Showcase entry ("Use as starting point"). Consumed once on mount. */
+  initialSeed?: DemoBuilderSeed | null;
+  /** Called after the seed has been applied so the parent can clear it. */
+  onSeedConsumed?: () => void;
+}
+
+export default function DemoBuildPanel({ initialSeed, onSeedConsumed }: DemoBuildPanelProps = {}) {
   const styles = useStyles();
   const { spec } = useWorkloadSpec();
   const { githubTokenConfigured } = useSettings();
@@ -296,21 +304,35 @@ export default function DemoBuildPanel() {
 
   const initialSlug = useMemo(() => slugify(spec.name || "my-azure-demo"), [spec.name]);
 
-  const [demoSlug, setDemoSlug] = useState(initialSlug);
-  const [demoTitle, setDemoTitle] = useState(spec.name || "My Azure Demo");
-  const [description, setDescription] = useState("");
+  const [demoSlug, setDemoSlug] = useState(initialSeed?.demo_slug || initialSlug);
+  const [demoTitle, setDemoTitle] = useState(initialSeed?.demo_title || spec.name || "My Azure Demo");
+  const [description, setDescription] = useState(initialSeed?.description || "");
   const [audience, setAudience] = useState<"customer" | "internal" | "partner">("customer");
   const [durationMinutes, setDurationMinutes] = useState<number>(15);
   const [targetPersona, setTargetPersona] = useState("platform engineer");
-  const [keyFeaturesText, setKeyFeaturesText] = useState("streaming, managed identity");
-  const [azureServicesText, setAzureServicesText] = useState("Azure OpenAI, App Service");
+  const [keyFeaturesText, setKeyFeaturesText] = useState(
+    initialSeed?.key_features?.length ? initialSeed.key_features.join(", ") : "streaming, managed identity",
+  );
+  const [azureServicesText, setAzureServicesText] = useState(
+    initialSeed?.azure_services?.length ? initialSeed.azure_services.join(", ") : "Azure OpenAI, App Service",
+  );
   const [publish, setPublish] = useState(false);
   const [publishTouched, setPublishTouched] = useState(false);
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"preview" | "talk" | "readme" | "files" | "diagrams" | "verify">("preview");
 
-  // Default the Publish switch ON once we know a PAT is configured, but never
-  // override an explicit user toggle (publishTouched).
+  // Apply an inbound Demo Showcase seed exactly once, then tell the parent to
+  // clear it so re-renders (or a manual edit) don't clobber the user's input.
+  useEffect(() => {
+    if (!initialSeed) return;
+    setDemoSlug(initialSeed.demo_slug || initialSlug);
+    setDemoTitle(initialSeed.demo_title || spec.name || "My Azure Demo");
+    setDescription(initialSeed.description || "");
+    if (initialSeed.key_features?.length) setKeyFeaturesText(initialSeed.key_features.join(", "));
+    if (initialSeed.azure_services?.length) setAzureServicesText(initialSeed.azure_services.join(", "));
+    onSeedConsumed?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialSeed]);
   useEffect(() => {
     if (!publishTouched && githubTokenConfigured) setPublish(true);
   }, [githubTokenConfigured, publishTouched]);

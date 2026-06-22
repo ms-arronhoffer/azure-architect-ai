@@ -10,15 +10,15 @@ import pytest
 
 @pytest.mark.asyncio
 async def test_config_unified_default(client, monkeypatch):
-    """Unset UNIFIED_AGENTS resolves to the unified surface (opt-out default)."""
+    """Unset UNIFIED_AGENTS resolves to the legacy surface (opt-in default)."""
     monkeypatch.delenv("UNIFIED_AGENTS", raising=False)
     resp = await client.get("/api/config")
     assert resp.status_code == 200
-    assert resp.json() == {"unified_agents": True}
+    assert resp.json() == {"unified_agents": False}
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("value", ["false", "0", "no", "off", "OFF", " False "])
+@pytest.mark.parametrize("value", ["false", "0", "no", "off", "OFF", " False ", "anything"])
 async def test_config_unified_opt_out(client, monkeypatch, value):
     monkeypatch.setenv("UNIFIED_AGENTS", value)
     resp = await client.get("/api/config")
@@ -27,7 +27,7 @@ async def test_config_unified_opt_out(client, monkeypatch, value):
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("value", ["true", "1", "yes", "anything"])
+@pytest.mark.parametrize("value", ["true", "1", "yes", "on", "TRUE", " On "])
 async def test_config_unified_opt_in(client, monkeypatch, value):
     monkeypatch.setenv("UNIFIED_AGENTS", value)
     resp = await client.get("/api/config")

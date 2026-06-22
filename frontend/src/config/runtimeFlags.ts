@@ -17,12 +17,13 @@
 import { apiFetch } from "./api";
 
 const OVERRIDE_KEY = "azure_unified_agents";
-const FALSEY = new Set(["false", "0", "no", "off"]);
+const TRUTHY = new Set(["true", "1", "yes", "on"]);
 
 // Build-time default — the last-resort fallback before the server responds.
+// Unified agents are opt-in: only an explicit truthy value enables them.
 function envDefault(): boolean {
   const raw = (import.meta.env.VITE_UNIFIED_AGENTS ?? "").trim().toLowerCase();
-  return !FALSEY.has(raw);
+  return TRUTHY.has(raw);
 }
 
 // Server-provided default, populated by loadRuntimeConfig(). null = not yet known.
@@ -43,7 +44,7 @@ function readOverride(): boolean | null {
   try {
     const raw = localStorage.getItem(OVERRIDE_KEY);
     if (raw === null) return null;
-    return !FALSEY.has(raw.trim().toLowerCase());
+    return TRUTHY.has(raw.trim().toLowerCase());
   } catch {
     return null;
   }

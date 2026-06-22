@@ -214,14 +214,15 @@ export const HOW_TO: Partial<Record<Mode, HowToEntry>> = {
   presentation: {
     label: "Presentation Coach",
     whatItDoes:
-      "Structures an Azure topic into a deck outline for a specific audience (exec, IT pro, developer, customer).",
+      "Structures an Azure topic into a deck outline for a specific audience (exec, IT pro, developer, customer), then builds a polished PPTX in your chosen light or dark theme.",
     howToUse: [
-      "Specify topic + audience + duration.",
-      "Iterate on slide titles and speaker notes.",
+      "Coach tab: brainstorm structure, narrative, and talking points.",
+      "Build Deck tab: set topic + audience, pick a light/dark theme and accent color, then generate.",
+      "Review the AI's suggestions, then download the themed PPTX.",
     ],
     outputs: [
       "Slide outline with title + bullet points + speaker notes.",
-      "Suggested visuals (diagram type, screenshot list).",
+      "World-class PPTX with a light or dark theme and your accent color.",
     ],
   },
 

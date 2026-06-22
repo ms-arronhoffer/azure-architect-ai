@@ -19,6 +19,7 @@ import {
   NewFilled,
   EditRegular,
   DeleteRegular,
+  RocketRegular,
 } from "@fluentui/react-icons";
 import type { Demo } from "../types";
 import { DemoVideoModal } from "./DemoVideoModal";
@@ -151,9 +152,10 @@ interface DemoCardProps {
   demo: Demo;
   onEdit?: (demo: Demo) => void;
   onDelete?: (demo: Demo) => void;
+  onUseAsStarting?: (demo: Demo) => void;
 }
 
-export function DemoCard({ demo, onEdit, onDelete }: DemoCardProps) {
+export function DemoCard({ demo, onEdit, onDelete, onUseAsStarting }: DemoCardProps) {
   const styles = useStyles();
   const [modalOpen, setModalOpen] = useState(false);
   const [imgExpanded, setImgExpanded] = useState(false);
@@ -251,9 +253,18 @@ export function DemoCard({ demo, onEdit, onDelete }: DemoCardProps) {
         />
 
         <CardFooter className={styles.footer}>
-          {demo.video_url && (
+          {onUseAsStarting && (
             <Button
               appearance="primary"
+              icon={<RocketRegular />}
+              onClick={() => onUseAsStarting(demo)}
+            >
+              Use as starting point
+            </Button>
+          )}
+          {demo.video_url && (
+            <Button
+              appearance={onUseAsStarting ? "outline" : "primary"}
               icon={<Video24Regular />}
               onClick={() => setModalOpen(true)}
             >
@@ -262,7 +273,7 @@ export function DemoCard({ demo, onEdit, onDelete }: DemoCardProps) {
           )}
           {demo.live_url && (
             <Button
-              appearance={demo.video_url ? "outline" : "primary"}
+              appearance={demo.video_url || onUseAsStarting ? "outline" : "primary"}
               icon={<Open24Regular />}
               as="a"
               href={demo.live_url}
