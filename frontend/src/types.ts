@@ -291,6 +291,19 @@ export interface CostLineItem {
   sku_swapped?: boolean;
   sku_status?: "unknown";
   source?: string;
+  matched_sku?: string;
+  confidence?: number | null;
+  low_confidence?: boolean;
+  meter_name?: string;
+  product_name?: string;
+  resolver_source?: string;
+  candidates?: Array<{
+    sku?: string;
+    meter_name?: string;
+    product_name?: string;
+    unit_price?: number | null;
+    score?: number | null;
+  }>;
 }
 
 export interface SkuValidationSummary {

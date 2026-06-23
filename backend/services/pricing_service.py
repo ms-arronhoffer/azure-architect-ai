@@ -7,6 +7,8 @@ from datetime import UTC, datetime
 
 import httpx
 
+from config import settings
+
 PRICING_API = "https://prices.azure.com/api/retail/prices"
 PRICING_DATA_SOURCE = "Azure Retail Pricing API (prices.azure.com)"
 
@@ -163,6 +165,80 @@ async def _mcp_price_search(service: str, sku: str, region: str) -> list[dict]:
         return []
 
 
+def _monthly_estimate(
+    unit_price: float, unit_of_measure: str, quantity: float, hours_per_month: float
+) -> float:
+    """Normalise a unit price to a monthly estimate based on its unit."""
+    uom = (unit_of_measure or "").lower()
+    if "hour" in uom:
+        return unit_price * hours_per_month * quantity
+    # month / GB / everything else: treat quantity as the billed unit count.
+    return unit_price * quantity
+
+
+async def _catalog_line_item(
+    service: str,
+    sku: str,
+    quantity: float,
+    hours_per_month: float,
+    region: str,
+) -> dict | None:
+    """Resolve one line item against the local catalog. Returns ``None`` on a
+    catalog miss (no rows for the service) so the caller can fall back to the
+    live API. A low-confidence match is returned with ``low_confidence=True``
+    set so the caller can decide whether to try the live API instead."""
+    from services import pricing_catalog, pricing_resolver
+
+    try:
+        res = await pricing_catalog.resolve_meter(service, sku, region, meter_hint=sku)
+    except Exception:
+        return None
+    row = res.get("matched")
+    if not row:
+        return None
+
+    unit_price = row.get("retailPrice", 0) or 0
+    uom = row.get("unitOfMeasure", "1 Hour")
+    monthly = _monthly_estimate(unit_price, uom, quantity, hours_per_month)
+    matched_sku = row.get("skuName") or sku
+    swapped = bool(sku) and pricing_resolver.search_key(sku) != pricing_resolver.search_key(
+        matched_sku
+    )
+
+    candidates = [
+        {
+            "sku": c.get("skuName"),
+            "meter_name": c.get("meterName"),
+            "product_name": c.get("productName"),
+            "unit_price": c.get("retailPrice"),
+            "score": c.get("_score"),
+        }
+        for c in res.get("candidates", [])
+    ]
+
+    return {
+        "service": res.get("resolved_service") or service,
+        "sku": matched_sku,
+        "matched_sku": matched_sku,
+        "requested_sku": sku,
+        "region": region,
+        "quantity": quantity,
+        "unit_price": unit_price,
+        "unit_of_measure": uom,
+        "monthly_estimate": round(monthly, 2),
+        "currency": row.get("currencyCode", "USD"),
+        "meter_name": row.get("meterName"),
+        "product_name": row.get("productName"),
+        "source": PRICING_DATA_SOURCE,
+        "resolver_source": res.get("source"),
+        "confidence": res.get("confidence"),
+        "service_confidence": res.get("service_confidence"),
+        "sku_swapped": swapped,
+        "low_confidence": bool(res.get("low_confidence")),
+        "candidates": candidates,
+    }
+
+
 async def estimate_line_item(
     service: str,
     sku: str = "",
@@ -170,10 +246,28 @@ async def estimate_line_item(
     hours_per_month: float = 730.0,
     region: str = "eastus",
 ) -> dict:
-    """Estimate monthly cost for one line item. If the requested SKU is not found,
-    consult validate_sku for suggestions and auto-swap to the first suggestion."""
-    prices = await get_price(service, sku, region)
+    """Estimate monthly cost for one line item.
+
+    Resolution order (catalog-first): the local pricing catalog via the
+    deterministic resolver → the live Retail API → the MCP fallback. The
+    catalog path replaces the old silent "cheapest meter" pick that collapsed
+    misses (e.g. ``P1v4``) onto the $0.01/hr ``Shared App`` meter; it surfaces
+    ``confidence``, ``matched_sku``, ``requested_sku``, ``sku_swapped`` and the
+    ``candidates`` considered so the agent/UI can be honest about a low match.
+    """
     requested_sku = sku
+
+    # Layer 0: local catalog resolver (catalog-first).
+    if settings.pricing_catalog_enabled:
+        catalog_item = await _catalog_line_item(
+            service, sku, quantity, hours_per_month, region
+        )
+        if catalog_item is not None and not catalog_item.get("low_confidence"):
+            return catalog_item
+    else:
+        catalog_item = None
+
+    prices = await get_price(service, sku, region)
     sku_swapped = False
 
     # On miss with a specific SKU, try to recover via validate_sku suggestions
@@ -190,6 +284,10 @@ async def estimate_line_item(
         prices = await _mcp_price_search(service, requested_sku, region)
 
     if not prices:
+        # Live + MCP both empty — surface the best-effort (possibly
+        # low-confidence) catalog match rather than nothing, if we have one.
+        if catalog_item is not None:
+            return catalog_item
         return {
             "service": service,
             "sku": requested_sku,
@@ -245,7 +343,15 @@ async def estimate_line_item(
 
 
 async def validate_sku(service: str, sku: str, region: str = "eastus") -> dict:
-    """Return best-match SKU info or suggestions when the requested SKU is not found."""
+    """Return best-match SKU info or suggestions when the requested SKU is not found.
+
+    Catalog-first: consult the local resolver, falling back to the live Retail
+    API only on a catalog miss."""
+    if settings.pricing_catalog_enabled:
+        catalog_result = await _catalog_validate_sku(service, sku, region)
+        if catalog_result is not None:
+            return catalog_result
+
     prices = await get_price(service, sku, region)
     if not prices:
         broader = await get_price(service, "", region)
@@ -270,6 +376,45 @@ async def validate_sku(service: str, sku: str, region: str = "eastus") -> dict:
         "matched_sku": best.get("skuName", sku),
         "unit_price": best.get("retailPrice", 0),
         "unit_of_measure": best.get("unitOfMeasure", ""),
+    }
+
+
+async def _catalog_validate_sku(service: str, sku: str, region: str) -> dict | None:
+    """Validate a SKU against the local catalog. Returns ``None`` on a catalog
+    miss (no rows for the service) so the caller falls back to the live API."""
+    from services import pricing_catalog
+
+    try:
+        res = await pricing_catalog.resolve_meter(service, sku, region, meter_hint=sku)
+    except Exception:
+        return None
+    row = res.get("matched")
+    if not row:
+        return None
+
+    if not res.get("low_confidence"):
+        return {
+            "valid": True,
+            "requested_sku": sku,
+            "matched_sku": row.get("skuName", sku),
+            "unit_price": row.get("retailPrice", 0),
+            "unit_of_measure": row.get("unitOfMeasure", ""),
+            "confidence": res.get("confidence"),
+        }
+
+    # Low confidence — offer the ranked candidates as suggestions (dedup, order
+    # preserved) rather than silently accepting a weak match.
+    suggestions: list[str] = []
+    for c in res.get("candidates", []):
+        name = c.get("skuName")
+        if name and name not in suggestions:
+            suggestions.append(name)
+    return {
+        "valid": False,
+        "requested_sku": sku,
+        "message": f"SKU '{sku}' not confidently matched for {service} in {region}.",
+        "suggestions": suggestions[:5],
+        "confidence": res.get("confidence"),
     }
 
 

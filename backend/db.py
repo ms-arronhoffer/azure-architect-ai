@@ -256,6 +256,36 @@ class RefArch(Base):
     last_synced_at: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
 
+class PricingMeter(Base):
+    """A single Azure Retail price meter — global reference data scraped from
+    prices.azure.com (not tenant-scoped, like RefArch).
+
+    One row per (meterId, armRegionName, currencyCode). `search_key` is the
+    normalised lowercase token string the resolver matches against so compact
+    ARM/diagram SKUs (``P1v4``) collide with the Retail display form
+    (``P1 v4``). Indexed on serviceName, armRegionName, and search_key.
+    """
+
+    __tablename__ = "pricing_meters"
+
+    id: Mapped[str] = mapped_column(String(160), primary_key=True)
+    meter_id: Mapped[str] = mapped_column(String(96), nullable=False, index=True)
+    service_name: Mapped[str] = mapped_column(String(128), nullable=False, default="", index=True)
+    service_family: Mapped[str] = mapped_column(String(128), nullable=False, default="")
+    product_name: Mapped[str] = mapped_column(String(256), nullable=False, default="")
+    sku_name: Mapped[str] = mapped_column(String(160), nullable=False, default="")
+    meter_name: Mapped[str] = mapped_column(String(256), nullable=False, default="")
+    arm_sku_name: Mapped[str] = mapped_column(String(160), nullable=False, default="")
+    arm_region_name: Mapped[str] = mapped_column(String(64), nullable=False, default="", index=True)
+    unit_of_measure: Mapped[str] = mapped_column(String(64), nullable=False, default="")
+    retail_price: Mapped[float] = mapped_column(nullable=False, default=0.0)
+    currency_code: Mapped[str] = mapped_column(String(8), nullable=False, default="USD")
+    price_type: Mapped[str] = mapped_column(String(32), nullable=False, default="Consumption")
+    search_key: Mapped[str] = mapped_column(String(256), nullable=False, default="", index=True)
+    effective_start_date: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    last_synced_at: Mapped[str] = mapped_column(String(64), nullable=False)
+
+
 class ArbSubmission(Base):
     """Architecture Review Board submission — a frozen design that has been
     handed off for governance review. The `bundled_design_snapshot` and
@@ -458,6 +488,7 @@ __all__ = [
     "Engagement",
     "EngagementReference",
     "MigrationJob",
+    "PricingMeter",
     "RagDocument",
     "RefArch",
     "TokenUsage",

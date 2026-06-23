@@ -256,3 +256,29 @@ async def test_service_error_continues_pipeline(monkeypatch):
     assert len(final) == 1
     assert final[0]["carbon"] is None
     assert final[0]["report"]  # narration ran
+
+
+@pytest.mark.asyncio
+async def test_live_price_phase_consumes_resolver_output():
+    """The live_price phase routes through retail_pricing_service.lookup, which
+    is now catalog-first: it must surface the resolved/matched SKU and a
+    confidence score for each line item (not a silent cheapest-meter pick)."""
+    from services import cost_pipeline as cp_mod
+    from services import pricing_catalog
+    from services.cost_pipeline import CostLineItem, CostOptimizeRequest
+
+    pricing_catalog.clear_cache()
+    req = CostOptimizeRequest(
+        items=[CostLineItem(service="App Service", sku="P1v4", region="eastus")]
+    )
+    state: dict = {}
+    _ = [ev async for ev in cp_mod._phase_live_price(req, state)]
+
+    lookups = state["live_price"]["lookups"]
+    assert len(lookups) == 1
+    li = lookups[0]
+    # The $9.49/mo Shared App trap must not win; the premium meter resolves.
+    assert li["matched_sku"] == "P1 v4"
+    assert li["monthly_estimate"] > 100
+    assert li["confidence"] >= 0.9
+    assert li["requested_sku"] == "P1v4"

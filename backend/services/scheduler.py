@@ -16,6 +16,7 @@ from services.avm_ingest import run_ingest as avm_run_ingest
 from services.azure_updates_ingest import run_ingest as azure_updates_run_ingest
 from services.demo_ingest import run_ingest as demo_run_ingest
 from services.model_iq_bundle_service import purge_old_bundles
+from services.pricing_ingest import run_ingest as pricing_run_ingest
 from services.refarch_ingest import run_ingest
 from services.tenant_inventory_ingest import (
     ingest_all_active_engagements as tenant_inventory_run_ingest,
@@ -102,6 +103,16 @@ def start_scheduler() -> None:
         trigger=CronTrigger(hour=3, minute=53),
         id="model_iq_bundle_cleanup_daily",
         name="Daily Model IQ bundle cleanup (24h retention)",
+        replace_existing=True,
+        coalesce=True,
+        max_instances=1,
+        misfire_grace_time=3600,
+    )
+    sched.add_job(
+        pricing_run_ingest,
+        trigger=CronTrigger(hour=4, minute=53),
+        id="pricing_ingest_daily",
+        name="Daily Azure Retail pricing catalog ingest",
         replace_existing=True,
         coalesce=True,
         max_instances=1,
