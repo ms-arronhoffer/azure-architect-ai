@@ -393,6 +393,54 @@ export interface RegionAvailability {
   source: string;
 }
 
+// ── Cheaper-equivalent SKU alternatives (suggest_alternatives) ───────────────
+
+export interface CostAlternativeRow {
+  sku: string;
+  requested_sku?: string;
+  region: string;
+  monthly_estimate: number | null;
+  unit_price?: number | null;
+  delta_vs_baseline: number | null;
+  savings_pct: number | null;
+  cheaper: boolean;
+  rule_id?: string;
+  rationale?: string;
+  tradeoff?: string;
+  est_savings_pct?: number | null;
+}
+
+export interface CostAlternatives {
+  service: string;
+  baseline: {
+    sku: string;
+    requested_sku?: string;
+    region: string;
+    monthly_estimate: number | null;
+    unit_price?: number | null;
+  };
+  alternatives: CostAlternativeRow[];
+  alternative_count: number;
+  cheaper_count: number;
+  currency: string;
+  source: string;
+}
+
+// ── Clarifying questions (request_clarification) ─────────────────────────────
+
+export interface ClarificationQuestion {
+  question: string;
+  options?: string[];
+  why_it_matters?: string;
+  allow_free_text?: boolean;
+}
+
+export interface ClarificationRequest {
+  questions: ClarificationQuestion[];
+  known_so_far?: Record<string, unknown>;
+  context?: string;
+}
+
 // ── Monitoring config types ──────────────────────────────────────────────────
 
 export interface AlertRule {
@@ -1013,6 +1061,8 @@ export type StructuredResult =
   | { kind: "dr_strategy"; data: DrStrategy }
   | { kind: "monitoring_config"; data: MonitoringConfig }
   | { kind: "cost_estimate"; data: CostEstimate }
+  | { kind: "cost_alternatives"; data: CostAlternatives }
+  | { kind: "clarification_request"; data: ClarificationRequest }
   | { kind: "learning_plan"; data: LearningPlan }
   | { kind: "network_topology"; data: NetworkTopology }
   | { kind: "landing_zone_design"; data: LandingZoneDesign }
@@ -1276,6 +1326,8 @@ export type SseEvent =
   | { type: "bicep"; code: string; param_file?: string; deploy_commands?: string[]; notes?: string[] }
   | { type: "bicep_preview"; preview: BicepPreview }
   | { type: "cost_estimate"; estimate: CostEstimate }
+  | { type: "cost_alternatives"; alternatives: CostAlternatives }
+  | { type: "clarification_request"; request: ClarificationRequest }
   | { type: "priced_worksheet"; worksheet: PricedWorksheet }
   | { type: "region_availability"; availability: RegionAvailability }
   | { type: "monitoring_config"; config: MonitoringConfig }

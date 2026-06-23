@@ -1194,6 +1194,7 @@ export default function ChatPanel({ mode, conversationId: savedId, initialMessag
             message={msg}
             onFork={msg.role === "assistant" && !msg.isStreaming ? () => onFork?.(messages, index) : undefined}
             onContinueIn={msg.role === "assistant" && !msg.isStreaming ? onContinueIn : undefined}
+            onQuickReply={msg.role === "assistant" && !msg.isStreaming && !isStreaming ? (text) => sendMessage(text) : undefined}
           />
         ))}
       </div>

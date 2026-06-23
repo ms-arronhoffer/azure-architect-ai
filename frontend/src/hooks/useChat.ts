@@ -164,6 +164,10 @@ function _toStructuredResult(event: { type: string; [key: string]: unknown }): S
       return { kind: "monitoring_config", data: event.config as never };
     case "cost_estimate":
       return { kind: "cost_estimate", data: event.estimate as never };
+    case "cost_alternatives":
+      return { kind: "cost_alternatives", data: event.alternatives as never };
+    case "clarification_request":
+      return { kind: "clarification_request", data: event.request as never };
     case "learning_plan":
       return { kind: "learning_plan", data: event.plan as never };
     case "network_topology":

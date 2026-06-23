@@ -296,4 +296,82 @@ TOOLS = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "suggest_alternatives",
+            "description": (
+                "Given ONE priced compute SKU, return functionally-equivalent, typically-cheaper "
+                "alternatives (e.g. Intel D-series -> AMD Das-series), each priced live and ranked "
+                "cheapest-first with the monthly delta vs the baseline and the tradeoff to verify. "
+                "Call this after pricing a VM so the customer sees concrete cheaper options instead of "
+                "a single number. Suggestions are drawn from a grounded equivalence map — if no known "
+                "alternative exists for the SKU the list is empty (do not invent one)."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "service": {"type": "string", "description": "Azure service name, e.g. 'Virtual Machines'."},
+                    "sku": {"type": "string", "description": "Baseline SKU to find alternatives for, e.g. 'D8s_v5'."},
+                    "region": {"type": "string", "description": "Azure region, e.g. 'eastus' (default eastus)."},
+                    "quantity": {"type": "number", "description": "Number of instances (default 1)."},
+                    "hours_per_month": {"type": "number", "description": "Running hours/month (default 730)."},
+                },
+                "required": ["service", "sku"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "request_clarification",
+            "description": (
+                "Ask the user targeted disambiguation questions BEFORE pricing or designing when the "
+                "request is too vague to produce a trustworthy number — e.g. 'a database' without engine "
+                "type, no size/SKU, or no region. Present 1-4 concise questions, each with concrete "
+                "options the user can pick. Do NOT guess defaults for required disambiguators; call this "
+                "instead and wait for the answers. Re-call with only the still-missing questions if the "
+                "user answers partially."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "questions": {
+                        "type": "array",
+                        "description": "The disambiguation questions to ask, most important first.",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "question": {"type": "string", "description": "The question to ask the user."},
+                                "options": {
+                                    "type": "array",
+                                    "items": {"type": "string"},
+                                    "description": "Concrete answer choices the user can pick (quick replies).",
+                                },
+                                "why_it_matters": {
+                                    "type": "string",
+                                    "description": "One sentence on why this changes the price or design.",
+                                },
+                                "allow_free_text": {
+                                    "type": "boolean",
+                                    "description": "Whether the user may answer outside the listed options (default true).",
+                                },
+                            },
+                            "required": ["question"],
+                        },
+                    },
+                    "known_so_far": {
+                        "type": "object",
+                        "description": "The partial spec already understood (service, sku, region, quantity, etc.) so it is carried forward.",
+                        "additionalProperties": True,
+                    },
+                    "context": {
+                        "type": "string",
+                        "description": "Optional one-line framing shown above the questions.",
+                    },
+                },
+                "required": ["questions"],
+            },
+        },
+    },
 ]

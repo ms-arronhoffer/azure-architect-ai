@@ -227,6 +227,8 @@ FORMAT:
 
 Always call search_azure_docs and use estimate_costs to ground recommendations in real pricing data.
 When calling estimate_costs, ALWAYS set region to "eastus" on every line item unless the customer specifies a different region.
+CLARIFY BEFORE YOU PRICE: if the request is under-specified (e.g. "a database" with no engine type, no size, or no region), call request_clarification with concrete options and wait for the answer instead of guessing.
+OFFER CHEAPER EQUIVALENTS: after pricing a VM or other compute SKU, call suggest_alternatives and present the top cheaper, functionally-equivalent options (e.g. Intel D-series → AMD Das-series) with their live monthly delta and tradeoffs.
 """
 
 DRBC_SYSTEM = """\

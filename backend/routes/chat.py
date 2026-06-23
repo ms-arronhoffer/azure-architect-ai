@@ -548,13 +548,43 @@ async def _dispatch_tool(name: str, args: dict) -> tuple[object, dict | None]:
                 currency=args.get("currency", "USD") or "USD",
             )
             event = {"type": "region_availability", "availability": result}
+        except Exception as e:
+            return {"status": "error", "message": str(e)}, None
+
+    if name == "suggest_alternatives":
+        from services import sku_alternatives_service
+        try:
+            result = await sku_alternatives_service.suggest(
+                service=args.get("service", ""),
+                sku=args.get("sku", ""),
+                region=args.get("region", "eastus") or "eastus",
+                quantity=float(args.get("quantity", 1)),
+                hours_per_month=float(args.get("hours_per_month", 730.0)),
+            )
+            event = {"type": "cost_alternatives", "alternatives": result}
             return {
-                "status": "region_availability_resolved",
-                "cheapest_region": result.get("cheapest_region"),
-                "available_count": result.get("available_count"),
+                "status": "alternatives_suggested",
+                "alternative_count": result.get("alternative_count"),
+                "cheaper_count": result.get("cheaper_count"),
             }, event
         except Exception as e:
             return {"status": "error", "message": str(e)}, None
+
+    if name == "request_clarification":
+        questions = args.get("questions", []) or []
+        event = {
+            "type": "clarification_request",
+            "request": {
+                "questions": questions,
+                "known_so_far": args.get("known_so_far", {}) or {},
+                "context": args.get("context", ""),
+            },
+        }
+        return {
+            "status": "clarification_requested",
+            "question_count": len(questions),
+            "note": "Awaiting the user's answers; do not price or design until they reply.",
+        }, event
 
     if name == "check_quota_alternatives":
         from services import engagement_context as _ec

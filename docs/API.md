@@ -42,6 +42,8 @@ SSE event kinds emitted:
 | `region_comparison` | region comparison table | from `compare_regions` |
 | `compliance_result` | control mappings | from `map_compliance` |
 | `cost_estimate` | cost table + monthly total | from `estimate_costs` |
+| `cost_alternatives` | baseline + cheaper equivalent SKUs (e.g. Intel→AMD), priced live | from `suggest_alternatives` |
+| `clarification_request` | disambiguation questions with quick-reply options | from `request_clarification` |
 | `tco_report` | 3-year TCO | from `generate_tco_report` |
 | `decision_card` | summary card | from `recommend_service` |
 | `dr_strategy` | RTO/RPO + plan | from `design_dr_strategy` |

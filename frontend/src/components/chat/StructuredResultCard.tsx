@@ -34,6 +34,7 @@ import type {
   TerraformFilesResult, ArmFilesResult, CicdFilesResult,
   CostAlertsResult, SecurityPostureResult, MulticloudComparisonResult,
   ArbSubmissionProposal, ArbConditionActionPayload, ArbStatusTransitionProposal,
+  CostAlternatives, ClarificationRequest,
 } from "../../types";
 
 const useCardStyles = makeStyles({
@@ -82,8 +83,16 @@ const useCardStyles = makeStyles({
   tip: { fontSize: "12px", color: tokens.colorNeutralForeground3, marginTop: "8px", display: "block" },
 });
 
-export default function StructuredResultCard({ result, onContinueIn }: { result: StructuredResult; onContinueIn?: (mode: Mode, seed: string) => void }) {
+export default function StructuredResultCard({ result, onContinueIn, onQuickReply }: { result: StructuredResult; onContinueIn?: (mode: Mode, seed: string) => void; onQuickReply?: (text: string) => void }) {
   const styles = useCardStyles();
+
+  if (result.kind === "cost_alternatives") {
+    return <CostAlternativesCard data={result.data} />;
+  }
+
+  if (result.kind === "clarification_request") {
+    return <ClarificationRequestCard data={result.data} onQuickReply={onQuickReply} />;
+  }
 
   if (result.kind === "cost_estimate") {
     const { data } = result;
@@ -647,6 +656,116 @@ export default function StructuredResultCard({ result, onContinueIn }: { result:
   if (result.kind === "arb_status_transition") return <ArbStatusTransitionCard data={result.data} />;
 
   return null;
+}
+
+function CostAlternativesCard({ data }: { data: CostAlternatives }) {
+  const styles = useCardStyles();
+  const baselineMonthly = data.baseline.monthly_estimate;
+  const fmt = (n: number | null | undefined) =>
+    n == null ? "—" : `$${n.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
+
+  return (
+    <div className={styles.card}>
+      <div className={styles.cardTitle}>
+        <div className={styles.cardTitleBadges}>
+          <Badge appearance="tint" color="success">Cheaper Alternatives</Badge>
+          <Text size={200} weight="semibold">
+            {data.baseline.sku} · {fmt(baselineMonthly)}/mo baseline
+          </Text>
+        </div>
+      </div>
+      {data.alternatives.length === 0 ? (
+        <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
+          No known functionally-equivalent alternatives for this SKU.
+        </Text>
+      ) : (
+        <Table size="small" className={styles.cardTable}>
+          <TableHeader>
+            <TableRow>
+              <TableHeaderCell>Alternative</TableHeaderCell>
+              <TableHeaderCell>$/mo</TableHeaderCell>
+              <TableHeaderCell>Savings</TableHeaderCell>
+              <TableHeaderCell>Tradeoff</TableHeaderCell>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {data.alternatives.map((alt, i) => (
+              <TableRow key={i} className={i % 2 === 0 ? styles.tableRowEven : styles.tableRowOdd}>
+                <TableCell>
+                  <Text size={200} weight="semibold">{alt.sku}</Text>
+                  {alt.rationale && (
+                    <Text size={100} style={{ display: "block", color: tokens.colorNeutralForeground3 }}>
+                      {alt.rationale}
+                    </Text>
+                  )}
+                </TableCell>
+                <TableCell>{fmt(alt.monthly_estimate)}</TableCell>
+                <TableCell>
+                  {alt.savings_pct != null ? (
+                    <Text size={200} style={{ color: alt.cheaper ? tokens.colorPaletteGreenForeground1 : tokens.colorNeutralForeground3 }}>
+                      {alt.cheaper ? `−${alt.savings_pct}%` : `+${Math.abs(alt.savings_pct)}%`}
+                      {alt.delta_vs_baseline != null && ` (${alt.delta_vs_baseline < 0 ? "−" : "+"}${fmt(Math.abs(alt.delta_vs_baseline))})`}
+                    </Text>
+                  ) : "—"}
+                </TableCell>
+                <TableCell><Text size={100}>{alt.tradeoff || "—"}</Text></TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      )}
+      <Text className={styles.tip}>
+        Prices are live Azure retail estimates ({data.source}). Verify the noted tradeoffs before switching.
+      </Text>
+    </div>
+  );
+}
+
+function ClarificationRequestCard({ data, onQuickReply }: { data: ClarificationRequest; onQuickReply?: (text: string) => void }) {
+  const styles = useCardStyles();
+  return (
+    <div className={styles.card}>
+      <div className={styles.cardTitle}>
+        <div className={styles.cardTitleBadges}>
+          <Badge appearance="tint" color="brand">A few quick questions</Badge>
+        </div>
+      </div>
+      {data.context && (
+        <Text size={200} style={{ display: "block", marginBottom: "10px", color: tokens.colorNeutralForeground2 }}>
+          {data.context}
+        </Text>
+      )}
+      <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+        {data.questions.map((q, qi) => (
+          <div key={qi}>
+            <Text size={300} weight="semibold" style={{ display: "block" }}>{q.question}</Text>
+            {q.why_it_matters && (
+              <Text size={100} style={{ display: "block", color: tokens.colorNeutralForeground3, marginBottom: "6px" }}>
+                {q.why_it_matters}
+              </Text>
+            )}
+            {(q.options?.length ?? 0) > 0 && (
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", marginTop: "4px" }}>
+                {(q.options ?? []).map((opt, oi) => (
+                  <Button
+                    key={oi}
+                    size="small"
+                    appearance="outline"
+                    disabled={!onQuickReply}
+                    onClick={() => onQuickReply?.(`${q.question} ${opt}`)}
+                    style={{ maxWidth: "100%", height: "auto", padding: "4px 10px", whiteSpace: "normal", textAlign: "left" }}
+                  >
+                    {opt}
+                  </Button>
+                ))}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+      <Text className={styles.tip}>Pick an option or just type your answer below.</Text>
+    </div>
+  );
 }
 
 function ServiceComparisonCard({ data }: { data: ServiceComparison }) {
