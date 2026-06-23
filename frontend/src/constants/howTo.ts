@@ -269,15 +269,16 @@ export const HOW_TO: Partial<Record<Mode, HowToEntry>> = {
   "cost-optimize": {
     label: "Cost Optimize",
     whatItDoes:
-      "Deterministic 7-phase cost pipeline: ingest → enrich → reservations → right-sizing → carbon → narrative → report. Streams progress per phase.",
+      "Structured Azure pricing calculator: pick service, region, SKU and buying option (reserved, savings plan, spot, dev/test, hybrid benefit) from dropdowns and see a live itemized cost grid with monthly/annual totals and savings vs pay-as-you-go. A separate 'Full optimization analysis' runs the deterministic 7-phase pipeline (live pricing → carbon → reservations → rightsizing → break-even → narrated report).",
     howToUse: [
-      "Provide a cost estimate (paste, upload, or pull from a saved design).",
-      "Run the pipeline; each phase shows progress + intermediate results.",
+      "Add resources and configure each from the dropdowns; the cost grid recalculates instantly.",
+      "Switch region, currency or buying option to compare; export the breakdown as CSV.",
+      "Optionally run the full optimization for carbon, rightsizing and break-even analysis.",
     ],
     outputs: [
-      "Optimized cost estimate with RI adjustments and right-sized SKUs.",
-      "Narrated report explaining each recommendation.",
-      "Carbon delta (current vs optimized).",
+      "Itemized cost estimate with per-line and total monthly/annual figures and savings vs PAYG.",
+      "CSV export of the cost breakdown.",
+      "Narrated optimization report with RI/right-sizing recommendations and carbon delta.",
     ],
   },
   strategy: {
