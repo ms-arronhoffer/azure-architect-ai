@@ -96,7 +96,7 @@ def _normalize_sku(sku: str) -> str:
     # but ARM / diagram inputs usually omit it ("P1v3"). Without this the SKU
     # filter matches nothing and the lookup retries unfiltered, collapsing to the
     # cheapest "Shared App" meter (~$0.01/hr).
-    m = re.fullmatch(r"([a-z]+\d+m?)(v\d+)", lower)
+    m = re.fullmatch(r"([a-z]\d+m?)(v\d+)", lower)
     if m:
         return f"{m.group(1)} {m.group(2)}"
     return sku
