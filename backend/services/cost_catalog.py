@@ -75,6 +75,7 @@ def list_services() -> list[dict[str, Any]]:
                 "key": svc["key"],
                 "display": svc["display"],
                 "family": svc["family"],
+                "retail_service_name": svc.get("retail_service_name", svc["display"]),
                 "unit": svc["unit"],
                 "quantity_label": svc.get("quantity_label"),
                 "usage_label": svc.get("usage_label"),
@@ -208,11 +209,10 @@ def price_line_item(
     qty = max(float(quantity), 0.0)
     hours = max(float(hours_per_month), 0.0)
 
-    # Monthly quantity multiplier per billing unit.
-    if unit == "hour":
-        units = qty * hours
-    else:  # month, gb_month, per_1k → quantity already expresses the monthly amount
-        units = qty
+    # Monthly quantity multiplier per billing unit. For hourly billing the
+    # monthly amount is qty * hours; for month/gb_month/per_1k the quantity
+    # already expresses the monthly amount.
+    units = qty * hours if unit == "hour" else qty
 
     payg_monthly = base_unit_price * units
 

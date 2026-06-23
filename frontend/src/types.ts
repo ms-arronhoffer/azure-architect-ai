@@ -1263,6 +1263,116 @@ export type ContinueInSeed =
 
 // ── Cost optimization pipeline ───────────────────────────────────────────────
 
+// ── Cost calculator (cached catalog) ─────────────────────────────────────────
+
+export interface CatalogService {
+  key: string;
+  display: string;
+  family: string;
+  retail_service_name: string;
+  unit: "hour" | "month" | "gb_month" | "per_1k";
+  quantity_label: string | null;
+  usage_label: string | null;
+  default_hours: number;
+  default_quantity: number;
+  eligible_options: string[];
+  hybrid_benefit: string | null;
+  sku_count: number;
+}
+
+export interface CatalogRegion {
+  slug: string;
+  display: string;
+  price_multiplier: number;
+}
+
+export interface CatalogCurrency {
+  code: string;
+  symbol: string;
+  rate: number;
+}
+
+export interface CatalogBuyingOption {
+  key: string;
+  label: string;
+  term_years: number;
+  description: string;
+  commitment: boolean;
+  upfront: boolean;
+}
+
+export interface CostCatalog {
+  services: CatalogService[];
+  regions: CatalogRegion[];
+  currencies: CatalogCurrency[];
+  buying_options: CatalogBuyingOption[];
+  meta: { generated_at: string; source: string; currency: string };
+}
+
+export interface CatalogSku {
+  name: string;
+  display: string;
+  unit_price: number;
+  base_unit_price?: number;
+  vcpu?: number;
+  ram_gb?: number;
+  os?: string;
+}
+
+export interface SkuListResponse {
+  service: string;
+  region: string;
+  unit: CatalogService["unit"];
+  quantity_label: string | null;
+  usage_label: string | null;
+  default_hours: number;
+  default_quantity: number;
+  eligible_options: string[];
+  hybrid_benefit: string | null;
+  skus: CatalogSku[];
+}
+
+export interface CalculatorEstimateLine {
+  service_key: string;
+  service?: string;
+  family?: string;
+  sku: string;
+  sku_display?: string;
+  region: string;
+  unit?: string;
+  unit_of_measure?: string;
+  unit_price?: number;
+  quantity?: number;
+  hours_per_month?: number | null;
+  buying_option?: string;
+  option_downgraded?: boolean;
+  hybrid_benefit_applied?: boolean;
+  discount_fraction?: number;
+  currency?: string;
+  currency_symbol?: string;
+  payg_monthly?: number;
+  monthly_cost: number | null;
+  annual_cost?: number;
+  monthly_savings_vs_payg?: number;
+  status: "ok" | "unknown";
+  note?: string;
+}
+
+export interface CalculatorEstimate {
+  line_items: CalculatorEstimateLine[];
+  currency: string;
+  currency_symbol: string;
+  total_monthly: number;
+  total_annual: number;
+  total_payg_monthly: number;
+  total_monthly_savings: number;
+  savings_pct: number;
+  priced_count: number;
+  unpriced_count: number;
+  source: string;
+  generated_at: string;
+}
+
 export interface CostOptimization {
   type: "cost_optimization";
   generated_at: string;

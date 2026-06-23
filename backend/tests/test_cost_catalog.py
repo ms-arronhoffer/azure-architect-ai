@@ -15,7 +15,6 @@ from fastapi import Request
 
 from services import cost_catalog
 
-
 # ── Service-level math ───────────────────────────────────────────────────────
 
 
@@ -25,7 +24,7 @@ def test_catalog_loads_and_has_core_shape():
     # Every buying option referenced by the discount table is a real option.
     option_keys = {o["key"] for o in cat["buying_options"]}
     assert "payg" in option_keys
-    for fam, table in cat["discounts"].items():
+    for _fam, table in cat["discounts"].items():
         for opt in table:
             assert opt in option_keys, f"discount references unknown option {opt}"
 
