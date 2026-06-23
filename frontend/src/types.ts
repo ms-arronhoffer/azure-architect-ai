@@ -329,6 +329,20 @@ export interface PricedMeter {
   priced?: boolean;
   source?: string;
   note?: string;
+  confidence?: number;
+  confidence_label?: "high" | "medium" | "low" | "none";
+  citation?: {
+    meter_id?: string | null;
+    meter_name?: string | null;
+    sku_name?: string | null;
+    product_name?: string | null;
+    region?: string;
+    unit_price?: number | null;
+    unit_of_measure?: string | null;
+    currency?: string;
+    retrieved_at?: string;
+    source?: string;
+  };
 }
 
 export interface PricedLine {
@@ -338,11 +352,17 @@ export interface PricedLine {
   sku?: string;
   region?: string;
   catalog_matched?: boolean;
+  discovered?: boolean;
   ri_eligible?: boolean;
   tags?: string[];
   meters: PricedMeter[];
   monthly_subtotal: number;
   currency: string;
+  confidence?: number;
+  confidence_label?: "high" | "medium" | "low" | "none";
+  assumptions?: string[];
+  note?: string;
+  source?: string;
   // Present when an engagement reservation was applied.
   original_monthly_estimate?: number;
   reservation_applied?: {
@@ -353,14 +373,34 @@ export interface PricedLine {
   };
 }
 
+// Accounts for every node extracted from the architecture: priced, free, or
+// unpriced-with-reason — so the user can trust the total is whole.
+export interface CompletenessReport {
+  components_found: number;
+  priceable: number;
+  priced: number;
+  not_billable: Array<{ name: string; reason: string }>;
+  unknown: Array<{ name: string; reason: string }>;
+  unpriced: Array<{ name: string; reason: string }>;
+  fully_accounted: boolean;
+}
+
 export interface PricedWorksheet {
   line_items: PricedLine[];
   total_monthly_estimate: number;
   currency: string;
-  summary?: { total_lines: number; catalog_matched: number; unpriced_meters: number };
+  summary?: {
+    total_lines: number;
+    catalog_matched: number;
+    unpriced_meters: number;
+    discovered?: number;
+    low_confidence_lines?: number;
+  };
   data_source?: string;
   disclaimer?: string;
   optimization_tips?: string[];
+  completeness?: CompletenessReport;
+  extraction?: { source: string; component_count: number; notes?: string[] };
   reservation_adjustments?: Array<{
     service: string;
     sku: string;

@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { Panel, Group as PanelGroup, Separator as PanelResizeHandle } from "react-resizable-panels";
 import {
   makeStyles,
@@ -17,13 +17,19 @@ import {
   TableBody,
   TableCell,
   Tooltip,
+  Spinner,
+  MessageBar,
+  MessageBarBody,
 } from "@fluentui/react-components";
 import {
   ArrowDownloadRegular,
+  ArrowUploadRegular,
   MoneyRegular,
   LightbulbRegular,
   GlobeRegular,
   TableSimpleRegular,
+  CheckmarkCircleRegular,
+  WarningRegular,
 } from "@fluentui/react-icons";
 import ChatPanel from "./ChatPanel";
 import type {
@@ -31,9 +37,12 @@ import type {
   ChatMessage,
   WorkloadContext,
   PricedWorksheet,
+  PricedLine,
   RegionAvailability,
+  SseEvent,
 } from "../types";
 import { exportWorksheetToXlsx } from "../utils/pricingExport";
+import { useSSE } from "../hooks/useSSE";
 
 const useStyles = makeStyles({
   rightPane: {
@@ -106,6 +115,20 @@ const useStyles = makeStyles({
   numeric: { fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" },
   regionRow: { display: "flex", alignItems: "center", gap: tokens.spacingHorizontalS },
   strike: { textDecoration: "line-through", color: tokens.colorNeutralForeground3 },
+  assumptions: {
+    margin: 0,
+    paddingLeft: tokens.spacingHorizontalL,
+    color: tokens.colorNeutralForeground3,
+  },
+  completenessRow: {
+    display: "flex",
+    alignItems: "flex-start",
+    gap: tokens.spacingHorizontalS,
+    padding: `${tokens.spacingVerticalXXS} 0`,
+  },
+  headerActions: { display: "flex", alignItems: "center", gap: tokens.spacingHorizontalS },
+  hiddenInput: { display: "none" },
+  citation: { color: tokens.colorNeutralForeground3 },
 });
 
 interface PricingDeskPanelProps {
@@ -125,6 +148,23 @@ function fmtUnit(v: number | null | undefined): string {
   return v.toLocaleString(undefined, { maximumFractionDigits: 4 });
 }
 
+type BadgeColor = "success" | "warning" | "danger" | "informative";
+
+function confidenceColor(label?: string): BadgeColor {
+  if (label === "high") return "success";
+  if (label === "medium") return "informative";
+  if (label === "low") return "warning";
+  return "danger";
+}
+
+function lineCitation(line: PricedLine): string | null {
+  const cited = line.meters?.find((m) => m.citation?.meter_id || m.meter_id);
+  if (!cited) return null;
+  const c = cited.citation;
+  const parts = [c?.meter_name || cited.meter_name, c?.sku_name, c?.region].filter(Boolean);
+  return parts.length ? `Azure Retail meter: ${parts.join(" · ")}` : null;
+}
+
 export default function PricingDeskPanel({
   workloadContext,
   onSave,
@@ -137,6 +177,61 @@ export default function PricingDeskPanel({
   // A "pending send" pushed into the chat when a user clicks a recommendation
   // or a cheaper-region chip, so iteration loops back through the agent.
   const [pendingSend, setPendingSend] = useState<{ content: string; nonce: number } | null>(null);
+
+  // Price-a-drawing: stream the unified /cost/price-architecture endpoint with
+  // an uploaded image / draw.io XML / text file straight into the worksheet.
+  const { stream, isStreaming } = useSSE();
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [streamError, setStreamError] = useState<string | null>(null);
+  const [statusMsg, setStatusMsg] = useState<string | null>(null);
+
+  const handleStreamEvent = useCallback((event: SseEvent) => {
+    if (event.type === "priced_worksheet") {
+      setWorksheet(event.worksheet);
+      setStatusMsg(null);
+    } else if (event.type === "status") {
+      setStatusMsg(event.message);
+    } else if (event.type === "error") {
+      setStreamError(event.message);
+      setStatusMsg(null);
+    }
+  }, []);
+
+  const priceFile = useCallback(
+    async (file: File) => {
+      setStreamError(null);
+      setStatusMsg("Reading the architecture…");
+      try {
+        if (file.type.startsWith("image/")) {
+          const dataUrl = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(String(reader.result));
+            reader.onerror = () => reject(new Error("Could not read the image file."));
+            reader.readAsDataURL(file);
+          });
+          await stream("/cost/price-architecture", { image_data_url: dataUrl }, handleStreamEvent);
+        } else {
+          const text = await file.text();
+          const isDrawio = text.includes("<mxfile") || text.includes("<mxGraphModel");
+          const body = isDrawio ? { drawio_xml: text } : { text };
+          await stream("/cost/price-architecture", body, handleStreamEvent);
+        }
+      } catch (err) {
+        setStreamError(err instanceof Error ? err.message : "Failed to price the drawing.");
+        setStatusMsg(null);
+      }
+    },
+    [stream, handleStreamEvent],
+  );
+
+  const onFilePicked = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      e.target.value = ""; // allow re-uploading the same file
+      if (file) void priceFile(file);
+    },
+    [priceFile],
+  );
 
   const handlePanelEvent = useCallback((event: { type: string; [key: string]: unknown }) => {
     if (event.type === "priced_worksheet") {
@@ -160,6 +255,40 @@ export default function PricingDeskPanel({
   const exportDisabled = !hasWorksheet;
 
   const rightPane = useMemo(() => {
+    const uploadBar = (
+      <>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/png,image/jpeg,image/webp,.xml,.drawio,.txt,.md"
+          className={styles.hiddenInput}
+          onChange={onFilePicked}
+        />
+        <Button
+          appearance="secondary"
+          icon={isStreaming ? <Spinner size="tiny" /> : <ArrowUploadRegular />}
+          disabled={isStreaming}
+          onClick={() => fileInputRef.current?.click()}
+        >
+          {isStreaming ? "Pricing…" : "Price a drawing"}
+        </Button>
+      </>
+    );
+    const banners = (
+      <>
+        {statusMsg && (
+          <MessageBar intent="info">
+            <MessageBarBody>{statusMsg}</MessageBarBody>
+          </MessageBar>
+        )}
+        {streamError && (
+          <MessageBar intent="error">
+            <MessageBarBody>{streamError}</MessageBarBody>
+          </MessageBar>
+        )}
+      </>
+    );
+
     if (!hasWorksheet && !availability) {
       return (
         <div className={styles.empty}>
@@ -170,9 +299,12 @@ export default function PricingDeskPanel({
             <br />“Price 3× D8s_v5 in West Europe and 5 TB of hot blob storage.”
           </Text>
           <Text size={200}>
-            The live worksheet builds here as you iterate. Ask for cheaper regions or
-            reservations and the numbers update.
+            Or drop in an architecture: upload a diagram image or a draw.io file and
+            every priceable node is enumerated, defaulted, and costed — with assumptions,
+            confidence, and a completeness report.
           </Text>
+          {uploadBar}
+          {banners}
         </div>
       );
     }
@@ -183,16 +315,20 @@ export default function PricingDeskPanel({
             <TableSimpleRegular />
             <Subtitle2>Pricing Worksheet</Subtitle2>
           </div>
-          <Button
-            appearance="primary"
-            icon={<ArrowDownloadRegular />}
-            disabled={exportDisabled}
-            onClick={() => worksheet && exportWorksheetToXlsx(worksheet)}
-          >
-            Export to Excel
-          </Button>
+          <div className={styles.headerActions}>
+            {uploadBar}
+            <Button
+              appearance="primary"
+              icon={<ArrowDownloadRegular />}
+              disabled={exportDisabled}
+              onClick={() => worksheet && exportWorksheetToXlsx(worksheet)}
+            >
+              Export to Excel
+            </Button>
+          </div>
         </div>
 
+        {banners}
         {hasWorksheet && worksheet && (
           <>
             <div className={styles.totalCard}>
@@ -217,6 +353,55 @@ export default function PricingDeskPanel({
               )}
             </div>
 
+            {worksheet.completeness && (
+              <div className={styles.section}>
+                <div className={styles.sectionTitle}>
+                  {worksheet.completeness.fully_accounted ? (
+                    <CheckmarkCircleRegular />
+                  ) : (
+                    <WarningRegular />
+                  )}
+                  <Subtitle2>Coverage</Subtitle2>
+                </div>
+                <Caption1>
+                  {worksheet.completeness.priced} of {worksheet.completeness.priceable} priceable
+                  component(s) priced · {worksheet.extraction?.component_count ??
+                    worksheet.completeness.components_found}{" "}
+                  found{worksheet.extraction?.source ? ` (${worksheet.extraction.source})` : ""}.
+                </Caption1>
+                {worksheet.completeness.not_billable.map((nb, i) => (
+                  <div className={styles.completenessRow} key={`nb-${i}`}>
+                    <Badge appearance="tint" color="informative" size="small">
+                      not billable
+                    </Badge>
+                    <Caption1>
+                      {nb.name} — {nb.reason}
+                    </Caption1>
+                  </div>
+                ))}
+                {worksheet.completeness.unpriced.map((up, i) => (
+                  <div className={styles.completenessRow} key={`up-${i}`}>
+                    <Badge appearance="tint" color="warning" size="small">
+                      unpriced
+                    </Badge>
+                    <Caption1>
+                      {up.name} — {up.reason}
+                    </Caption1>
+                  </div>
+                ))}
+                {worksheet.completeness.unknown.map((uk, i) => (
+                  <div className={styles.completenessRow} key={`uk-${i}`}>
+                    <Badge appearance="tint" color="danger" size="small">
+                      unrecognized
+                    </Badge>
+                    <Caption1>
+                      {uk.name} — {uk.reason}
+                    </Caption1>
+                  </div>
+                ))}
+              </div>
+            )}
+
             {worksheet.line_items.map((line, li) => (
               <div className={styles.section} key={`${line.service}-${line.sku ?? ""}-${li}`}>
                 <div className={styles.lineHeader}>
@@ -224,9 +409,32 @@ export default function PricingDeskPanel({
                     <Text weight="semibold">{line.display_name || line.service}</Text>
                     {line.sku && <Tag size="extra-small">{line.sku}</Tag>}
                     {line.region && <Tag size="extra-small" appearance="outline">{line.region}</Tag>}
+                    {line.confidence_label && (
+                      <Tooltip
+                        content={lineCitation(line) || "Match confidence against the Azure Retail catalog"}
+                        relationship="label"
+                      >
+                        <Badge
+                          appearance="tint"
+                          color={confidenceColor(line.confidence_label)}
+                          size="small"
+                        >
+                          {line.confidence_label} confidence
+                        </Badge>
+                      </Tooltip>
+                    )}
                     {!line.catalog_matched && (
-                      <Tooltip content="Priced via single-meter live lookup (not in the meter catalog)" relationship="label">
-                        <Badge appearance="outline" color="warning" size="small">estimate</Badge>
+                      <Tooltip
+                        content={
+                          line.discovered
+                            ? "Priced via dynamic meter discovery from the live Retail API"
+                            : "Priced via single-meter live lookup (not in the meter catalog)"
+                        }
+                        relationship="label"
+                      >
+                        <Badge appearance="outline" color="warning" size="small">
+                          {line.discovered ? "discovered" : "estimate"}
+                        </Badge>
                       </Tooltip>
                     )}
                   </div>
@@ -281,6 +489,18 @@ export default function PricingDeskPanel({
                     ))}
                   </TableBody>
                 </Table>
+                {line.assumptions && line.assumptions.length > 0 && (
+                  <ul className={styles.assumptions}>
+                    {line.assumptions.map((a, ai) => (
+                      <li key={ai}>
+                        <Caption1>assumption: {a}</Caption1>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {lineCitation(line) && (
+                  <Caption1 className={styles.citation}>{lineCitation(line)}</Caption1>
+                )}
                 {line.sku && (
                   <Button
                     size="small"
@@ -384,7 +604,7 @@ export default function PricingDeskPanel({
         )}
       </div>
     );
-  }, [styles, hasWorksheet, worksheet, availability, currency, tips, reservationSavings, exportDisabled, seed]);
+  }, [styles, hasWorksheet, worksheet, availability, currency, tips, reservationSavings, exportDisabled, seed, isStreaming, statusMsg, streamError, onFilePicked]);
 
   return (
     <PanelGroup orientation="horizontal" style={{ height: "100%", width: "100%" }}>

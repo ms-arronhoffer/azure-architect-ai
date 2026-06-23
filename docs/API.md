@@ -221,6 +221,19 @@ Body: budget spec → returns generated Bicep.
 ### `GET /api/cost/anomaly-kql`
 Returns KQL queries to detect spend anomalies.
 
+### `POST /api/cost/price-architecture`
+Body: one of `text`, `drawio_xml`, `diagram`, `image_data_url`, `attachments`, or
+`line_items`. Extracts every component from an architecture drawing or
+description, prices each across all of its billing meters (catalog + dynamic
+meter discovery), applies engagement reservation/hybrid-benefit discounts, and
+streams a single `priced_worksheet` SSE with per-line assumptions, confidence,
+citations, and a completeness report. See
+[`ARCHITECTURE_PRICING.md`](./ARCHITECTURE_PRICING.md).
+
+### `POST /api/cost/worksheet/export`
+Body: a `priced_worksheet` → returns a CSV (one row per meter with citation,
+confidence, and assumptions, plus a TOTAL row).
+
 Source: `backend/routes/cost.py`. Backed by `services/cost_service.py` and `services/cost_anomaly_service.py`.
 
 ## Security posture
