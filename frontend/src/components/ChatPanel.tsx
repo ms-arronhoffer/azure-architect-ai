@@ -1027,10 +1027,11 @@ interface ChatPanelProps {
   onBuildDeck?: (conversationText: string) => void;
   onContinueIn?: (mode: Mode, seed: string) => void;
   onDiagram?: (xml: string) => void;
+  onPanelEvent?: (event: { type: string; [key: string]: unknown }) => void;
   pendingSend?: { content: string; nonce: number };
 }
 
-export default function ChatPanel({ mode, conversationId: savedId, initialMessages, suggestedReplies, modelConfig, workloadContext, onOpenContext, onFork, onSave, onBuildDeck, onContinueIn, onDiagram, pendingSend }: ChatPanelProps) {
+export default function ChatPanel({ mode, conversationId: savedId, initialMessages, suggestedReplies, modelConfig, workloadContext, onOpenContext, onFork, onSave, onBuildDeck, onContinueIn, onDiagram, onPanelEvent, pendingSend }: ChatPanelProps) {
   const styles = useStyles();
   const convId = useRef(savedId ?? crypto.randomUUID()).current;
   const subtopics = GROUP_SUBTOPICS[mode];
@@ -1044,6 +1045,7 @@ export default function ChatPanel({ mode, conversationId: savedId, initialMessag
     initialMessages,
     modelConfig,
     onDiagram,
+    onPanelEvent,
   );
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);

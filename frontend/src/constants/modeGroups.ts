@@ -48,7 +48,7 @@ export const DATA_DESK_MODES: Mode[] = [
 export const PANEL_MODES: Mode[] = [
   ...ARCH_MODES, "waf", "review", "drbc", "threatmodel", "reliability",
   "landingzone", "troubleshoot", "strategy", "pipelineforge", "runbookstudio",
-  "namingstandards", "cost-optimize", "demo-build",
+  "namingstandards", "cost-optimize", "demo-build", "pricing-desk",
 ];
 
 // ── Unified 5-agent surface ────────────────────────────────────────────────
