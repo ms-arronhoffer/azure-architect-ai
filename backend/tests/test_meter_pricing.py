@@ -138,6 +138,26 @@ async def test_multiply_hours_for_cosmos_ru(fake_retail):
 
 
 @pytest.mark.asyncio
+async def test_redis_prices_via_meter_from_item(fake_retail):
+    """Redis publishes the cache size in meterName (e.g. "C1 Cache") while
+    skuName is only the tier — `meter_from_item` must route the SKU to the
+    meterName filter so the cache instance gets priced."""
+    from services import meter_pricing_service as mp
+
+    # The fake keys on meter_name: item sku "C1" must drive the lookup.
+    fake_retail["C1"] = [
+        {"skuName": "Standard", "meterName": "C1 Cache", "productName": "Azure Cache for Redis Standard",
+         "retailPrice": 0.082, "unitOfMeasure": "1 Hour", "meterId": "redis-c1", "currencyCode": "USD"}
+    ]
+    item = {"service": "Azure Cache for Redis", "sku": "C1", "quantity": 1, "hours_per_month": 730}
+    line = await mp.price_line_item(item)
+    compute = next(m for m in line["meters"] if m["dimension"] == "compute")
+    assert compute["priced"] is True
+    assert compute["monthly_cost"] == pytest.approx(round(0.082 * 730, 2))
+    assert line["monthly_subtotal"] == pytest.approx(round(0.082 * 730, 2))
+
+
+@pytest.mark.asyncio
 async def test_unknown_meter_degrades_not_raises(fake_retail):
     from services import meter_pricing_service as mp
 

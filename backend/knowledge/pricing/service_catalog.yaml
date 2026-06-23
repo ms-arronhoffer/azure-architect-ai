@@ -29,6 +29,9 @@
 #     required         A core meter (always priced); optional meters price only when >0
 #     meter_match      Retail API record disambiguation:
 #       sku_from_item    Use the line item `sku` as a skuName `contains` filter
+#       meter_from_item  Use the line item `sku` as a meterName `contains` filter
+#                        (for services whose SKU lives in meterName, e.g. Redis
+#                        cache size "C1 Cache" while skuName is only the tier)
 #       sku_contains     Literal skuName `contains` filter
 #       meter_contains   meterName `contains` filter
 #       product_contains productName `contains` filter
@@ -179,7 +182,7 @@ services:
         default_quantity: 730
         required: true
         meter_match:
-          sku_from_item: true
+          meter_from_item: true
           unit_contains: Hour
 
   # ── Data ─────────────────────────────────────────────────────────────────
