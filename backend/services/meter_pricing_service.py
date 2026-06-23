@@ -155,6 +155,12 @@ async def _price_dimension(
     billable = max(0.0, qty - included)
     match = dim.get("meter_match", {}) or {}
     sku = item.get("sku", "") if match.get("sku_from_item") else match.get("sku_contains", "")
+    # Some services (e.g. Azure Cache for Redis) publish the user-facing SKU in the
+    # meterName (e.g. "C1 Cache") while skuName carries only the tier ("Standard").
+    # `meter_from_item` routes the line item SKU to the meterName filter instead.
+    meter_name = match.get("meter_contains", "") or ""
+    if match.get("meter_from_item"):
+        meter_name = item.get("sku", "") or meter_name
 
     row: dict[str, Any] = {
         "dimension": dim.get("key"),
@@ -179,7 +185,7 @@ async def _price_dimension(
             sku_name=sku or "",
             region=region,
             currency=currency,
-            meter_name=match.get("meter_contains", "") or "",
+            meter_name=meter_name,
             product_name=match.get("product_contains", "") or "",
             unit_of_measure=match.get("unit_contains", "") or "",
         )

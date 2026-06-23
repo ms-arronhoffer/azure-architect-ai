@@ -1028,10 +1028,11 @@ interface ChatPanelProps {
   onContinueIn?: (mode: Mode, seed: string) => void;
   onDiagram?: (xml: string) => void;
   onPanelEvent?: (event: { type: string; [key: string]: unknown }) => void;
+  onClear?: () => void;
   pendingSend?: { content: string; nonce: number };
 }
 
-export default function ChatPanel({ mode, conversationId: savedId, initialMessages, suggestedReplies, modelConfig, workloadContext, onOpenContext, onFork, onSave, onBuildDeck, onContinueIn, onDiagram, onPanelEvent, pendingSend }: ChatPanelProps) {
+export default function ChatPanel({ mode, conversationId: savedId, initialMessages, suggestedReplies, modelConfig, workloadContext, onOpenContext, onFork, onSave, onBuildDeck, onContinueIn, onDiagram, onPanelEvent, onClear, pendingSend }: ChatPanelProps) {
   const styles = useStyles();
   const convId = useRef(savedId ?? crypto.randomUUID()).current;
   const subtopics = GROUP_SUBTOPICS[mode];
@@ -1330,7 +1331,7 @@ export default function ChatPanel({ mode, conversationId: savedId, initialMessag
                   appearance="subtle"
                   size="small"
                   icon={<DeleteRegular />}
-                  onClick={reset}
+                  onClick={() => { reset(); onClear?.(); }}
                   title="Clear chat"
                 />
               )}

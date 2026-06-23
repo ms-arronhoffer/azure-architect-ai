@@ -209,12 +209,12 @@ export default function PricingDeskPanel({
             reader.onerror = () => reject(new Error("Could not read the image file."));
             reader.readAsDataURL(file);
           });
-          await stream("/cost/price-architecture", { image_data_url: dataUrl }, handleStreamEvent);
+          await stream("/api/cost/price-architecture", { image_data_url: dataUrl }, handleStreamEvent);
         } else {
           const text = await file.text();
           const isDrawio = text.includes("<mxfile") || text.includes("<mxGraphModel");
           const body = isDrawio ? { drawio_xml: text } : { text };
-          await stream("/cost/price-architecture", body, handleStreamEvent);
+          await stream("/api/cost/price-architecture", body, handleStreamEvent);
         }
       } catch (err) {
         setStreamError(err instanceof Error ? err.message : "Failed to price the drawing.");
@@ -243,6 +243,13 @@ export default function PricingDeskPanel({
 
   const seed = useCallback((content: string) => {
     setPendingSend({ content, nonce: Date.now() });
+  }, []);
+
+  const clearWorksheet = useCallback(() => {
+    setWorksheet(null);
+    setAvailability(null);
+    setStatusMsg(null);
+    setStreamError(null);
   }, []);
 
   const currency = worksheet?.currency || "USD";
@@ -616,6 +623,7 @@ export default function PricingDeskPanel({
           workloadContext={workloadContext}
           onSave={onSave}
           onPanelEvent={handlePanelEvent}
+          onClear={clearWorksheet}
           pendingSend={pendingSend ?? undefined}
         />
       </Panel>
