@@ -199,3 +199,34 @@ async def test_price_model_aggregates_total(fake_retail):
     model = await mp.price_model(items)
     assert model["summary"]["total_lines"] == 1
     assert model["total_monthly_estimate"] == pytest.approx(round(0.20 * 730 * 2, 2))
+
+
+@pytest.mark.asyncio
+async def test_apim_premium_prices_unit_not_self_hosted_gateway(fake_retail):
+    """APIM Premium must price the managed deployment unit, not the cheaper
+    Self-Hosted Gateway meter that shares the same skuName/tier."""
+    from services import meter_pricing_service as mp
+
+    # Both records carry skuName "Premium" and an hourly unit; the gateway is
+    # cheaper and would win the naive cheapest-meter pick without exclusion.
+    fake_retail["Unit"] = [
+        {"skuName": "Premium", "meterName": "Premium Unit", "productName": "API Management",
+         "retailPrice": 2.9485, "unitOfMeasure": "1 Hour", "meterId": "apim-unit", "currencyCode": "USD"},
+        {"skuName": "Premium", "meterName": "Premium Unit", "productName": "Self Hosted Gateway",
+         "retailPrice": 0.137, "unitOfMeasure": "1 Hour", "meterId": "apim-shgw", "currencyCode": "USD"},
+    ]
+
+    item = {
+        "service": "API Management",
+        "sku": "Premium",
+        "region": "westus2",
+        "quantity": 2,
+        "hours_per_month": 730,
+    }
+    line = await mp.price_line_item(item)
+
+    assert line["catalog_matched"] is True
+    unit = next(m for m in line["meters"] if m["dimension"] == "unit")
+    assert unit["unit_price"] == pytest.approx(2.9485)
+    assert unit["monthly_cost"] == pytest.approx(2.9485 * 730 * 2)
+    assert line["monthly_subtotal"] == pytest.approx(2.9485 * 730 * 2)
