@@ -20,5 +20,9 @@ router = APIRouter()
 async def trigger_pricing_ingest(
     _claims: dict[str, Any] = Depends(require_metrics_role),
 ) -> dict[str, Any]:
-    """Run the Azure Retail pricing catalog ingest on-demand. Returns counts."""
+    """Run the Azure Retail pricing catalog ingest on-demand. Returns counts.
+
+    ``run_ingest`` never returns raw exception text (failures are logged
+    server-side and surfaced as a generic message), so the summary is safe to
+    return to the caller."""
     return await run_ingest()

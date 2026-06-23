@@ -230,7 +230,7 @@ async def run_ingest() -> dict[str, Any]:
         raw = await fetch_prices()
     except Exception as exc:
         _log.exception("pricing_ingest.fetch_failed", error=str(exc))
-        return {"ok": False, "stage": "fetch", "error": str(exc)}
+        return {"ok": False, "stage": "fetch", "error": "fetch failed; see server logs"}
 
     normalised: list[dict[str, Any]] = []
     for item in raw:
@@ -242,7 +242,7 @@ async def run_ingest() -> dict[str, Any]:
         counts = await upsert_meters(normalised)
     except Exception as exc:
         _log.exception("pricing_ingest.upsert_failed", error=str(exc))
-        return {"ok": False, "stage": "upsert", "error": str(exc)}
+        return {"ok": False, "stage": "upsert", "error": "upsert failed; see server logs"}
 
     pruned = 0
     try:
