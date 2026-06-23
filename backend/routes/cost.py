@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field
 from auth import require_user
 from services import (
     carbon_service,
+    cost_catalog,
     cost_service,
     reservations_service,
     retail_pricing_service,
@@ -20,6 +21,71 @@ from services import (
 from services.cost_pipeline import CostOptimizeRequest, stream_cost_pipeline
 
 router = APIRouter(prefix="/cost", tags=["cost"])
+
+
+# ── Pricing calculator (cached catalog) ──────────────────────────────────────
+
+
+@router.get("/catalog")
+async def catalog(_=Depends(require_user)) -> dict:
+    """Service / region / currency / buying-option metadata for the calculator
+    dropdowns, sourced from the committed pricing snapshot."""
+    return {
+        "services": cost_catalog.list_services(),
+        "regions": cost_catalog.list_regions(),
+        "currencies": cost_catalog.list_currencies(),
+        "buying_options": cost_catalog.list_buying_options(),
+        "meta": cost_catalog.catalog_meta(),
+    }
+
+
+@router.get("/skus")
+async def skus(
+    service: str = Query(..., min_length=1),
+    region: str = Query("eastus"),
+    _=Depends(require_user),
+) -> dict:
+    """Region-priced SKU options for a service, to populate the SKU dropdown."""
+    svc = cost_catalog.get_service(service)
+    if not svc:
+        raise HTTPException(status_code=404, detail=f"unknown service '{service}'")
+    return {
+        "service": service,
+        "region": region,
+        "unit": svc["unit"],
+        "quantity_label": svc.get("quantity_label"),
+        "usage_label": svc.get("usage_label"),
+        "default_hours": svc.get("default_hours", 730),
+        "default_quantity": svc.get("default_quantity", 1),
+        "eligible_options": svc.get("eligible_options", ["payg"]),
+        "hybrid_benefit": svc.get("hybrid_benefit"),
+        "skus": cost_catalog.list_skus(service, region),
+    }
+
+
+class EstimateLineItem(BaseModel):
+    service_key: str = Field(min_length=1)
+    sku: str = ""
+    region: str = "eastus"
+    quantity: float = Field(default=1.0, ge=0)
+    hours_per_month: float = Field(default=730.0, ge=0)
+    buying_option: str = "payg"
+    hybrid_benefit: bool = False
+
+
+class EstimateRequest(BaseModel):
+    items: list[EstimateLineItem] = Field(default_factory=list)
+    currency: str = "USD"
+
+
+@router.post("/estimate")
+async def estimate(req: EstimateRequest, _=Depends(require_user)) -> dict:
+    """Instant, deterministic cost estimate from the cached catalog — no network
+    round-trip, so the calculator can recompute live as the user edits."""
+    return cost_catalog.estimate(
+        [li.model_dump() for li in req.items],
+        currency=req.currency,
+    )
 
 
 @router.get("/mtd")

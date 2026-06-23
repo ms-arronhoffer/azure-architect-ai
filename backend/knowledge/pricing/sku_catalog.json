@@ -1,0 +1,810 @@
+{
+  "generated_at": "2026-06-23",
+  "currency": "USD",
+  "source": "Azure Retail Pricing API (prices.azure.com) \u2014 curated snapshot. Representative pay-as-you-go list prices for East US; regional multipliers applied. Verify exact figures against the Azure Pricing Calculator before quoting customers.",
+  "regions": [
+    {
+      "slug": "eastus",
+      "display": "East US",
+      "price_multiplier": 1.0
+    },
+    {
+      "slug": "eastus2",
+      "display": "East US 2",
+      "price_multiplier": 1.0
+    },
+    {
+      "slug": "westus2",
+      "display": "West US 2",
+      "price_multiplier": 1.02
+    },
+    {
+      "slug": "westus3",
+      "display": "West US 3",
+      "price_multiplier": 1.02
+    },
+    {
+      "slug": "centralus",
+      "display": "Central US",
+      "price_multiplier": 1.01
+    },
+    {
+      "slug": "southcentralus",
+      "display": "South Central US",
+      "price_multiplier": 1.01
+    },
+    {
+      "slug": "westeurope",
+      "display": "West Europe",
+      "price_multiplier": 1.1
+    },
+    {
+      "slug": "northeurope",
+      "display": "North Europe",
+      "price_multiplier": 1.08
+    },
+    {
+      "slug": "uksouth",
+      "display": "UK South",
+      "price_multiplier": 1.12
+    },
+    {
+      "slug": "swedencentral",
+      "display": "Sweden Central",
+      "price_multiplier": 1.07
+    },
+    {
+      "slug": "germanywestcentral",
+      "display": "Germany West Central",
+      "price_multiplier": 1.11
+    },
+    {
+      "slug": "francecentral",
+      "display": "France Central",
+      "price_multiplier": 1.1
+    },
+    {
+      "slug": "southeastasia",
+      "display": "Southeast Asia",
+      "price_multiplier": 1.14
+    },
+    {
+      "slug": "japaneast",
+      "display": "Japan East",
+      "price_multiplier": 1.16
+    },
+    {
+      "slug": "australiaeast",
+      "display": "Australia East",
+      "price_multiplier": 1.18
+    },
+    {
+      "slug": "centralindia",
+      "display": "Central India",
+      "price_multiplier": 1.05
+    },
+    {
+      "slug": "brazilsouth",
+      "display": "Brazil South",
+      "price_multiplier": 1.3
+    },
+    {
+      "slug": "canadacentral",
+      "display": "Canada Central",
+      "price_multiplier": 1.03
+    }
+  ],
+  "currencies": [
+    {
+      "code": "USD",
+      "symbol": "$",
+      "rate": 1.0
+    },
+    {
+      "code": "EUR",
+      "symbol": "\u20ac",
+      "rate": 0.92
+    },
+    {
+      "code": "GBP",
+      "symbol": "\u00a3",
+      "rate": 0.79
+    },
+    {
+      "code": "JPY",
+      "symbol": "\u00a5",
+      "rate": 157.0
+    },
+    {
+      "code": "AUD",
+      "symbol": "A$",
+      "rate": 1.51
+    },
+    {
+      "code": "INR",
+      "symbol": "\u20b9",
+      "rate": 83.4
+    },
+    {
+      "code": "CAD",
+      "symbol": "C$",
+      "rate": 1.37
+    },
+    {
+      "code": "BRL",
+      "symbol": "R$",
+      "rate": 5.45
+    }
+  ],
+  "buying_options": [
+    {
+      "key": "payg",
+      "label": "Pay-as-you-go",
+      "term_years": 0,
+      "description": "On-demand list price. No commitment.",
+      "commitment": false,
+      "upfront": false
+    },
+    {
+      "key": "reserved_1yr",
+      "label": "1-Year Reserved",
+      "term_years": 1,
+      "description": "1-year reserved instance commitment. Best for steady-state workloads.",
+      "commitment": true,
+      "upfront": true
+    },
+    {
+      "key": "reserved_3yr",
+      "label": "3-Year Reserved",
+      "term_years": 3,
+      "description": "3-year reserved instance commitment. Maximum savings for long-term workloads.",
+      "commitment": true,
+      "upfront": true
+    },
+    {
+      "key": "savings_1yr",
+      "label": "1-Year Savings Plan",
+      "term_years": 1,
+      "description": "1-year hourly compute spend commitment. Flexible across SKUs and regions.",
+      "commitment": true,
+      "upfront": false
+    },
+    {
+      "key": "savings_3yr",
+      "label": "3-Year Savings Plan",
+      "term_years": 3,
+      "description": "3-year hourly compute spend commitment. Flexible across SKUs and regions.",
+      "commitment": true,
+      "upfront": false
+    },
+    {
+      "key": "spot",
+      "label": "Spot",
+      "term_years": 0,
+      "description": "Spare-capacity pricing. Can be evicted; for interruptible workloads.",
+      "commitment": false,
+      "upfront": false
+    },
+    {
+      "key": "dev_test",
+      "label": "Dev/Test",
+      "term_years": 0,
+      "description": "Discounted rates for Dev/Test subscriptions (no Windows/SQL license charges).",
+      "commitment": false,
+      "upfront": false
+    }
+  ],
+  "discounts": {
+    "vm": {
+      "reserved_1yr": 0.41,
+      "reserved_3yr": 0.62,
+      "savings_1yr": 0.28,
+      "savings_3yr": 0.49,
+      "spot": 0.8,
+      "dev_test": 0.4
+    },
+    "aks": {
+      "reserved_1yr": 0.41,
+      "reserved_3yr": 0.62,
+      "savings_1yr": 0.28,
+      "savings_3yr": 0.49,
+      "spot": 0.8,
+      "dev_test": 0.4
+    },
+    "appservice": {
+      "reserved_1yr": 0.34,
+      "reserved_3yr": 0.55,
+      "savings_1yr": 0.2,
+      "savings_3yr": 0.38,
+      "dev_test": 0.55
+    },
+    "sql": {
+      "reserved_1yr": 0.33,
+      "reserved_3yr": 0.55,
+      "dev_test": 0.55
+    },
+    "cosmos": {
+      "reserved_1yr": 0.2,
+      "reserved_3yr": 0.3
+    },
+    "redis": {
+      "reserved_1yr": 0.3,
+      "reserved_3yr": 0.48
+    },
+    "postgres": {
+      "reserved_1yr": 0.38,
+      "reserved_3yr": 0.51,
+      "dev_test": 0.4
+    },
+    "storage": {
+      "reserved_1yr": 0.18,
+      "reserved_3yr": 0.3
+    },
+    "default": {}
+  },
+  "hybrid_benefit": {
+    "vm_windows": 0.4,
+    "sql": 0.3
+  },
+  "services": [
+    {
+      "key": "virtual_machines",
+      "display": "Virtual Machines",
+      "retail_service_name": "Virtual Machines",
+      "family": "vm",
+      "unit": "hour",
+      "quantity_label": "Instances",
+      "usage_label": "Hours / month",
+      "default_hours": 730,
+      "default_quantity": 1,
+      "eligible_options": [
+        "payg",
+        "reserved_1yr",
+        "reserved_3yr",
+        "savings_1yr",
+        "savings_3yr",
+        "spot",
+        "dev_test"
+      ],
+      "hybrid_benefit": "vm_windows",
+      "skus": [
+        {
+          "name": "Standard_B2s",
+          "display": "B2s (2 vCPU, 4 GiB) burstable",
+          "unit_price": 0.0416,
+          "vcpu": 2,
+          "ram_gb": 4,
+          "os": "linux"
+        },
+        {
+          "name": "Standard_D2s_v5",
+          "display": "D2s v5 (2 vCPU, 8 GiB)",
+          "unit_price": 0.096,
+          "vcpu": 2,
+          "ram_gb": 8,
+          "os": "linux"
+        },
+        {
+          "name": "Standard_D4s_v5",
+          "display": "D4s v5 (4 vCPU, 16 GiB)",
+          "unit_price": 0.192,
+          "vcpu": 4,
+          "ram_gb": 16,
+          "os": "linux"
+        },
+        {
+          "name": "Standard_D8s_v5",
+          "display": "D8s v5 (8 vCPU, 32 GiB)",
+          "unit_price": 0.384,
+          "vcpu": 8,
+          "ram_gb": 32,
+          "os": "linux"
+        },
+        {
+          "name": "Standard_D16s_v5",
+          "display": "D16s v5 (16 vCPU, 64 GiB)",
+          "unit_price": 0.768,
+          "vcpu": 16,
+          "ram_gb": 64,
+          "os": "linux"
+        },
+        {
+          "name": "Standard_E8s_v5",
+          "display": "E8s v5 (8 vCPU, 64 GiB) mem-opt",
+          "unit_price": 0.504,
+          "vcpu": 8,
+          "ram_gb": 64,
+          "os": "linux"
+        },
+        {
+          "name": "Standard_E16s_v5",
+          "display": "E16s v5 (16 vCPU, 128 GiB)",
+          "unit_price": 1.008,
+          "vcpu": 16,
+          "ram_gb": 128,
+          "os": "linux"
+        },
+        {
+          "name": "Standard_F8s_v2",
+          "display": "F8s v2 (8 vCPU, 16 GiB) compute",
+          "unit_price": 0.338,
+          "vcpu": 8,
+          "ram_gb": 16,
+          "os": "linux"
+        },
+        {
+          "name": "Standard_D8s_v5_Windows",
+          "display": "D8s v5 Windows (8 vCPU, 32 GiB)",
+          "unit_price": 0.752,
+          "vcpu": 8,
+          "ram_gb": 32,
+          "os": "windows"
+        }
+      ]
+    },
+    {
+      "key": "aks",
+      "display": "Azure Kubernetes Service (node pool)",
+      "retail_service_name": "Virtual Machines",
+      "family": "aks",
+      "unit": "hour",
+      "quantity_label": "Nodes",
+      "usage_label": "Hours / month",
+      "default_hours": 730,
+      "default_quantity": 3,
+      "eligible_options": [
+        "payg",
+        "reserved_1yr",
+        "reserved_3yr",
+        "savings_1yr",
+        "savings_3yr",
+        "spot"
+      ],
+      "hybrid_benefit": null,
+      "skus": [
+        {
+          "name": "Standard_D2s_v5",
+          "display": "D2s v5 node (2 vCPU, 8 GiB)",
+          "unit_price": 0.096,
+          "vcpu": 2,
+          "ram_gb": 8
+        },
+        {
+          "name": "Standard_D4s_v5",
+          "display": "D4s v5 node (4 vCPU, 16 GiB)",
+          "unit_price": 0.192,
+          "vcpu": 4,
+          "ram_gb": 16
+        },
+        {
+          "name": "Standard_D8s_v5",
+          "display": "D8s v5 node (8 vCPU, 32 GiB)",
+          "unit_price": 0.384,
+          "vcpu": 8,
+          "ram_gb": 32
+        },
+        {
+          "name": "Standard_E8s_v5",
+          "display": "E8s v5 node (8 vCPU, 64 GiB)",
+          "unit_price": 0.504,
+          "vcpu": 8,
+          "ram_gb": 64
+        }
+      ]
+    },
+    {
+      "key": "app_service",
+      "display": "App Service Plan",
+      "retail_service_name": "Azure App Service",
+      "family": "appservice",
+      "unit": "hour",
+      "quantity_label": "Instances",
+      "usage_label": "Hours / month",
+      "default_hours": 730,
+      "default_quantity": 1,
+      "eligible_options": [
+        "payg",
+        "reserved_1yr",
+        "reserved_3yr",
+        "savings_1yr",
+        "savings_3yr",
+        "dev_test"
+      ],
+      "hybrid_benefit": null,
+      "skus": [
+        {
+          "name": "B1",
+          "display": "B1 Basic (1 core, 1.75 GiB)",
+          "unit_price": 0.075
+        },
+        {
+          "name": "B2",
+          "display": "B2 Basic (2 core, 3.5 GiB)",
+          "unit_price": 0.15
+        },
+        {
+          "name": "S1",
+          "display": "S1 Standard (1 core, 1.75 GiB)",
+          "unit_price": 0.1
+        },
+        {
+          "name": "P1v3",
+          "display": "P1v3 Premium (2 core, 8 GiB)",
+          "unit_price": 0.156
+        },
+        {
+          "name": "P2v3",
+          "display": "P2v3 Premium (4 core, 16 GiB)",
+          "unit_price": 0.312
+        },
+        {
+          "name": "P3v3",
+          "display": "P3v3 Premium (8 core, 32 GiB)",
+          "unit_price": 0.624
+        }
+      ]
+    },
+    {
+      "key": "sql_database",
+      "display": "Azure SQL Database (vCore)",
+      "retail_service_name": "SQL Database",
+      "family": "sql",
+      "unit": "hour",
+      "quantity_label": "Databases",
+      "usage_label": "Hours / month",
+      "default_hours": 730,
+      "default_quantity": 1,
+      "eligible_options": [
+        "payg",
+        "reserved_1yr",
+        "reserved_3yr",
+        "dev_test"
+      ],
+      "hybrid_benefit": "sql",
+      "skus": [
+        {
+          "name": "GP_Gen5_2",
+          "display": "General Purpose Gen5 2 vCore",
+          "unit_price": 0.5044,
+          "vcpu": 2
+        },
+        {
+          "name": "GP_Gen5_4",
+          "display": "General Purpose Gen5 4 vCore",
+          "unit_price": 1.0088,
+          "vcpu": 4
+        },
+        {
+          "name": "GP_Gen5_8",
+          "display": "General Purpose Gen5 8 vCore",
+          "unit_price": 2.0176,
+          "vcpu": 8
+        },
+        {
+          "name": "BC_Gen5_4",
+          "display": "Business Critical Gen5 4 vCore",
+          "unit_price": 2.7137,
+          "vcpu": 4
+        },
+        {
+          "name": "BC_Gen5_8",
+          "display": "Business Critical Gen5 8 vCore",
+          "unit_price": 5.4274,
+          "vcpu": 8
+        },
+        {
+          "name": "HS_Gen5_4",
+          "display": "Hyperscale Gen5 4 vCore",
+          "unit_price": 1.1504,
+          "vcpu": 4
+        }
+      ]
+    },
+    {
+      "key": "postgresql",
+      "display": "Azure Database for PostgreSQL (Flexible)",
+      "retail_service_name": "Azure Database for PostgreSQL",
+      "family": "postgres",
+      "unit": "hour",
+      "quantity_label": "Servers",
+      "usage_label": "Hours / month",
+      "default_hours": 730,
+      "default_quantity": 1,
+      "eligible_options": [
+        "payg",
+        "reserved_1yr",
+        "reserved_3yr",
+        "dev_test"
+      ],
+      "hybrid_benefit": null,
+      "skus": [
+        {
+          "name": "B1ms",
+          "display": "Burstable B1ms (1 vCore, 2 GiB)",
+          "unit_price": 0.0344,
+          "vcpu": 1
+        },
+        {
+          "name": "D2ds_v5",
+          "display": "General Purpose D2ds v5 (2 vCore)",
+          "unit_price": 0.1424,
+          "vcpu": 2
+        },
+        {
+          "name": "D4ds_v5",
+          "display": "General Purpose D4ds v5 (4 vCore)",
+          "unit_price": 0.2848,
+          "vcpu": 4
+        },
+        {
+          "name": "E4ds_v5",
+          "display": "Memory Optimized E4ds v5 (4 vCore)",
+          "unit_price": 0.3776,
+          "vcpu": 4
+        }
+      ]
+    },
+    {
+      "key": "cosmos_db",
+      "display": "Azure Cosmos DB (provisioned RU/s)",
+      "retail_service_name": "Azure Cosmos DB",
+      "family": "cosmos",
+      "unit": "hour",
+      "quantity_label": "x 100 RU/s",
+      "usage_label": "Hours / month",
+      "default_hours": 730,
+      "default_quantity": 4,
+      "eligible_options": [
+        "payg",
+        "reserved_1yr",
+        "reserved_3yr"
+      ],
+      "hybrid_benefit": null,
+      "skus": [
+        {
+          "name": "standard_100ru",
+          "display": "100 RU/s (provisioned)",
+          "unit_price": 0.008
+        }
+      ]
+    },
+    {
+      "key": "redis",
+      "display": "Azure Cache for Redis",
+      "retail_service_name": "Azure Cache for Redis",
+      "family": "redis",
+      "unit": "hour",
+      "quantity_label": "Caches",
+      "usage_label": "Hours / month",
+      "default_hours": 730,
+      "default_quantity": 1,
+      "eligible_options": [
+        "payg",
+        "reserved_1yr",
+        "reserved_3yr"
+      ],
+      "hybrid_benefit": null,
+      "skus": [
+        {
+          "name": "C1_Standard",
+          "display": "C1 Standard (1 GB)",
+          "unit_price": 0.082
+        },
+        {
+          "name": "C3_Standard",
+          "display": "C3 Standard (6 GB)",
+          "unit_price": 0.329
+        },
+        {
+          "name": "P1_Premium",
+          "display": "P1 Premium (6 GB)",
+          "unit_price": 0.412
+        },
+        {
+          "name": "P2_Premium",
+          "display": "P2 Premium (13 GB)",
+          "unit_price": 0.824
+        }
+      ]
+    },
+    {
+      "key": "blob_storage",
+      "display": "Blob Storage (capacity)",
+      "retail_service_name": "Storage",
+      "family": "storage",
+      "unit": "gb_month",
+      "quantity_label": "GB stored",
+      "usage_label": null,
+      "default_hours": 0,
+      "default_quantity": 1000,
+      "eligible_options": [
+        "payg",
+        "reserved_1yr",
+        "reserved_3yr"
+      ],
+      "hybrid_benefit": null,
+      "skus": [
+        {
+          "name": "Hot_LRS",
+          "display": "Hot LRS",
+          "unit_price": 0.0184
+        },
+        {
+          "name": "Cool_LRS",
+          "display": "Cool LRS",
+          "unit_price": 0.01
+        },
+        {
+          "name": "Cold_LRS",
+          "display": "Cold LRS",
+          "unit_price": 0.0036
+        },
+        {
+          "name": "Hot_GRS",
+          "display": "Hot GRS",
+          "unit_price": 0.0368
+        },
+        {
+          "name": "Archive_LRS",
+          "display": "Archive LRS",
+          "unit_price": 0.00099
+        }
+      ]
+    },
+    {
+      "key": "managed_disks",
+      "display": "Managed Disks (capacity)",
+      "retail_service_name": "Storage",
+      "family": "storage",
+      "unit": "month",
+      "quantity_label": "Disks",
+      "usage_label": null,
+      "default_hours": 0,
+      "default_quantity": 1,
+      "eligible_options": [
+        "payg"
+      ],
+      "hybrid_benefit": null,
+      "skus": [
+        {
+          "name": "P10_128GB",
+          "display": "Premium SSD P10 (128 GiB)",
+          "unit_price": 19.71
+        },
+        {
+          "name": "P20_512GB",
+          "display": "Premium SSD P20 (512 GiB)",
+          "unit_price": 73.22
+        },
+        {
+          "name": "P30_1TB",
+          "display": "Premium SSD P30 (1 TiB)",
+          "unit_price": 135.17
+        },
+        {
+          "name": "E10_128GB",
+          "display": "Standard SSD E10 (128 GiB)",
+          "unit_price": 9.6
+        }
+      ]
+    },
+    {
+      "key": "log_analytics",
+      "display": "Log Analytics (ingestion)",
+      "retail_service_name": "Log Analytics",
+      "family": "default",
+      "unit": "gb_month",
+      "quantity_label": "GB ingested / month",
+      "usage_label": null,
+      "default_hours": 0,
+      "default_quantity": 100,
+      "eligible_options": [
+        "payg"
+      ],
+      "hybrid_benefit": null,
+      "skus": [
+        {
+          "name": "PerGB2018",
+          "display": "Pay-as-you-go ingestion",
+          "unit_price": 2.76
+        },
+        {
+          "name": "Commitment_100GB",
+          "display": "100 GB/day commitment tier",
+          "unit_price": 2.3
+        }
+      ]
+    },
+    {
+      "key": "bandwidth",
+      "display": "Bandwidth (egress)",
+      "retail_service_name": "Bandwidth",
+      "family": "default",
+      "unit": "gb_month",
+      "quantity_label": "GB egress / month",
+      "usage_label": null,
+      "default_hours": 0,
+      "default_quantity": 1000,
+      "eligible_options": [
+        "payg"
+      ],
+      "hybrid_benefit": null,
+      "skus": [
+        {
+          "name": "Internet_Egress",
+          "display": "Internet egress (first 10 TB tier)",
+          "unit_price": 0.087
+        }
+      ]
+    },
+    {
+      "key": "application_gateway",
+      "display": "Application Gateway (WAF v2)",
+      "retail_service_name": "Application Gateway",
+      "family": "default",
+      "unit": "hour",
+      "quantity_label": "Gateways",
+      "usage_label": "Hours / month",
+      "default_hours": 730,
+      "default_quantity": 1,
+      "eligible_options": [
+        "payg"
+      ],
+      "hybrid_benefit": null,
+      "skus": [
+        {
+          "name": "WAF_v2_Fixed",
+          "display": "WAF v2 fixed (gateway hour)",
+          "unit_price": 0.443
+        },
+        {
+          "name": "Standard_v2_Fixed",
+          "display": "Standard v2 fixed (gateway hour)",
+          "unit_price": 0.246
+        }
+      ]
+    },
+    {
+      "key": "azure_openai",
+      "display": "Azure OpenAI (tokens)",
+      "retail_service_name": "Azure OpenAI",
+      "family": "default",
+      "unit": "per_1k",
+      "quantity_label": "x 1K tokens / month",
+      "usage_label": null,
+      "default_hours": 0,
+      "default_quantity": 1000,
+      "eligible_options": [
+        "payg"
+      ],
+      "hybrid_benefit": null,
+      "skus": [
+        {
+          "name": "gpt-4o_input",
+          "display": "GPT-4o input (1K tokens)",
+          "unit_price": 0.005
+        },
+        {
+          "name": "gpt-4o_output",
+          "display": "GPT-4o output (1K tokens)",
+          "unit_price": 0.015
+        },
+        {
+          "name": "gpt-4o-mini_input",
+          "display": "GPT-4o mini input (1K tokens)",
+          "unit_price": 0.00015
+        },
+        {
+          "name": "gpt-4o-mini_output",
+          "display": "GPT-4o mini output (1K tokens)",
+          "unit_price": 0.0006
+        },
+        {
+          "name": "text-embedding-3-large",
+          "display": "Embedding 3 large (1K tokens)",
+          "unit_price": 0.00013
+        }
+      ]
+    }
+  ]
+}
