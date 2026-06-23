@@ -33,6 +33,28 @@ def test_classify_not_billable_takes_precedence_over_fuzzy():
         assert c.reason
 
 
+def test_fuzzy_does_not_bind_unrelated_service_via_generic_token():
+    from services import component_model as cm
+
+    # These share only the generic word "azure" (or an incidental "vaults") with
+    # priceable services; they must NOT collapse onto Azure App Service / Key
+    # Vault and get mispriced — they resolve to unknown and are reported.
+    for name in ["Azure Backup Vaults", "Azure Arc", "Azure Backup"]:
+        c = cm.Component(label=name, shape=name)
+        cm.classify(c)
+        assert c.classification == "unknown", (name, c.service)
+        assert c.service is None
+
+
+def test_fuzzy_still_resolves_distinctive_overlap():
+    from services import component_model as cm
+
+    # A decisive token overlap (service or candidate fully covered) still binds.
+    assert cm.resolve_service("Azure Monitor + Log Analytics") == "Log Analytics"
+    assert cm.resolve_service("Storage Account") == "Storage"
+    assert cm.resolve_service("Cosmos") == "Azure Cosmos DB"
+
+
 def test_classify_public_ip_stays_priceable():
     from services import component_model as cm
 
@@ -104,6 +126,48 @@ def test_normalize_all_adds_implied_egress():
     services = {c.service for c in ex.components if c.service}
     assert "Bandwidth" in services       # edge to "Users" implied internet egress
     assert any(c.classification == "not_billable" for c in ex.components)
+
+
+@pytest.mark.asyncio
+async def test_default_llm_caller_routes_gpt5_via_responses_api(monkeypatch):
+    """The Pricing Desk model (gpt-5.4-mini) must go through the Responses API,
+    not Chat Completions, and image parts are converted to Responses input."""
+    from services import diagram_extraction_service as dx
+    from services import openai_service
+
+    captured: dict[str, object] = {}
+
+    class _Resp:
+        output_text = '{"components": [], "edges": []}'
+
+    class _Responses:
+        async def create(self, **kwargs):
+            captured.update(kwargs)
+            return _Resp()
+
+    class _RClient:
+        responses = _Responses()
+
+    def fake_resolve(mode, *a, **k):
+        captured["mode"] = mode
+        return object(), "gpt-5.4-mini"
+
+    monkeypatch.setattr(openai_service, "resolve_async_client_and_model", fake_resolve)
+    monkeypatch.setattr(openai_service, "get_async_responses_client", lambda d: _RClient())
+
+    out = await dx._default_llm_caller(
+        "system",
+        [
+            {"type": "text", "text": "hi"},
+            {"type": "image_url", "image_url": {"url": "data:image/png;base64,AAAA", "detail": "high"}},
+        ],
+    )
+    assert out == '{"components": [], "edges": []}'
+    assert captured["mode"] == "pricing"
+    assert captured["model"] == "gpt-5.4-mini"
+    content = captured["input"][0]["content"]
+    assert {"type": "input_text", "text": "hi"} in content
+    assert any(p.get("type") == "input_image" for p in content)
 
 
 @pytest.mark.asyncio

@@ -30,10 +30,10 @@ profiles:
     note: Assumes one always-on general-purpose VM with a 128 GB managed disk.
 
   Azure App Service:
-    sku: P1v3
+    sku: P1v4
     quantity: 1
     hours_per_month: 730
-    note: Assumes one always-on Premium v3 plan instance.
+    note: Assumes one always-on Premium v4 plan instance.
 
   Azure Functions:
     sku: ""

@@ -192,11 +192,36 @@ def get_async_client(deployment: str | None = None) -> AsyncAzureOpenAI:
     return _build_client(endpoint=endpoint, api_version=api_version, key=key, is_async=True)  # type: ignore[return-value]
 
 
+def get_async_responses_client(deployment: str | None = None) -> AsyncAzureOpenAI:
+    """Async client pinned to a Responses-API-capable api-version. Async sibling
+    of `get_responses_client()`; required for codex / gpt-5 / o-series
+    deployments, which reject Chat Completions outright."""
+    endpoint = _route_endpoint(deployment)
+    api_version = _route_api_version(deployment, RESPONSES_API_VERSION)
+    key = _route_key(deployment)
+    return _build_client(endpoint=endpoint, api_version=api_version, key=key, is_async=True)  # type: ignore[return-value]
+
+
+def needs_responses_api(deployment: str | None) -> bool:
+    """Detect codex / gpt-5 / o-series deployments. These reject Chat Completions
+    entirely and must be called via the Responses API instead."""
+    d = (deployment or "").lower()
+    return (
+        d.startswith("gpt-5")
+        or "codex" in d
+        or d.startswith("o1")
+        or d.startswith("o3")
+        or d.startswith("o4")
+    )
+
+
 def get_deployment(mode: str) -> str:
     if mode in ("architecture", "waf"):
         return settings.azure_openai_deployment_arch
     if mode == "demo-build":
         return settings.azure_openai_deployment_demo_build
+    if mode == "pricing":
+        return settings.azure_openai_deployment_pricing
     return settings.azure_openai_deployment_chat
 
 
