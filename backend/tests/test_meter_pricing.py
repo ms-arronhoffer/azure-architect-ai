@@ -230,3 +230,19 @@ async def test_apim_premium_prices_unit_not_self_hosted_gateway(fake_retail):
     assert unit["unit_price"] == pytest.approx(2.9485)
     assert unit["monthly_cost"] == pytest.approx(2.9485 * 730 * 2)
     assert line["monthly_subtotal"] == pytest.approx(2.9485 * 730 * 2)
+
+
+def test_normalize_sku_app_service_plan_inserts_space():
+    """App Service / Isolated plan SKUs match the Retail skuName ("P1 v3"),
+    which carries a space the ARM/diagram form ("P1v3") omits. Without this the
+    SKU filter matches nothing and the lookup collapses to the cheapest
+    "Shared App" meter (~$0.01/hr)."""
+    from services import pricing_service as ps
+
+    assert ps._normalize_sku("P1v3") == "p1 v3"
+    assert ps._normalize_sku("P1v4") == "p1 v4"
+    assert ps._normalize_sku("P1mv3") == "p1m v3"
+    assert ps._normalize_sku("I1v2") == "i1 v2"
+    # Underscored VM SKUs and storage aliases are untouched by this rule.
+    assert ps._normalize_sku("D4s_v5") == "D4s_v5"
+    assert ps._normalize_sku("Standard_LRS") == "LRS"

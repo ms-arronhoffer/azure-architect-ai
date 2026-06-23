@@ -193,6 +193,42 @@ def _normalize(name: str) -> str:
     return name.strip().lower().replace("-", "_").replace(" ", "_")
 
 
+# Generic tokens that carry no service-identifying signal. Excluded from fuzzy
+# token-overlap matching so a shared word like "azure" can never, on its own,
+# bind an unrelated component (e.g. "Azure Backup Vaults") to a priceable
+# service (e.g. "Azure App Service").
+_FUZZY_STOPWORDS = frozenset(
+    {
+        "azure",
+        "microsoft",
+        "the",
+        "for",
+        "and",
+        "plus",
+        "with",
+        "of",
+        "service",
+        "services",
+        "plan",
+        "plans",
+        "tier",
+        "instance",
+        "instances",
+        "managed",
+        "cloud",
+    }
+)
+
+
+def _meaningful_tokens(name: str) -> set[str]:
+    """Distinctive (non-stopword, length>2) tokens of a normalized name."""
+    return {
+        w
+        for w in _normalize(name).split("_")
+        if len(w) > 2 and w not in _FUZZY_STOPWORDS
+    }
+
+
 def _not_billable_reason(*names: str) -> str | None:
     """Return a reason if any of the candidate names is a known free/logical
     resource, else None. Matches whole words or exact rule terms."""
@@ -228,22 +264,41 @@ def _resolve_direct(*candidates: str) -> str | None:
 
 
 def _resolve_fuzzy(*candidates: str) -> str | None:
-    """Last-resort token-overlap match across known service names."""
+    """Last-resort token-overlap match across known service names.
+
+    Generic, non-distinctive tokens (``azure``, ``microsoft``, ``service`` …)
+    are ignored so that, e.g., "Azure Backup Vaults" does not collapse onto the
+    first service that merely shares the word "azure". The candidate is matched
+    to the service with the greatest number of *meaningful* overlapping tokens.
+    """
     known: dict[str, str] = {}
     for svc in cost_catalog.all_services():
         known[_normalize(svc.get("service", ""))] = str(svc.get("service"))
     for norm_key, svc in SHAPE_TO_SERVICE.items():
         known[norm_key] = svc
+
+    best_service: str | None = None
+    best_score = 0
     for cand in candidates:
         if not cand:
             continue
-        words = {w for w in _normalize(cand).split("_") if len(w) > 2}
+        words = _meaningful_tokens(cand)
         if not words:
             continue
         for key, svc in known.items():
-            if words & {w for w in key.split("_") if len(w) > 2}:
-                return svc
-    return None
+            key_words = _meaningful_tokens(key)
+            overlap = words & key_words
+            # Require a *decisive* overlap: the candidate or the service name is
+            # fully covered by the shared tokens. A single incidental token (e.g.
+            # "vaults" shared by "Backup Vaults" and "Key Vault") is not enough
+            # to bind an unrelated service — better to report it as unknown.
+            if not overlap or (overlap != words and overlap != key_words):
+                continue
+            score = len(overlap)
+            if score > best_score:
+                best_score = score
+                best_service = svc
+    return best_service if best_score > 0 else None
 
 
 def resolve_service(*candidates: str) -> str | None:

@@ -91,6 +91,14 @@ def _normalize_sku(sku: str) -> str:
     m = re.match(r"(gp_s|gp|bc|hs)_gen\d+_\d+", lower)
     if m:
         return _SQL_TIER_MAP.get(m.group(1), sku)
+    # App Service / Isolated plan SKUs: the Retail API publishes skuName with a
+    # space before the version suffix ("P1 v3", "P1mv3" -> "P1m v3", "I1 v2"),
+    # but ARM / diagram inputs usually omit it ("P1v3"). Without this the SKU
+    # filter matches nothing and the lookup retries unfiltered, collapsing to the
+    # cheapest "Shared App" meter (~$0.01/hr).
+    m = re.fullmatch(r"([a-z]\d+m?)(v\d+)", lower)
+    if m:
+        return f"{m.group(1)} {m.group(2)}"
     return sku
 
 

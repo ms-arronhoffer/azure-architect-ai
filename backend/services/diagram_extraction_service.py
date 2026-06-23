@@ -226,9 +226,26 @@ LLMCaller = Callable[[str, list[dict[str, Any]]], Awaitable[str]]
 async def _default_llm_caller(system: str, user_parts: list[dict[str, Any]]) -> str:
     from services import openai_service
 
-    client, model = openai_service.resolve_async_client_and_model("chat")
+    client, deployment = openai_service.resolve_async_client_and_model("pricing")
+
+    # gpt-5 / codex / o-series deployments reject Chat Completions and must go
+    # through the Responses API. The Pricing Desk model (gpt-5.4-mini) is one of
+    # these, so route accordingly while keeping the Chat Completions path for
+    # gpt-4-family deployments.
+    if openai_service.needs_responses_api(deployment):
+        rclient = openai_service.get_async_responses_client(deployment)
+        resp = await rclient.responses.create(
+            model=deployment,
+            instructions=system,
+            input=[{"role": "user", "content": _to_responses_content(user_parts)}],
+            reasoning={"effort": "medium"},
+            text={"format": {"type": "json_object"}},
+            max_output_tokens=8000,
+        )
+        return _responses_text(resp) or "{}"
+
     resp = await client.chat.completions.create(
-        model=model,
+        model=deployment,
         messages=[
             {"role": "system", "content": system},
             {"role": "user", "content": user_parts},
@@ -237,6 +254,37 @@ async def _default_llm_caller(system: str, user_parts: list[dict[str, Any]]) -> 
         response_format={"type": "json_object"},
     )
     return resp.choices[0].message.content or "{}"
+
+
+def _to_responses_content(user_parts: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Convert Chat Completions content parts to Responses API input parts."""
+    out: list[dict[str, Any]] = []
+    for part in user_parts:
+        kind = part.get("type")
+        if kind == "text":
+            out.append({"type": "input_text", "text": part.get("text", "")})
+        elif kind == "image_url":
+            img = part.get("image_url") or {}
+            url = img.get("url", "") if isinstance(img, dict) else str(img)
+            entry: dict[str, Any] = {"type": "input_image", "image_url": url}
+            if isinstance(img, dict) and img.get("detail"):
+                entry["detail"] = img["detail"]
+            out.append(entry)
+    return out
+
+
+def _responses_text(resp: Any) -> str:
+    """Best-effort text extraction from a Responses API result."""
+    text = getattr(resp, "output_text", None)
+    if text:
+        return text.strip()
+    chunks: list[str] = []
+    for item in getattr(resp, "output", []) or []:
+        for c in getattr(item, "content", []) or []:
+            t = getattr(c, "text", None)
+            if t:
+                chunks.append(t)
+    return "".join(chunks).strip()
 
 
 async def extract_from_image(
