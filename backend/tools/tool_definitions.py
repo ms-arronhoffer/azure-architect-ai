@@ -53,7 +53,7 @@ TOOLS_BY_MODE: dict[str, list] = {
         "search_azure_docs", "estimate_costs", "generate_tco_report",
         "design_cost_alerts", "live_price_lookup", "analyze_reservations",
         "recommend_rightsizing", "estimate_carbon", "compare_payg_vs_ri",
-        "compare_regions",
+        "compare_regions", "price_services", "check_region_availability",
     ),
     "operations":   get_tools(
         "search_azure_docs", "generate_monitoring_config", "define_slo_framework",
@@ -216,6 +216,12 @@ TOOLS_BY_MODE: dict[str, list] = {
     "dataiac":         get_tools("search_azure_docs", "design_architecture", "generate_bicep",
                                  "generate_terraform", "generate_arm", "validate_resource_naming",
                                  "suggest_resource_name"),
+    # ── Pricing Desk (panel mode — conversational pricing worksheet) ──
+    "pricing-desk":    get_tools(
+        "search_azure_docs", "price_services", "check_region_availability",
+        "live_price_lookup", "estimate_costs", "compare_payg_vs_ri",
+        "analyze_reservations", "recommend_rightsizing", "compare_regions",
+    ),
 }
 
 # Modes that benefit from MCP tools (informational/guidance, not subscription-bound actions)
@@ -238,6 +244,7 @@ _MCP_ENABLED_MODES = {
     "aieval", "aisafety", "aicost", "aiiac",
     "datalake", "datawarehouse", "datastream", "datalakehouse", "datagovernance",
     "datasecurity", "datamigration", "datacost", "dataquality", "dataiac",
+    "pricing-desk",
 }
 
 

@@ -206,6 +206,79 @@ TOOLS = [
     {
         "type": "function",
         "function": {
+            "name": "price_services",
+            "description": (
+                "Price one or more Azure services across ALL their billing meters (not just compute "
+                "hours) using the live Azure Retail Pricing API. Use this for the Pricing Desk worksheet "
+                "whenever the user wants a structured, exportable price for any Azure service — storage, "
+                "databases, networking, AI, bandwidth, etc. Each line is priced through the meter-aware "
+                "catalog (e.g. SQL = vCore + storage + backup; Storage = capacity tiers + operations) with "
+                "a universal single-meter fallback for uncatalogued services. Returns a per-line meter "
+                "breakdown that populates the right-hand worksheet."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "line_items": {
+                        "type": "array",
+                        "description": "Services to price. Pass dimensions for non-hourly meters (e.g. storage GB, operations).",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "service": {"type": "string", "description": "Azure service name, e.g. 'Storage', 'SQL Database', 'Azure Cosmos DB'."},
+                                "sku": {"type": "string", "description": "SKU / tier, e.g. 'D8s_v5', 'Hot LRS', 'General Purpose'."},
+                                "quantity": {"type": "number", "description": "Instance/unit count (default 1)."},
+                                "hours_per_month": {"type": "number", "description": "Running hours/month for hourly meters (default 730)."},
+                                "region": {"type": "string", "description": "Azure region, e.g. 'eastus'."},
+                                "display_name": {"type": "string", "description": "Friendly label for the worksheet row."},
+                                "dimensions": {
+                                    "type": "object",
+                                    "description": "Named non-hourly quantities the catalog meter expects, e.g. {\"storage_gb\": 5000, \"write_ops\": 1000000}.",
+                                    "additionalProperties": {"type": "number"},
+                                },
+                            },
+                            "required": ["service"],
+                        },
+                    },
+                    "optimization_tips": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Cost-savings recommendations for this worksheet (RIs, region swap, right-sizing, tier change).",
+                    },
+                    "currency": {"type": "string", "description": "ISO currency code (default USD)."},
+                },
+                "required": ["line_items"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "check_region_availability",
+            "description": (
+                "For one Azure service + SKU, report where it is available and the live unit price in each "
+                "candidate Azure region, cheapest first. Use when the user asks 'where can I run this?' or "
+                "'is there a cheaper region?'. Populates the region-availability strip in the Pricing Desk."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "service": {"type": "string", "description": "Azure service name, e.g. 'Virtual Machines'."},
+                    "sku": {"type": "string", "description": "SKU/tier to check, e.g. 'D8s_v5'."},
+                    "regions": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Optional explicit region list; defaults to a curated global set.",
+                    },
+                    "currency": {"type": "string", "description": "ISO currency code (default USD)."},
+                },
+                "required": ["service"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "compare_payg_vs_ri",
             "description": (
                 "Pure-math comparator: given PAYG monthly, reserved monthly, optional upfront, and term, "

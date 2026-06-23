@@ -499,6 +499,63 @@ async def _dispatch_tool(name: str, args: dict) -> tuple[object, dict | None]:
         except Exception as e:
             return {"status": "error", "message": str(e)}, None
 
+    if name == "price_services":
+        from services import meter_pricing_service
+        try:
+            items = args.get("line_items", []) or []
+            currency = args.get("currency", "USD") or "USD"
+            worksheet = await meter_pricing_service.price_model(items, currency=currency)
+            tips = args.get("optimization_tips", []) or []
+            if tips:
+                worksheet["optimization_tips"] = tips
+            # Engagement-aware reservation discounts, mirroring estimate_costs.
+            # apply_reservation_discounts keys on per-line `monthly_estimate` /
+            # `quantity`; bridge from the meter-aware `monthly_subtotal` shape,
+            # then reconcile the subtotal back so the worksheet stays consistent.
+            try:
+                from services.engagement_context import load_active
+                from services.reservations_service import apply_reservation_discounts
+                eng = await load_active()
+                commitments = dict(getattr(eng, "reservation_commitments", None) or {}) if eng else {}
+                if commitments:
+                    for line, src in zip(
+                        worksheet.get("line_items", []), items, strict=False
+                    ):
+                        line["monthly_estimate"] = line.get("monthly_subtotal")
+                        line.setdefault("quantity", src.get("quantity", 1))
+                    worksheet = apply_reservation_discounts(worksheet, commitments)
+                    for line in worksheet.get("line_items", []):
+                        if "monthly_estimate" in line:
+                            line["monthly_subtotal"] = line["monthly_estimate"]
+            except Exception:
+                pass
+            event = {"type": "priced_worksheet", "worksheet": worksheet}
+            return {
+                "status": "worksheet_priced",
+                "total": worksheet.get("total_monthly_estimate"),
+                "lines": worksheet.get("summary", {}).get("total_lines"),
+            }, event
+        except Exception as e:
+            return {"status": "error", "message": str(e)}, None
+
+    if name == "check_region_availability":
+        from services import region_availability_service
+        try:
+            result = await region_availability_service.availability(
+                service=args.get("service", ""),
+                sku=args.get("sku", ""),
+                regions=args.get("regions") or None,
+                currency=args.get("currency", "USD") or "USD",
+            )
+            event = {"type": "region_availability", "availability": result}
+            return {
+                "status": "region_availability_resolved",
+                "cheapest_region": result.get("cheapest_region"),
+                "available_count": result.get("available_count"),
+            }, event
+        except Exception as e:
+            return {"status": "error", "message": str(e)}, None
+
     if name == "check_quota_alternatives":
         from services import engagement_context as _ec
         from services.quota_service import QuotaServiceUnavailable, check_quota_for_line_items

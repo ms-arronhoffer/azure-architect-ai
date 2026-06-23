@@ -15,6 +15,7 @@ from services import (
     cost_catalog,
     cost_service,
     cost_template_service,
+    region_availability_service,
     reservations_service,
     retail_pricing_service,
     rightsizing_service,
@@ -83,6 +84,26 @@ async def retail_price(
             region=region,
             quantity=quantity,
             hours_per_month=hours_per_month,
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
+@router.get("/region-availability")
+async def region_availability(
+    service: str = Query(..., min_length=1),
+    sku: str = Query(""),
+    regions: list[str] | None = Query(default=None),
+    currency: str = Query("USD"),
+    _=Depends(require_user),
+) -> dict:
+    """Per-region availability + live unit price for one service/SKU, cheapest first."""
+    try:
+        return await region_availability_service.availability(
+            service=service,
+            sku=sku,
+            regions=regions or None,
+            currency=currency,
         )
     except Exception as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
