@@ -286,8 +286,8 @@ async def worksheet_export(
     row per meter with its assumptions, confidence, and citation."""
     try:
         worksheet = await request.json()
-    except Exception as exc:
-        raise HTTPException(status_code=422, detail=f"Invalid JSON body: {exc}") from None
+    except Exception:
+        raise HTTPException(status_code=422, detail="Invalid JSON body.") from None
     if not isinstance(worksheet, dict):
         raise HTTPException(status_code=422, detail="Body must be a worksheet object.")
     content = cost_template_service.worksheet_to_csv(worksheet)

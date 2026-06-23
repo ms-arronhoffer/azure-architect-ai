@@ -206,7 +206,10 @@ async def stream_price_architecture(
         )
     except Exception as exc:  # surface, never crash the stream
         log.error("architecture_pricing.failed", error=str(exc))
-        yield {"type": "error", "message": f"Pricing failed: {exc}"}
+        yield {
+            "type": "error",
+            "message": "Pricing failed while processing the architecture. Please retry.",
+        }
         return
 
     comp_count = worksheet.get("extraction", {}).get("component_count", 0)
