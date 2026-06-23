@@ -8,7 +8,7 @@ export interface AgentRouteInfo {
   reason: string;
 }
 
-export function useChat(mode: Mode, _conversationId?: string, onSave?: (msgs: ChatMessage[]) => void, initialMessages?: ChatMessage[], modelConfig?: ModelConfig, onDiagram?: (xml: string) => void) {
+export function useChat(mode: Mode, _conversationId?: string, onSave?: (msgs: ChatMessage[]) => void, initialMessages?: ChatMessage[], modelConfig?: ModelConfig, onDiagram?: (xml: string) => void, onPanelEvent?: (event: { type: string; [key: string]: unknown }) => void) {
   // If the last initialMessage is a user message, auto-send it on mount.
   // useMemo with [] deps so this only computes once (stable across renders).
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -35,6 +35,11 @@ export function useChat(mode: Mode, _conversationId?: string, onSave?: (msgs: Ch
   // parent re-render → new onSave reference → effect refires → save loop.
   const onSaveRef = useRef(onSave);
   useEffect(() => { onSaveRef.current = onSave; }, [onSave]);
+
+  // Stable ref for the side-channel panel callback (pricing worksheet / region
+  // availability) so it doesn't re-create sendMessage on every parent render.
+  const onPanelEventRef = useRef(onPanelEvent);
+  useEffect(() => { onPanelEventRef.current = onPanelEvent; }, [onPanelEvent]);
 
   // Debounced save after message updates
   useEffect(() => {
@@ -78,6 +83,10 @@ export function useChat(mode: Mode, _conversationId?: string, onSave?: (msgs: Ch
       }, (event) => {
         if (event.type === "diagram" && typeof event.xml === "string") {
           onDiagram?.(event.xml);
+          return;
+        }
+        if (event.type === "priced_worksheet" || event.type === "region_availability") {
+          onPanelEventRef.current?.(event);
           return;
         }
         if (event.type === "agent_route") {
@@ -155,6 +164,10 @@ function _toStructuredResult(event: { type: string; [key: string]: unknown }): S
       return { kind: "monitoring_config", data: event.config as never };
     case "cost_estimate":
       return { kind: "cost_estimate", data: event.estimate as never };
+    case "cost_alternatives":
+      return { kind: "cost_alternatives", data: event.alternatives as never };
+    case "clarification_request":
+      return { kind: "clarification_request", data: event.request as never };
     case "learning_plan":
       return { kind: "learning_plan", data: event.plan as never };
     case "network_topology":

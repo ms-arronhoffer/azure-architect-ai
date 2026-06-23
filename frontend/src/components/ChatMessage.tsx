@@ -198,9 +198,9 @@ function CitationChips({ citation }: { citation: Citation }) {
   );
 }
 
-interface Props { message: ChatMessageType; onFork?: () => void; onContinueIn?: (mode: Mode, seed: string) => void; }
+interface Props { message: ChatMessageType; onFork?: () => void; onContinueIn?: (mode: Mode, seed: string) => void; onQuickReply?: (text: string) => void; }
 
-export default function ChatMessage({ message, onFork, onContinueIn }: Props) {
+export default function ChatMessage({ message, onFork, onContinueIn, onQuickReply }: Props) {
   const styles = useStyles();
   const isUser = message.role === "user";
   const [copied, setCopied] = useState(false);
@@ -273,7 +273,7 @@ export default function ChatMessage({ message, onFork, onContinueIn }: Props) {
           </div>
         )}
 
-        {message.structuredResult && <StructuredResultCard result={message.structuredResult} onContinueIn={onContinueIn} />}
+        {message.structuredResult && <StructuredResultCard result={message.structuredResult} onContinueIn={onContinueIn} onQuickReply={onQuickReply} />}
 
         {message.citations && message.citations.length > 0 && (
           <Accordion collapsible className={styles.citations}>

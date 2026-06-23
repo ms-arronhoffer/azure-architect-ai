@@ -64,6 +64,20 @@ def resolve_service(name: str) -> dict[str, Any] | None:
     return _alias_index().get(name.strip().lower())
 
 
+def clarify_for(name: str) -> list[dict[str, Any]]:
+    """Return the disambiguation questions for a service, or [] when none.
+
+    Used to decide whether a request is specific enough to price (the
+    ``request_clarification`` flow) — `required: true` entries are the
+    disambiguators that should be resolved before quoting a number.
+    """
+    svc = resolve_service(name)
+    if not svc:
+        return []
+    clarify = svc.get("clarify")
+    return list(clarify) if isinstance(clarify, list) else []
+
+
 def currency_default() -> str:
     return str(_load_raw().get("currency_default", "USD"))
 
@@ -102,6 +116,7 @@ def public_catalog() -> dict[str, Any]:
                 "category": svc.get("category"),
                 "sku_field": svc.get("sku_field"),
                 "ri_eligible": bool(svc.get("ri_eligible", False)),
+                "clarify": svc.get("clarify", []) or [],
                 "dimensions": dims,
             }
         )
@@ -115,6 +130,7 @@ def public_catalog() -> dict[str, Any]:
 
 __all__ = [
     "all_services",
+    "clarify_for",
     "currency_default",
     "public_catalog",
     "region_default",

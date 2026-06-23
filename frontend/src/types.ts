@@ -35,6 +35,7 @@ export type Mode =
   | "intakechat"
   | "analyze"
   | "cost-optimize"
+  | "pricing-desk"
   | "troubleshoot"
   | "whatsnew"
   | "servicehealth"
@@ -308,6 +309,176 @@ export interface CostEstimate {
   disclaimer: string;
   optimization_tips?: string[];
   sku_validation?: SkuValidationSummary;
+}
+
+// ── Pricing Desk types (meter-aware worksheet) ───────────────────────────────
+
+export interface PricedMeter {
+  dimension?: string;
+  label?: string;
+  unit?: string;
+  quantity?: number;
+  included_free?: number;
+  billable_quantity?: number;
+  unit_price?: number | null;
+  unit_of_measure?: string | null;
+  monthly_cost?: number | null;
+  meter_id?: string | null;
+  meter_name?: string | null;
+  currency?: string;
+  priced?: boolean;
+  source?: string;
+  note?: string;
+  confidence?: number;
+  confidence_label?: "high" | "medium" | "low" | "none";
+  citation?: {
+    meter_id?: string | null;
+    meter_name?: string | null;
+    sku_name?: string | null;
+    product_name?: string | null;
+    region?: string;
+    unit_price?: number | null;
+    unit_of_measure?: string | null;
+    currency?: string;
+    retrieved_at?: string;
+    source?: string;
+  };
+}
+
+export interface PricedLine {
+  service: string;
+  display_name?: string;
+  category?: string;
+  sku?: string;
+  region?: string;
+  catalog_matched?: boolean;
+  discovered?: boolean;
+  ri_eligible?: boolean;
+  tags?: string[];
+  meters: PricedMeter[];
+  monthly_subtotal: number;
+  currency: string;
+  confidence?: number;
+  confidence_label?: "high" | "medium" | "low" | "none";
+  assumptions?: string[];
+  note?: string;
+  source?: string;
+  // Present when an engagement reservation was applied.
+  original_monthly_estimate?: number;
+  reservation_applied?: {
+    commit_key: string;
+    covered_quantity: number;
+    discount_rate: number;
+    monthly_savings: number;
+  };
+}
+
+// Accounts for every node extracted from the architecture: priced, free, or
+// unpriced-with-reason — so the user can trust the total is whole.
+export interface CompletenessReport {
+  components_found: number;
+  priceable: number;
+  priced: number;
+  not_billable: Array<{ name: string; reason: string }>;
+  unknown: Array<{ name: string; reason: string }>;
+  unpriced: Array<{ name: string; reason: string }>;
+  fully_accounted: boolean;
+}
+
+export interface PricedWorksheet {
+  line_items: PricedLine[];
+  total_monthly_estimate: number;
+  currency: string;
+  summary?: {
+    total_lines: number;
+    catalog_matched: number;
+    unpriced_meters: number;
+    discovered?: number;
+    low_confidence_lines?: number;
+  };
+  data_source?: string;
+  disclaimer?: string;
+  optimization_tips?: string[];
+  completeness?: CompletenessReport;
+  extraction?: { source: string; component_count: number; notes?: string[] };
+  reservation_adjustments?: Array<{
+    service: string;
+    sku: string;
+    commit_key: string;
+    covered_quantity: number;
+    monthly_savings: number;
+  }>;
+  reservation_monthly_savings?: number;
+}
+
+export interface RegionAvailabilityRow {
+  region: string;
+  available: boolean;
+  unit_price: number | null;
+  unit_of_measure: string | null;
+  sku: string;
+  currency: string;
+  cheapest?: boolean;
+  note?: string;
+}
+
+export interface RegionAvailability {
+  service: string;
+  requested_sku: string;
+  currency: string;
+  regions: RegionAvailabilityRow[];
+  available_count: number;
+  total_regions: number;
+  cheapest_region: string | null;
+  source: string;
+}
+
+// ── Cheaper-equivalent SKU alternatives (suggest_alternatives) ───────────────
+
+export interface CostAlternativeRow {
+  sku: string;
+  requested_sku?: string;
+  region: string;
+  monthly_estimate: number | null;
+  unit_price?: number | null;
+  delta_vs_baseline: number | null;
+  savings_pct: number | null;
+  cheaper: boolean;
+  rule_id?: string;
+  rationale?: string;
+  tradeoff?: string;
+  est_savings_pct?: number | null;
+}
+
+export interface CostAlternatives {
+  service: string;
+  baseline: {
+    sku: string;
+    requested_sku?: string;
+    region: string;
+    monthly_estimate: number | null;
+    unit_price?: number | null;
+  };
+  alternatives: CostAlternativeRow[];
+  alternative_count: number;
+  cheaper_count: number;
+  currency: string;
+  source: string;
+}
+
+// ── Clarifying questions (request_clarification) ─────────────────────────────
+
+export interface ClarificationQuestion {
+  question: string;
+  options?: string[];
+  why_it_matters?: string;
+  allow_free_text?: boolean;
+}
+
+export interface ClarificationRequest {
+  questions: ClarificationQuestion[];
+  known_so_far?: Record<string, unknown>;
+  context?: string;
 }
 
 // ── Monitoring config types ──────────────────────────────────────────────────
@@ -930,6 +1101,8 @@ export type StructuredResult =
   | { kind: "dr_strategy"; data: DrStrategy }
   | { kind: "monitoring_config"; data: MonitoringConfig }
   | { kind: "cost_estimate"; data: CostEstimate }
+  | { kind: "cost_alternatives"; data: CostAlternatives }
+  | { kind: "clarification_request"; data: ClarificationRequest }
   | { kind: "learning_plan"; data: LearningPlan }
   | { kind: "network_topology"; data: NetworkTopology }
   | { kind: "landing_zone_design"; data: LandingZoneDesign }
@@ -1193,6 +1366,10 @@ export type SseEvent =
   | { type: "bicep"; code: string; param_file?: string; deploy_commands?: string[]; notes?: string[] }
   | { type: "bicep_preview"; preview: BicepPreview }
   | { type: "cost_estimate"; estimate: CostEstimate }
+  | { type: "cost_alternatives"; alternatives: CostAlternatives }
+  | { type: "clarification_request"; request: ClarificationRequest }
+  | { type: "priced_worksheet"; worksheet: PricedWorksheet }
+  | { type: "region_availability"; availability: RegionAvailability }
   | { type: "monitoring_config"; config: MonitoringConfig }
   | { type: "compliance_result"; result: ComplianceResult }
   | { type: "migration_assessment"; assessment: MigrationAssessment }

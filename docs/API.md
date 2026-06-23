@@ -42,6 +42,8 @@ SSE event kinds emitted:
 | `region_comparison` | region comparison table | from `compare_regions` |
 | `compliance_result` | control mappings | from `map_compliance` |
 | `cost_estimate` | cost table + monthly total | from `estimate_costs` |
+| `cost_alternatives` | baseline + cheaper equivalent SKUs (e.g. Intel→AMD), priced live | from `suggest_alternatives` |
+| `clarification_request` | disambiguation questions with quick-reply options | from `request_clarification` |
 | `tco_report` | 3-year TCO | from `generate_tco_report` |
 | `decision_card` | summary card | from `recommend_service` |
 | `dr_strategy` | RTO/RPO + plan | from `design_dr_strategy` |
@@ -218,6 +220,19 @@ Body: budget spec → returns generated Bicep.
 
 ### `GET /api/cost/anomaly-kql`
 Returns KQL queries to detect spend anomalies.
+
+### `POST /api/cost/price-architecture`
+Body: one of `text`, `drawio_xml`, `diagram`, `image_data_url`, `attachments`, or
+`line_items`. Extracts every component from an architecture drawing or
+description, prices each across all of its billing meters (catalog + dynamic
+meter discovery), applies engagement reservation/hybrid-benefit discounts, and
+streams a single `priced_worksheet` SSE with per-line assumptions, confidence,
+citations, and a completeness report. See
+[`ARCHITECTURE_PRICING.md`](./ARCHITECTURE_PRICING.md).
+
+### `POST /api/cost/worksheet/export`
+Body: a `priced_worksheet` → returns a CSV (one row per meter with citation,
+confidence, and assumptions, plus a TOTAL row).
 
 Source: `backend/routes/cost.py`. Backed by `services/cost_service.py` and `services/cost_anomaly_service.py`.
 

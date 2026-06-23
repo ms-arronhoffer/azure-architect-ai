@@ -1,0 +1,67 @@
+# Functionally-comparable, typically-cheaper Azure SKU alternatives.
+#
+# The catalog (service_catalog.yaml) prices whatever SKU string it is handed but
+# has no notion of *equivalence* — it cannot tell that an AMD Das-series VM is a
+# drop-in, cheaper substitute for the equivalent Intel Ds-series VM. This file
+# supplies that missing knowledge as a set of grounded transformation rules so
+# services/sku_alternatives_service.py can generate candidate SKUs, price each
+# through the live Retail API, and rank the cheaper equivalents.
+#
+# Each rule:
+#   id              Stable identifier (used in tests / telemetry)
+#   service         Catalog service the rule applies to (matched case-insensitively
+#                   against the line item `service`; substring match)
+#   description     Human label for the swap
+#   pattern         Python regex matched against the baseline SKU (case-insensitive).
+#                   Capture groups are referenced by the replacement.
+#   replacement     re.sub replacement producing the alternative SKU. Preserves the
+#                   baseline separator so "D8s_v5" -> "D8as_v5" and "D8s v5" -> "D8as v5".
+#   rationale       Why the alternative is functionally comparable.
+#   tradeoff        What the architect must verify before adopting it.
+#   est_savings_pct Rough public-list saving vs. the baseline (informational only;
+#                   the real delta is computed from live retail prices).
+
+version: 1
+
+rules:
+  # ── General-purpose: Intel D(s) -> AMD Da(s) ──────────────────────────────
+  - id: gp-intel-to-amd
+    service: Virtual Machines
+    description: Intel D-series -> AMD Das-series (general purpose)
+    pattern: '(?i)\bD(\d+)s([ _]v\d+)\b'
+    replacement: 'D\1as\2'
+    rationale: >-
+      AMD EPYC general-purpose VMs match the Intel D-series on vCPU and RAM and
+      are typically ~10% cheaper on list price.
+    tradeoff: >-
+      AMD processor instead of Intel; validate ISV support and any AVX-512 /
+      Intel-specific instruction dependencies.
+    est_savings_pct: 10
+
+  # ── General-purpose (non-premium-storage): Intel D -> AMD Da ──────────────
+  - id: gp-intel-to-amd-nonpremium
+    service: Virtual Machines
+    description: Intel D-series -> AMD Da-series (general purpose, standard storage)
+    pattern: '(?i)\bD(\d+)([ _]v\d+)\b'
+    replacement: 'D\1a\2'
+    rationale: >-
+      AMD EPYC general-purpose VMs match the Intel D-series on vCPU and RAM and
+      are typically ~10% cheaper on list price.
+    tradeoff: >-
+      AMD processor instead of Intel; validate ISV support and any
+      Intel-specific instruction dependencies.
+    est_savings_pct: 10
+
+  # ── Memory-optimised: Intel E(s) -> AMD Ea(s) ─────────────────────────────
+  - id: mem-intel-to-amd
+    service: Virtual Machines
+    description: Intel E-series -> AMD Eas-series (memory optimised)
+    pattern: '(?i)\bE(\d+)s([ _]v\d+)\b'
+    replacement: 'E\1as\2'
+    rationale: >-
+      AMD EPYC memory-optimised VMs match the Intel E-series on vCPU and RAM and
+      are typically ~10% cheaper on list price.
+    tradeoff: >-
+      AMD processor instead of Intel; validate ISV support for memory-bound
+      workloads sensitive to per-core licensing.
+    est_savings_pct: 10

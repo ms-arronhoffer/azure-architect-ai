@@ -37,6 +37,7 @@ const IntakePanel = lazy(() => import("./components/IntakePanel"));
 const IntakeChatPanel = lazy(() => import("./components/IntakeChatPanel"));
 const AnalysisPanel = lazy(() => import("./components/AnalysisPanel"));
 const CostOptimizePanel = lazy(() => import("./components/CostOptimizePanel"));
+const PricingDeskPanel = lazy(() => import("./components/PricingDeskPanel"));
 const DemoBuildPanel = lazy(() => import("./components/DemoBuildPanel"));
 const LandingZonePanel = lazy(() => import("./components/LandingZonePanel"));
 const ThreatModelPanel = lazy(() => import("./components/ThreatModelPanel"));
@@ -354,6 +355,17 @@ export default function App() {
     }
     if (mode === "cost-optimize") {
       return <CostOptimizePanel key="cost-optimize" />;
+    }
+    if (mode === "pricing-desk") {
+      return (
+        <PricingDeskPanel
+          key="pricing-desk"
+          workloadContext={workloadContext}
+          initialMessages={initialMessages}
+          conversationId={selectedConversation?.id}
+          onSave={(id, m, msgs) => upsert(id, m, msgs)}
+        />
+      );
     }
     if (mode === "demo-build") {
       return <DemoBuildPanel key="demo-build" initialSeed={demoBuildSeed} onSeedConsumed={() => setDemoBuildSeed(null)} />;

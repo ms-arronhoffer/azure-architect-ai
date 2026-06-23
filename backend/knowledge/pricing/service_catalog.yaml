@@ -49,6 +49,27 @@ services:
     sku_field: compute
     ri_eligible: true
     ri_discounts: { one_year: 0.40, three_year: 0.62 }
+    # Disambiguators that must be resolved before a trustworthy price.
+    # `required: true` items should trigger request_clarification when unknown.
+    clarify:
+      - key: size
+        question: What size VM do you need?
+        why_it_matters: VM size (vCPU/RAM) is the single biggest price driver.
+        required: true
+        options:
+          - "Small — ~2 vCPU / 8 GB (e.g. D2s_v5)"
+          - "Medium — ~4 vCPU / 16 GB (e.g. D4s_v5)"
+          - "Large — ~8 vCPU / 32 GB (e.g. D8s_v5)"
+          - "Let me specify vCPU/RAM or an exact SKU"
+      - key: region
+        question: Which Azure region?
+        why_it_matters: Prices vary materially by region.
+        required: true
+        options: [eastus, westeurope, uksouth, australiaeast, "Other"]
+      - key: quantity
+        question: How many instances?
+        why_it_matters: Cost scales linearly with instance count.
+        required: false
     dimensions:
       - key: compute
         label: Compute (instance hours)
@@ -169,6 +190,30 @@ services:
     sku_field: compute
     ri_eligible: true
     ri_discounts: { one_year: 0.33, three_year: 0.55 }
+    clarify:
+      - key: engine
+        question: Is this a relational database, and do you need managed SQL specifically?
+        why_it_matters: Relational vs NoSQL (Cosmos DB) and engine choice change the meters and price entirely.
+        required: true
+        options:
+          - "Relational — Azure SQL Database"
+          - "Relational — PostgreSQL / MySQL"
+          - "Non-relational — Azure Cosmos DB"
+          - "Not sure — help me choose"
+      - key: tier
+        question: Which service tier / size?
+        why_it_matters: vCore count and tier (General Purpose vs Business Critical) drive most of the cost.
+        required: true
+        options:
+          - "Small — General Purpose, 2 vCore"
+          - "Medium — General Purpose, 4 vCore"
+          - "Large — Business Critical, 8 vCore"
+          - "Let me specify vCore / DTU"
+      - key: region
+        question: Which Azure region?
+        why_it_matters: Prices vary by region.
+        required: true
+        options: [eastus, westeurope, uksouth, "Other"]
     dimensions:
       - key: compute
         label: vCore compute (hours)

@@ -48,12 +48,14 @@ TOOLS_BY_MODE: dict[str, list] = {
         "compare_regions", "compare_services", "recommend_service",
         "design_medallion_schema", "generate_adf_pipeline",
         "plan_fabric_capacity", "design_dr_strategy",
+        "request_clarification", "suggest_alternatives",
     ),
     "cost":         get_tools(
         "search_azure_docs", "estimate_costs", "generate_tco_report",
         "design_cost_alerts", "live_price_lookup", "analyze_reservations",
         "recommend_rightsizing", "estimate_carbon", "compare_payg_vs_ri",
-        "compare_regions",
+        "compare_regions", "price_services", "check_region_availability",
+        "suggest_alternatives", "request_clarification",
     ),
     "operations":   get_tools(
         "search_azure_docs", "generate_monitoring_config", "define_slo_framework",
@@ -123,7 +125,8 @@ TOOLS_BY_MODE: dict[str, list] = {
                                 "generate_remediation_runbook"),
     "devops":         get_tools("search_azure_docs", "generate_cicd_pipeline", "design_pipeline"),
     "finops":         get_tools("search_azure_docs", "estimate_costs", "generate_tco_report",
-                                "design_cost_alerts"),
+                                "design_cost_alerts", "suggest_alternatives",
+                                "request_clarification"),
     "securityposture": get_tools("search_azure_docs", "assess_security_posture",
                                  "assess_waf_pillar", "map_compliance"),
     "multicloud":     get_tools("search_azure_docs", "compare_clouds", "compare_services"),
@@ -164,7 +167,8 @@ TOOLS_BY_MODE: dict[str, list] = {
     "netpricing":      get_tools("search_azure_docs", "estimate_costs"),
     # ── Compute Desk specialists (Azure-only) ──
     "compsku":          get_tools("search_azure_docs", "design_architecture", "estimate_costs",
-                                  "generate_bicep", "generate_terraform"),
+                                  "generate_bicep", "generate_terraform",
+                                  "suggest_alternatives", "request_clarification"),
     "compscale":        get_tools("search_azure_docs", "generate_bicep", "generate_terraform",
                                   "estimate_costs"),
     "compdisk":         get_tools("search_azure_docs", "generate_bicep", "generate_terraform",
@@ -180,7 +184,8 @@ TOOLS_BY_MODE: dict[str, list] = {
                                   "generate_remediation_runbook"),
     "compsecurity":     get_tools("search_azure_docs", "assess_security_posture",
                                   "assess_waf_pillar", "generate_bicep"),
-    "compcost":         get_tools("search_azure_docs", "estimate_costs"),
+    "compcost":         get_tools("search_azure_docs", "estimate_costs",
+                                  "suggest_alternatives", "request_clarification"),
     # ── AI Desk specialists (Azure-only) ──
     "aifoundry":   get_tools("search_azure_docs", "design_architecture", "generate_bicep",
                              "generate_terraform", "estimate_costs"),
@@ -216,6 +221,13 @@ TOOLS_BY_MODE: dict[str, list] = {
     "dataiac":         get_tools("search_azure_docs", "design_architecture", "generate_bicep",
                                  "generate_terraform", "generate_arm", "validate_resource_naming",
                                  "suggest_resource_name"),
+    # ── Pricing Desk (panel mode — conversational pricing worksheet) ──
+    "pricing-desk":    get_tools(
+        "search_azure_docs", "price_services", "check_region_availability",
+        "live_price_lookup", "estimate_costs", "compare_payg_vs_ri",
+        "analyze_reservations", "recommend_rightsizing", "compare_regions",
+        "suggest_alternatives", "request_clarification",
+    ),
 }
 
 # Modes that benefit from MCP tools (informational/guidance, not subscription-bound actions)
@@ -238,6 +250,7 @@ _MCP_ENABLED_MODES = {
     "aieval", "aisafety", "aicost", "aiiac",
     "datalake", "datawarehouse", "datastream", "datalakehouse", "datagovernance",
     "datasecurity", "datamigration", "datacost", "dataquality", "dataiac",
+    "pricing-desk",
 }
 
 
