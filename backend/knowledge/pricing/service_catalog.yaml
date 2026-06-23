@@ -431,7 +431,12 @@ services:
         required: true
         meter_match:
           sku_from_item: true
+          # Price the managed deployment unit (e.g. "Premium Unit"), not the much
+          # cheaper Self-Hosted Gateway meter which shares the same skuName/tier and
+          # whose lower hourly rate would otherwise win the cheapest-meter pick.
+          meter_contains: Unit
           unit_contains: Hour
+          product_excludes: [Self Hosted Gateway, Self-Hosted Gateway]
 
   - service: Key Vault
     label: Key Vault
