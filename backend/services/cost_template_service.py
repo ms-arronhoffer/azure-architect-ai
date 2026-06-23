@@ -229,4 +229,71 @@ def parse_template(content: str, fmt: str = "") -> dict[str, Any]:
     }
 
 
-__all__ = ["parse_template", "sample_template"]
+def worksheet_to_csv(worksheet: dict[str, Any]) -> str:
+    """Flatten a priced worksheet to CSV — one row per meter — for sharing.
+
+    Columns cover the service, SKU, region, meter, billable quantity, unit
+    price, monthly + annual cost, confidence, assumptions, and the retail meter
+    citation so the figures are independently verifiable.
+    """
+    currency = str(worksheet.get("currency") or "USD")
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow(
+        [
+            "Service",
+            "Display name",
+            "SKU",
+            "Region",
+            "Meter",
+            "Unit",
+            "Billable quantity",
+            "Unit price",
+            "Monthly cost",
+            "Annual cost",
+            "Currency",
+            "Confidence",
+            "Priced",
+            "Assumptions",
+            "Meter ID",
+        ]
+    )
+    for line in worksheet.get("line_items", []) or []:
+        assumptions = "; ".join(line.get("assumptions", []) or [])
+        line_currency = str(line.get("currency") or currency)
+        meters = line.get("meters", []) or []
+        if not meters:
+            meters = [{}]
+        for meter in meters:
+            citation = meter.get("citation") or {}
+            monthly = meter.get("monthly_cost")
+            annual = round(monthly * 12, 2) if isinstance(monthly, (int, float)) else ""
+            writer.writerow(
+                [
+                    line.get("service", ""),
+                    line.get("display_name", ""),
+                    line.get("sku", ""),
+                    line.get("region", ""),
+                    meter.get("label") or meter.get("meter_name") or meter.get("dimension") or "",
+                    meter.get("unit_of_measure") or meter.get("unit") or "",
+                    meter.get("billable_quantity", meter.get("quantity", "")),
+                    meter.get("unit_price", ""),
+                    "" if monthly is None else monthly,
+                    annual,
+                    meter.get("currency") or line_currency,
+                    meter.get("confidence_label") or line.get("confidence_label") or "",
+                    "yes" if meter.get("priced") else "no",
+                    assumptions,
+                    citation.get("meter_id") or meter.get("meter_id") or "",
+                ]
+            )
+    total = worksheet.get("total_monthly_estimate")
+    if isinstance(total, (int, float)):
+        writer.writerow([])
+        writer.writerow(
+            ["TOTAL", "", "", "", "", "", "", "", total, round(total * 12, 2), currency, "", "", "", ""]
+        )
+    return buf.getvalue()
+
+
+__all__ = ["parse_template", "sample_template", "worksheet_to_csv"]

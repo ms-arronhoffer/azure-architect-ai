@@ -206,6 +206,98 @@ async def cost_optimize(req: CostOptimizeRequest, _=Depends(require_user)) -> St
     )
 
 
+class PriceArchitectureRequest(BaseModel):
+    """One front door to price an architecture from any input shape.
+
+    Provide exactly one primary input: ``text`` (free-text description),
+    ``drawio_xml`` (draw.io / mxGraph XML), ``diagram`` (our own
+    {components, connections} dict), ``image_data_url`` (a data: URL), or
+    pre-structured ``line_items``. ``attachments`` (data: URLs) are accepted as
+    a convenience — the first image is used.
+    """
+
+    text: str | None = None
+    drawio_xml: str | None = None
+    diagram: dict | None = None
+    image_data_url: str | None = None
+    attachments: list[str] = Field(default_factory=list)
+    line_items: list[dict] | None = None
+    region: str = "eastus"
+    currency: str = "USD"
+    optimization_tips: list[str] = Field(default_factory=list)
+
+
+async def _engagement_commitments() -> dict | None:
+    """Active-engagement reservation commitments, or None. Never raises."""
+    try:
+        from services.engagement_context import load_active
+
+        eng = await load_active()
+        commitments = dict(getattr(eng, "reservation_commitments", None) or {}) if eng else {}
+        return commitments or None
+    except Exception:
+        return None
+
+
+@router.post("/price-architecture")
+async def price_architecture(
+    req: PriceArchitectureRequest, _=Depends(require_user)
+) -> StreamingResponse:
+    """Stream a complete, line-by-line price list for an architecture supplied as
+    a drawing (image / draw.io XML), a diagram, free text, or explicit line
+    items. Emits status events then a single ``priced_worksheet`` SSE event."""
+    from services.architecture_pricing_service import stream_price_architecture
+
+    image = req.image_data_url or next(
+        (a for a in req.attachments if isinstance(a, str) and a.startswith("data:image/")),
+        None,
+    )
+    commitments = await _engagement_commitments()
+
+    async def gen():
+        async for ev in stream_price_architecture(
+            drawio_xml=req.drawio_xml,
+            diagram=req.diagram,
+            image_data_url=image,
+            text=req.text,
+            line_items=req.line_items,
+            region=req.region,
+            currency=req.currency,
+            optimization_tips=req.optimization_tips or None,
+            commitments=commitments,
+        ):
+            yield f"data: {json.dumps(ev, default=str)}\n\n"
+        yield "data: {\"type\": \"done\"}\n\n"
+
+    return StreamingResponse(
+        gen(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+@router.post("/worksheet/export")
+async def worksheet_export(
+    request: Request,
+    format: str = Query("csv", pattern="^(csv)$"),
+    _=Depends(require_user),
+) -> Response:
+    """Export a priced worksheet (the JSON body) as a flat, shareable CSV — one
+    row per meter with its assumptions, confidence, and citation."""
+    try:
+        worksheet = await request.json()
+    except Exception as exc:
+        raise HTTPException(status_code=422, detail=f"Invalid JSON body: {exc}") from None
+    if not isinstance(worksheet, dict):
+        raise HTTPException(status_code=422, detail="Body must be a worksheet object.")
+    content = cost_template_service.worksheet_to_csv(worksheet)
+    return Response(
+        content=content,
+        media_type="text/csv",
+        headers={"Content-Disposition": 'attachment; filename="azure-price-list.csv"'},
+    )
+
+
 @router.get("/catalog")
 async def catalog(_=Depends(require_user)) -> dict:
     """Service billing catalog: services + their billing dimensions, for the UI
