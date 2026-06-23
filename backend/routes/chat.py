@@ -548,6 +548,11 @@ async def _dispatch_tool(name: str, args: dict) -> tuple[object, dict | None]:
                 currency=args.get("currency", "USD") or "USD",
             )
             event = {"type": "region_availability", "availability": result}
+            return {
+                "status": "region_availability_resolved",
+                "cheapest_region": result.get("cheapest_region"),
+                "available_count": result.get("available_count"),
+            }, event
         except Exception as e:
             return {"status": "error", "message": str(e)}, None
 
