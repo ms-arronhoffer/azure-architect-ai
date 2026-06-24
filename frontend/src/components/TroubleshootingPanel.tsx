@@ -11,6 +11,11 @@ import {
   Tab,
   TabList,
   Badge,
+  Menu,
+  MenuTrigger,
+  MenuPopover,
+  MenuList,
+  MenuItem,
 } from "@fluentui/react-components";
 import {
   ArrowDownloadRegular,
@@ -18,6 +23,8 @@ import {
   DismissCircleRegular,
   DocumentRegular,
 } from "@fluentui/react-icons";
+import { exportMessageToDocx } from "../utils/docxExport";
+import { exportMarkdownToPdf } from "../utils/pdfExport";
 import { useSSE } from "../hooks/useSSE";
 import type {
   SseEvent,
@@ -386,9 +393,17 @@ export default function TroubleshootingPanel({ sessionId, onRefine: _onRefine, o
     return lines.join("\n");
   }
 
-  function handleExport() {
+  function handleExport(format: "md" | "docx" | "pdf") {
     if (!hasResults) return;
     const md = buildMarkdown();
+    if (format === "docx") {
+      void exportMessageToDocx(md, "troubleshooting-report.docx");
+      return;
+    }
+    if (format === "pdf") {
+      exportMarkdownToPdf(md, "troubleshooting-report.pdf");
+      return;
+    }
     const blob = new Blob([md], { type: "text/markdown" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -662,15 +677,25 @@ export default function TroubleshootingPanel({ sessionId, onRefine: _onRefine, o
                 <Tab value="kql">KQL Queries{kqlQueries.length > 0 && <span className={styles.tabDot} />}</Tab>
                 <Tab value="runbook">Runbook{runbook && <span className={styles.tabDot} />}</Tab>
               </TabList>
-              <Button
-                size="small"
-                appearance="outline"
-                icon={<ArrowDownloadRegular />}
-                onClick={handleExport}
-                disabled={!hasResults}
-              >
-                Export
-              </Button>
+              <Menu>
+                <MenuTrigger disableButtonEnhancement>
+                  <Button
+                    size="small"
+                    appearance="outline"
+                    icon={<ArrowDownloadRegular />}
+                    disabled={!hasResults}
+                  >
+                    Export
+                  </Button>
+                </MenuTrigger>
+                <MenuPopover>
+                  <MenuList>
+                    <MenuItem onClick={() => handleExport("md")}>Markdown (.md)</MenuItem>
+                    <MenuItem onClick={() => handleExport("docx")}>Word (.docx)</MenuItem>
+                    <MenuItem onClick={() => handleExport("pdf")}>PDF (.pdf)</MenuItem>
+                  </MenuList>
+                </MenuPopover>
+              </Menu>
             </div>
 
             <div className={styles.tabContent}>
