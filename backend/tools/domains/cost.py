@@ -6,8 +6,12 @@ TOOLS = [
         "function": {
             "name": "estimate_costs",
             "description": (
-                "Estimate monthly Azure costs for a set of services using the Azure Retail Pricing API. "
-                "Returns line-item cost estimates with optimization recommendations."
+                "Estimate monthly Azure costs for a set of services using the local Azure Retail "
+                "pricing catalog (resolved via a deterministic fuzzy SKU matcher, with the live "
+                "Retail API as fallback). Each line item returns the resolved/matched SKU, a "
+                "confidence score, and the alternative SKUs considered. Present the matched SKU and "
+                "confidence to the user; when confidence is low or the matched SKU differs from what "
+                "was requested, say so and ask them to confirm rather than quoting the number as fact."
             ),
             "parameters": {
                 "type": "object",
@@ -113,8 +117,11 @@ TOOLS = [
         "function": {
             "name": "live_price_lookup",
             "description": (
-                "Resolve the live Azure Retail price for one SKU right now. "
-                "Use when the user asks 'what does X cost today?' rather than for full architecture costing."
+                "Resolve the Azure Retail price for one SKU right now via the local pricing catalog "
+                "and deterministic resolver (live Retail API as fallback). Use when the user asks "
+                "'what does X cost today?' rather than for full architecture costing. Returns the "
+                "matched SKU, confidence, and candidate alternatives — surface the matched SKU and "
+                "confidence, and confirm with the user when confidence is low instead of inventing a price."
             ),
             "parameters": {
                 "type": "object",

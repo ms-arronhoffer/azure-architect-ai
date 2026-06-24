@@ -67,6 +67,24 @@ async def test_start_scheduler_idempotent(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_start_scheduler_registers_pricing_ingest_daily(monkeypatch):
+    monkeypatch.setattr(settings, "ingest_enabled", True)
+    scheduler_module.start_scheduler()
+    assert scheduler_module._scheduler is not None
+
+    jobs = {j.id: j for j in scheduler_module._scheduler.get_jobs()}
+    # issubset (not strict equality) per the scheduler test convention.
+    assert {"pricing_ingest_daily"}.issubset(jobs.keys())
+
+    pricing = jobs["pricing_ingest_daily"]
+    assert pricing.max_instances == 1
+    assert pricing.coalesce is True
+    fields = {f.name: str(f) for f in pricing.trigger.fields}
+    assert fields["hour"] == "4"
+    assert fields["minute"] == "53"
+
+
+@pytest.mark.asyncio
 async def test_shutdown_clears_singleton(monkeypatch):
     monkeypatch.setattr(settings, "ingest_enabled", True)
     scheduler_module.start_scheduler()

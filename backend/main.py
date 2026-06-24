@@ -37,6 +37,7 @@ from routes.intake import router as intake_router  # noqa: E402
 from routes.model_migration import router as model_migration_router  # noqa: E402
 from routes.parse import router as parse_router  # noqa: E402
 from routes.presentation import router as presentation_router  # noqa: E402
+from routes.pricing_admin import router as pricing_admin_router  # noqa: E402
 from routes.rag import router as rag_router  # noqa: E402
 from routes.refarch import router as refarch_router  # noqa: E402
 from routes.refarch_admin import router as refarch_admin_router  # noqa: E402
@@ -169,6 +170,7 @@ app.include_router(demo_router, prefix="/api")
 app.include_router(demos_admin_router, prefix="/api")
 app.include_router(refarch_router, prefix="/api")
 app.include_router(refarch_admin_router, prefix="/api")
+app.include_router(pricing_admin_router, prefix="/api")
 app.include_router(security_router, prefix="/api")
 app.include_router(model_migration_router, prefix="/api")
 app.include_router(report_analyzer_router, prefix="/api")

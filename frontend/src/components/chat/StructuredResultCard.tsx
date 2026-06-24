@@ -112,7 +112,30 @@ export default function StructuredResultCard({ result, onContinueIn, onQuickRepl
           <TableBody>
             {data.line_items.map((item, i) => (
               <TableRow key={i}>
-                <TableCell>{item.service}</TableCell><TableCell>{item.sku || "—"}</TableCell>
+                <TableCell>{item.service}</TableCell>
+                <TableCell>
+                  {item.matched_sku || item.sku || "—"}
+                  {item.confidence != null && (
+                    <Badge
+                      appearance="tint"
+                      color={item.low_confidence ? "warning" : "success"}
+                      size="small"
+                      style={{ marginLeft: 6 }}
+                    >
+                      {Math.round((item.confidence ?? 0) * 100)}%{item.low_confidence ? " low" : ""} confidence
+                    </Badge>
+                  )}
+                  {item.sku_swapped && item.requested_sku && (
+                    <Text size={100} style={{ display: "block", color: tokens.colorNeutralForeground3 }}>
+                      requested “{item.requested_sku}”
+                    </Text>
+                  )}
+                  {item.meter_name && (
+                    <Text size={100} style={{ display: "block", color: tokens.colorNeutralForeground3 }}>
+                      Azure Retail meter: {item.meter_name}
+                    </Text>
+                  )}
+                </TableCell>
                 <TableCell>{item.quantity}</TableCell>
                 <TableCell>{item.monthly_estimate != null ? `$${item.monthly_estimate.toLocaleString()}` : "—"}</TableCell>
               </TableRow>

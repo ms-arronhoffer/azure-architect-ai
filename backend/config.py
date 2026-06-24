@@ -62,6 +62,26 @@ class Settings(BaseSettings):
     ingest_enabled: bool = False
     ingest_user_agent: str = "AzureArchitectAI-Ingest/1.0"
 
+    # Retail pricing catalog. When `pricing_catalog_enabled` is true, pricing
+    # lookups resolve against the locally-scraped `PricingMeter` table (falling
+    # back to a committed snapshot, then the live Retail API, then MCP). The
+    # `pricing_ingest_daily` scheduler job walks prices.azure.com and upserts
+    # rows for the regions/currency below. Use `["*"]` to scrape every region.
+    pricing_catalog_enabled: bool = True
+    pricing_regions: list[str] = [
+        "eastus",
+        "eastus2",
+        "westus2",
+        "westus3",
+        "centralus",
+        "westeurope",
+        "northeurope",
+        "uksouth",
+    ]
+    pricing_currency: str = "USD"
+    pricing_catalog_ttl_days: int = 30
+    pricing_resolver_confidence_floor: float = 0.45
+
     # Per-user daily OpenAI token budget (prompt + completion, rolling 24h).
     # Set to 0 to disable. Default is intentionally generous so it never breaks
     # legitimate multi-turn architecture runs; tune downward only after observing
