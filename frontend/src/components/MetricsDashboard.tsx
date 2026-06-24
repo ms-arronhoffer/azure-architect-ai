@@ -703,7 +703,9 @@ export default function MetricsDashboard() {
                 {data.token_by_user.map((row) => (
                   <TableRow key={row.user_id}>
                     <TableCell>
-                      <Text style={{ fontSize: "11px", fontFamily: "monospace" }}>{row.user_id}</Text>
+                      <Text style={{ fontSize: "11px", fontFamily: "monospace" }} title={row.user_id}>
+                        {row.user_id.length > 20 ? `${row.user_id.slice(0, 20)}…` : row.user_id}
+                      </Text>
                     </TableCell>
                     <TableCell>{row.prompt_tokens.toLocaleString()}</TableCell>
                     <TableCell>{row.completion_tokens.toLocaleString()}</TableCell>
