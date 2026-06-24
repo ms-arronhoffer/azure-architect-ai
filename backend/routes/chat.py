@@ -785,17 +785,50 @@ async def _dispatch_tool(name: str, args: dict) -> tuple[object, dict | None]:
         return {"status": "service_recommended"}, {"type": "decision_card", "card": {**args}}
 
     if name == "diagnose_issue":
-        event = {"type": "diagnosis", "diagnosis": {**args}}
+        diagnosis = {
+            "root_cause_hypotheses": [
+                {
+                    "hypothesis": h.get("cause", ""),
+                    "likelihood": h.get("likelihood", "medium"),
+                    "evidence_to_confirm": h.get("evidence_needed") or h.get("rule_out_check", ""),
+                    "azure_service": h.get("azure_service"),
+                }
+                for h in (args.get("hypotheses") or [])
+            ],
+            "affected_services": args.get("affected_services") or [],
+            "severity": args.get("severity", "medium"),
+            "estimated_blast_radius": args.get("blast_radius") or args.get("estimated_blast_radius"),
+        }
+        event = {"type": "diagnosis", "diagnosis": diagnosis}
         return {"status": "diagnosis_received"}, event
 
     if name == "generate_kql_queries":
-        event = {"type": "kql_queries", "queries": args.get("queries", [])}
+        queries = [
+            {
+                "name": q.get("name", ""),
+                "query": q.get("kql") or q.get("query", ""),
+                "purpose": q.get("purpose", ""),
+                "table": q.get("table"),
+            }
+            for q in (args.get("queries") or [])
+        ]
+        event = {"type": "kql_queries", "queries": queries}
         return {"status": "kql_received"}, event
 
     if name == "generate_remediation_runbook":
+        steps = [
+            {
+                "step_number": s.get("order", i + 1),
+                "action": s.get("action", ""),
+                "command": s.get("command"),
+                "expected_output": s.get("expected_output"),
+                "if_fails": s.get("fallback") or s.get("if_fails"),
+            }
+            for i, s in enumerate(args.get("steps") or [])
+        ]
         event = {
             "type": "remediation_runbook",
-            "steps": args.get("steps", []),
+            "steps": steps,
             "escalation_path": args.get("escalation_path", ""),
             "estimated_minutes": args.get("estimated_resolution_minutes", 0),
         }
