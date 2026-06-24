@@ -28,7 +28,7 @@ import { useSSE } from "../hooks/useSSE";
 import type { CodeFile, ChatMessage } from "../types";
 import { apiFetch } from "../config/api";
 
-const LANGUAGES = ["python", "typescript", "csharp", "java", "go", "rust", "m"];
+const LANGUAGES = ["python", "typescript", "csharp", "java", "go", "rust", "powershell", "m"];
 const LANG_LABELS: Record<string, string> = {
   python: "Python",
   typescript: "TypeScript",
@@ -36,6 +36,7 @@ const LANG_LABELS: Record<string, string> = {
   java: "Java",
   go: "Go",
   rust: "Rust",
+  powershell: "PowerShell",
   m: "Power Query M",
 };
 

@@ -33,6 +33,7 @@ import {
 } from "@fluentui/react-icons";
 import { apiFetch } from "../config/api";
 import { TOASTER_ID } from "../constants/toaster";
+import { ToastDismissButton } from "./ToastDismissButton";
 import type {
   CostOptimization,
   CostCatalog,
@@ -275,7 +276,7 @@ export default function CostOptimizePanel() {
     ) => {
       dispatchToast(
         <Toast>
-          <ToastTitle>{title}</ToastTitle>
+          <ToastTitle action={<ToastDismissButton />}>{title}</ToastTitle>
           {body ? <ToastBody>{body}</ToastBody> : null}
         </Toast>,
         { intent },
