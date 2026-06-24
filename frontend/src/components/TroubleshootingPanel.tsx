@@ -338,9 +338,9 @@ export default function TroubleshootingPanel({ sessionId, onRefine: _onRefine, o
         {diagnosis && (
           <div style={{ display: "flex", gap: "8px", marginBottom: "12px", flexWrap: "wrap" }}>
             <Badge appearance="filled" color={SEVERITY_COLOR[diagnosis.severity] ?? "informative"} size="large">
-              {diagnosis.severity.toUpperCase()}
+              {(diagnosis.severity ?? "").toUpperCase()}
             </Badge>
-            {diagnosis.affected_services.map((s) => (
+            {(diagnosis.affected_services ?? []).map((s) => (
               <Badge key={s} appearance="tint" color="brand" size="small">{s}</Badge>
             ))}
             {diagnosis.estimated_blast_radius && (
@@ -358,7 +358,8 @@ export default function TroubleshootingPanel({ sessionId, onRefine: _onRefine, o
   }
 
   function renderDiagnosisTab() {
-    if (!diagnosis) {
+    const hypotheses = diagnosis?.root_cause_hypotheses ?? [];
+    if (!diagnosis || hypotheses.length === 0) {
       return (
         <div className={styles.emptyTabHint}>
           <Text size={300} style={{ color: tokens.colorNeutralForeground3 }}>
@@ -370,11 +371,11 @@ export default function TroubleshootingPanel({ sessionId, onRefine: _onRefine, o
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
         <Text weight="semibold" size={400}>Root Cause Hypotheses</Text>
-        {diagnosis.root_cause_hypotheses.map((h, i) => (
+        {hypotheses.map((h, i) => (
           <div key={i} className={styles.hypothesisCard}>
             <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
               <Badge appearance="filled" color={LIKELIHOOD_COLOR[h.likelihood] ?? "informative"} size="small">
-                {h.likelihood.toUpperCase()}
+                {(h.likelihood ?? "").toUpperCase()}
               </Badge>
               {h.azure_service && (
                 <Badge appearance="tint" color="brand" size="small">{h.azure_service}</Badge>
@@ -443,7 +444,7 @@ export default function TroubleshootingPanel({ sessionId, onRefine: _onRefine, o
             <Badge appearance="tint" color="informative">Est. {runbook.estimated_resolution_minutes} min</Badge>
           </div>
         )}
-        {runbook.steps.map((step, i) => (
+        {(runbook.steps ?? []).map((step, i) => (
           <div key={i} className={styles.stepCard}>
             <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
               <Badge appearance="filled" color="brand" size="small">Step {step.step_number}</Badge>
