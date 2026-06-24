@@ -13,6 +13,7 @@ import {
   Badge,
 } from "@fluentui/react-components";
 import {
+  ArrowDownloadRegular,
   ArrowUploadRegular,
   DismissCircleRegular,
   DocumentRegular,
@@ -86,6 +87,10 @@ const useStyles = makeStyles({
     background: tokens.colorNeutralBackground1,
     borderBottom: `1px solid ${tokens.colorNeutralStroke2}`,
     flexShrink: 0,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: "12px",
   },
   tabContent: {
     flex: 1,
@@ -318,6 +323,79 @@ export default function TroubleshootingPanel({ sessionId, onRefine: _onRefine, o
 
   async function copyToClipboard(text: string) {
     await navigator.clipboard.writeText(text);
+  }
+
+  function buildMarkdown(): string {
+    const lines: string[] = ["# Troubleshooting Report", ""];
+
+    if (symptoms.trim()) {
+      lines.push("## Symptoms", "", symptoms.trim(), "");
+    }
+    if (errorLogs.trim()) {
+      lines.push("## Error Messages / Logs", "", "```", errorLogs.trim(), "```", "");
+    }
+    if (narrative.trim()) {
+      lines.push("## Analysis", "", narrative.trim(), "");
+    }
+    if (diagnosis) {
+      lines.push("## Diagnosis", "");
+      lines.push(`- **Severity:** ${(diagnosis.severity ?? "").toUpperCase()}`);
+      if (diagnosis.affected_services?.length) {
+        lines.push(`- **Affected services:** ${diagnosis.affected_services.join(", ")}`);
+      }
+      if (diagnosis.estimated_blast_radius) {
+        lines.push(`- **Estimated blast radius:** ${diagnosis.estimated_blast_radius}`);
+      }
+      lines.push("");
+      const hypotheses = diagnosis.root_cause_hypotheses ?? [];
+      if (hypotheses.length) {
+        lines.push("### Root Cause Hypotheses", "");
+        hypotheses.forEach((h, i) => {
+          lines.push(`${i + 1}. **${h.hypothesis}** _(${(h.likelihood ?? "").toUpperCase()}${h.azure_service ? `, ${h.azure_service}` : ""})_`);
+          if (h.evidence_to_confirm) {
+            lines.push(`   - Evidence needed: ${h.evidence_to_confirm}`);
+          }
+        });
+        lines.push("");
+      }
+    }
+    if (kqlQueries.length) {
+      lines.push("## KQL Queries", "");
+      kqlQueries.forEach((q) => {
+        lines.push(`### ${q.name}${q.table ? ` (${q.table})` : ""}`, "");
+        if (q.purpose) lines.push(q.purpose, "");
+        lines.push("```kql", q.query, "```", "");
+      });
+    }
+    if (runbook) {
+      lines.push("## Remediation Runbook", "");
+      if (runbook.estimated_resolution_minutes != null) {
+        lines.push(`_Estimated resolution: ${runbook.estimated_resolution_minutes} min_`, "");
+      }
+      (runbook.steps ?? []).forEach((step) => {
+        lines.push(`### Step ${step.step_number}: ${step.action}`, "");
+        if (step.command) lines.push("```", step.command, "```", "");
+        if (step.expected_output) lines.push(`Expected: ${step.expected_output}`, "");
+        if (step.if_fails) lines.push(`If fails: ${step.if_fails}`, "");
+      });
+      if (runbook.escalation_path) {
+        lines.push("### Escalation Path", "", runbook.escalation_path, "");
+      }
+    }
+
+    return lines.join("\n");
+  }
+
+  function handleExport() {
+    if (!hasResults) return;
+    const md = buildMarkdown();
+    const blob = new Blob([md], { type: "text/markdown" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "troubleshooting-report.md";
+    a.click();
+    URL.revokeObjectURL(url);
   }
 
   function renderAnalysisTab() {
@@ -584,6 +662,15 @@ export default function TroubleshootingPanel({ sessionId, onRefine: _onRefine, o
                 <Tab value="kql">KQL Queries{kqlQueries.length > 0 && <span className={styles.tabDot} />}</Tab>
                 <Tab value="runbook">Runbook{runbook && <span className={styles.tabDot} />}</Tab>
               </TabList>
+              <Button
+                size="small"
+                appearance="outline"
+                icon={<ArrowDownloadRegular />}
+                onClick={handleExport}
+                disabled={!hasResults}
+              >
+                Export
+              </Button>
             </div>
 
             <div className={styles.tabContent}>
