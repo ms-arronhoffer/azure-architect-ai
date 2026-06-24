@@ -266,7 +266,7 @@ def route(
             )
 
         resp = openai_service.call_with_retry(
-            _call, max_attempts=2, model_name=deployment
+            _call, max_attempts=2, model_name=deployment, mode="router"
         )
         raw = resp.choices[0].message.content or "{}"
         parsed = _parse_response(raw)

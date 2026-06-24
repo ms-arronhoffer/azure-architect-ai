@@ -23,7 +23,7 @@ from typing import Any
 
 import jwt
 
-from db import engagement_id_var, tenant_id_var
+from db import engagement_id_var, tenant_id_var, user_id_var
 
 
 def _tenant_from_headers(headers: list[tuple[bytes, bytes]]) -> str:
@@ -42,6 +42,31 @@ def _tenant_from_headers(headers: list[tuple[bytes, bytes]]) -> str:
                 return "default"
             return str(claims.get("tid") or "default")
     return "default"
+
+
+def _user_from_headers(headers: list[tuple[bytes, bytes]]) -> str | None:
+    """Best-effort user id (oid, falling back to sub) from the bearer token.
+
+    Mirrors `auth.entra.user_id_from_claims`. Signature is NOT verified here —
+    this only acts as a query/usage-attribution key; the real auth check still
+    runs in `Depends(require_user)` before any data is returned.
+    """
+    for key, value in headers:
+        if key.lower() == b"authorization":
+            header = value.decode("latin-1", errors="ignore")
+            if not header.lower().startswith("bearer "):
+                return None
+            token = header[7:].strip()
+            try:
+                claims = jwt.decode(
+                    token,
+                    options={"verify_signature": False, "verify_aud": False, "verify_exp": False},
+                )
+            except Exception:
+                return None
+            uid = claims.get("oid") or claims.get("sub")
+            return str(uid) if uid else None
+    return None
 
 
 def _engagement_from_headers(headers: list[tuple[bytes, bytes]]) -> str | None:
@@ -64,8 +89,10 @@ class TenantContextMiddleware:
         headers = scope.get("headers") or []
         tenant_tok = tenant_id_var.set(_tenant_from_headers(headers))
         eng_tok = engagement_id_var.set(_engagement_from_headers(headers))
+        user_tok = user_id_var.set(_user_from_headers(headers))
         try:
             await self.app(scope, receive, send)
         finally:
+            user_id_var.reset(user_tok)
             engagement_id_var.reset(eng_tok)
             tenant_id_var.reset(tenant_tok)

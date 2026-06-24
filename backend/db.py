@@ -26,9 +26,20 @@ tenant_id_var: ContextVar[str] = ContextVar("tenant_id", default="default")
 # chat prepends the engagement preamble to the system prompt when set.
 engagement_id_var: ContextVar[str | None] = ContextVar("engagement_id", default=None)
 
+# Per-request user scope. Populated by TenantContextMiddleware from the JWT
+# `oid`/`sub` claim. None for unauthenticated/background work. Read by the
+# token-usage recorder so LLM calls made deep inside services (cost/demo
+# pipelines, router, reranker, embeddings) are attributed to the caller even
+# when the route handler does not thread the user id through explicitly.
+user_id_var: ContextVar[str | None] = ContextVar("user_id", default=None)
+
 
 def current_tenant_id() -> str:
     return tenant_id_var.get()
+
+
+def current_user_id() -> str | None:
+    return user_id_var.get()
 
 
 def current_engagement_id() -> str | None:
@@ -465,10 +476,12 @@ __all__ = [
     "WhatsNewCache",
     "current_engagement_id",
     "current_tenant_id",
+    "current_user_id",
     "engagement_id_var",
     "get_session",
     "init_db",
     "select",
     "session_scope",
     "tenant_id_var",
+    "user_id_var",
 ]

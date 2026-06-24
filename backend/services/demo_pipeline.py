@@ -263,6 +263,7 @@ async def _llm_json(
                 _stream_and_collect,
                 max_attempts=2,
                 model_name=deployment,
+                mode="demo",
             )
         except BadRequestError as exc:
             msg = getattr(exc, "message", None) or str(exc)
@@ -299,6 +300,7 @@ async def _llm_json(
                 lambda: client.chat.completions.create(**kwargs),
                 max_attempts=2,
                 model_name=deployment,
+                mode="demo",
             )
 
         attempts: list[tuple[str, list[dict], str]] = [
