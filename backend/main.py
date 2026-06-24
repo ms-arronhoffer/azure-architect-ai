@@ -103,6 +103,15 @@ async def lifespan(app: FastAPI):
         background_tasks: set[asyncio.Task] = set()
         app.state.startup_tasks = background_tasks
 
+        # Capture the main loop so usage writes scheduled from worker threads
+        # (LLM calls run via asyncio.to_thread in pipelines) can be persisted.
+        try:
+            from services.token_service import set_main_loop
+            set_main_loop(asyncio.get_running_loop())
+        except Exception as exc:
+            from middleware.logging import get_logger
+            get_logger("startup").warning("token_loop.capture_failed", error=str(exc))
+
         def _spawn(coro) -> None:
             task = asyncio.create_task(coro)
             background_tasks.add(task)

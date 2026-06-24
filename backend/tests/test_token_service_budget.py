@@ -90,3 +90,44 @@ async def test_check_budget_disabled_when_zero(monkeypatch):
     assert allowed
     assert used == 0
     assert limit == 0
+
+
+@pytest.mark.asyncio
+async def test_record_llm_usage_attributes_to_context_user():
+    """record_llm_usage falls back to the request-scoped user and persists tokens."""
+    import uuid
+
+    from db import user_id_var
+    from services.token_service import record_llm_usage
+
+    await init_db()
+    uid = f"u-ctx-{uuid.uuid4().hex[:8]}"
+    tok = user_id_var.set(uid)
+    try:
+        record_llm_usage("gpt-4o-mini", "cost-optimize", 120, 80)
+    finally:
+        user_id_var.reset(tok)
+    # The write is scheduled fire-and-forget on the running loop; let it drain.
+    import asyncio
+    await asyncio.sleep(0.05)
+    used = await daily_usage_tokens(uid)
+    assert used == 200
+
+
+@pytest.mark.asyncio
+async def test_record_llm_usage_skips_when_no_user():
+    """Background/system work with no user in scope is not recorded."""
+    import asyncio
+
+    from db import user_id_var
+    from services.token_service import record_llm_usage
+
+    await init_db()
+    tok = user_id_var.set(None)
+    try:
+        record_llm_usage("gpt-4o-mini", "embedding", 500, 0)
+    finally:
+        user_id_var.reset(tok)
+    await asyncio.sleep(0.05)
+    # No user → nothing attributable; the explicit None sentinel user has no rows.
+    assert await daily_usage_tokens("") == 0

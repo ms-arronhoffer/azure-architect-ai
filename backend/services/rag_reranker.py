@@ -133,6 +133,7 @@ async def rerank(query: str, hits: list[dict], top_k: int = 5) -> list[dict]:
                 response_format={"type": "json_object"},
             ),
             model_name=deployment,
+            mode="rerank",
         )
         raw = resp.choices[0].message.content or ""
     except Exception as exc:

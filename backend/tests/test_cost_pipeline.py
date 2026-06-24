@@ -32,7 +32,7 @@ def _patch_narration(monkeypatch, *, captured: list[str] | None = None, text: st
     def fake_resolve(mode: str = "chat", provider: str = "azure", model=None, github_token=None):
         return fake_client, "fake-deployment"
 
-    def fake_call_with_retry(fn, *, max_attempts: int = 2, model_name: str = ""):
+    def fake_call_with_retry(fn, *, max_attempts: int = 2, model_name: str = "", mode: str = "system"):
         # Re-build the prompt the way _phase_narration does, by intercepting
         # the lambda's closure. Simpler: invoke fn() with a stubbed client.
         return fn()
