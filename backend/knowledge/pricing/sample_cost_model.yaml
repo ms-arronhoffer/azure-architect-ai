@@ -1,0 +1,78 @@
+# ============================================================================
+# Azure Cost Model — sample input template
+# ============================================================================
+# Hand this file to the Cost Optimize tool (Upload template) to get a
+# meter-level price estimate plus savings recommendations. Every field below is
+# documented; optional fields can be deleted. Run `GET /api/cost/catalog` (or
+# the "Add service" dropdown in the UI) to see which services and billing
+# dimensions are supported.
+#
+# Pricing is pulled live from the Azure Retail Pricing API (pay-as-you-go).
+# Each service is billed on MULTIPLE meters — e.g. SQL Database charges for
+# vCore compute AND data storage AND backup — so fill in the `dimensions:` that
+# apply to your workload, not just a single SKU.
+# ----------------------------------------------------------------------------
+
+model_name: Contoso Web Platform        # free-text label for this estimate
+default_region: eastus                   # used when a service omits `region`
+currency: USD                            # USD only for v1
+
+services:
+
+  # ── Web tier: App Service plan ────────────────────────────────────────────
+  - name: App Service                     # must match a catalog service/alias
+    display_name: Prod API plan           # free-text label shown in the report
+    sku: P1v3                             # plan / tier / VM size
+    region: eastus
+    quantity: 2                           # number of instances
+    hours_per_month: 730                  # 730 = always on; lower = part-time
+    tags: [cost-center-1234, prod]
+    commitment: 3yr_ri                    # none | 1yr_ri | 3yr_ri | savings_plan
+
+  # ── Data tier: Azure SQL Database (vCore) ─────────────────────────────────
+  - name: SQL Database
+    display_name: Orders DB
+    sku: GP_Gen5_4                        # General Purpose, Gen5, 4 vCores
+    region: eastus
+    quantity: 1
+    hours_per_month: 730
+    dimensions:
+      storage_gb: 256                     # provisioned data storage
+      backup_gb: 100                      # PITR / backup storage
+    tags: [prod]
+
+  # ── Storage account ───────────────────────────────────────────────────────
+  - name: Storage
+    display_name: Media blobs
+    sku: Hot LRS                          # tier + redundancy
+    region: eastus
+    dimensions:
+      capacity_gb: 5120                   # GB stored / month
+      write_ops_10k: 50                   # write ops in units of 10k
+      read_ops_10k: 800                   # read ops in units of 10k
+
+  # ── Serverless compute: Functions ─────────────────────────────────────────
+  - name: Azure Functions
+    display_name: Image processor
+    region: eastus
+    dimensions:
+      executions_millions: 12             # total executions (first 1M free)
+      gb_seconds: 6                        # millions of GB-seconds (first 0.4M free)
+
+  # ── Virtual machine ───────────────────────────────────────────────────────
+  - name: Virtual Machines
+    display_name: Batch worker
+    sku: Standard_D4s_v5
+    region: eastus
+    quantity: 1
+    hours_per_month: 200                  # part-time → idle-resource recommendation
+    dimensions:
+      os_disk_gb: 128                     # managed disk capacity per instance
+    commitment: none
+
+  # ── Egress bandwidth ──────────────────────────────────────────────────────
+  - name: Bandwidth
+    display_name: Outbound transfer
+    region: eastus
+    dimensions:
+      egress_gb: 1024                     # GB out / month (first 100 GB free)

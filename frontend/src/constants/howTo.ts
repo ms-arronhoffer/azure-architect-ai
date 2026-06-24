@@ -31,7 +31,7 @@ export const HOW_TO_SECTIONS: HowToSection[] = [
   },
   {
     label: "Plan",
-    modes: ["intake", "intakechat", "analyze", "cost-optimize", "strategy"],
+    modes: ["intake", "intakechat", "analyze", "cost-optimize", "pricing-desk", "strategy"],
   },
   {
     label: "Design",
@@ -278,6 +278,23 @@ export const HOW_TO: Partial<Record<Mode, HowToEntry>> = {
       "Optimized cost estimate with RI adjustments and right-sized SKUs.",
       "Narrated report explaining each recommendation.",
       "Carbon delta (current vs optimized).",
+    ],
+  },
+  "pricing-desk": {
+    label: "Pricing Desk",
+    whatItDoes:
+      "Conversational pricing for ANY Azure service (not just VMs). Describe what you need priced and a live, exportable worksheet builds on the right, priced across every billing meter via the Azure Retail Pricing API.",
+    howToUse: [
+      "Describe what to price, e.g. '3× D8s_v5 in West Europe and 5 TB hot blob storage'.",
+      "Iterate in chat — add lines, change regions, or switch to reservations; the worksheet updates.",
+      "Ask 'where is this cheaper?' to see per-region availability and one-click re-price.",
+      "Click Export to Excel for a worksheet + recommendations workbook.",
+    ],
+    outputs: [
+      "Meter-level pricing worksheet with per-line subtotals and a grand total.",
+      "Cost-savings recommendations (reservations, right-sizing, region/tier swaps).",
+      "Region availability comparison for selected SKUs.",
+      "Excel (.xlsx) export.",
     ],
   },
   strategy: {

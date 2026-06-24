@@ -5,14 +5,17 @@ from __future__ import annotations
 import asyncio
 import json
 
-from fastapi import APIRouter, Depends, HTTPException, Query
-from fastapi.responses import StreamingResponse
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel, Field
 
 from auth import require_user
 from services import (
     carbon_service,
+    cost_catalog,
     cost_service,
+    cost_template_service,
+    region_availability_service,
     reservations_service,
     retail_pricing_service,
     rightsizing_service,
@@ -81,6 +84,26 @@ async def retail_price(
             region=region,
             quantity=quantity,
             hours_per_month=hours_per_month,
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
+@router.get("/region-availability")
+async def region_availability(
+    service: str = Query(..., min_length=1),
+    sku: str = Query(""),
+    regions: list[str] | None = Query(default=None),
+    currency: str = Query("USD"),
+    _=Depends(require_user),
+) -> dict:
+    """Per-region availability + live unit price for one service/SKU, cheapest first."""
+    try:
+        return await region_availability_service.availability(
+            service=service,
+            sku=sku,
+            regions=regions or None,
+            currency=currency,
         )
     except Exception as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
@@ -181,4 +204,142 @@ async def cost_optimize(req: CostOptimizeRequest, _=Depends(require_user)) -> St
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+
+
+class PriceArchitectureRequest(BaseModel):
+    """One front door to price an architecture from any input shape.
+
+    Provide exactly one primary input: ``text`` (free-text description),
+    ``drawio_xml`` (draw.io / mxGraph XML), ``diagram`` (our own
+    {components, connections} dict), ``image_data_url`` (a data: URL), or
+    pre-structured ``line_items``. ``attachments`` (data: URLs) are accepted as
+    a convenience — the first image is used.
+    """
+
+    text: str | None = None
+    drawio_xml: str | None = None
+    diagram: dict | None = None
+    image_data_url: str | None = None
+    attachments: list[str] = Field(default_factory=list)
+    line_items: list[dict] | None = None
+    region: str = "eastus"
+    currency: str = "USD"
+    optimization_tips: list[str] = Field(default_factory=list)
+
+
+async def _engagement_commitments() -> dict | None:
+    """Active-engagement reservation commitments, or None. Never raises."""
+    try:
+        from services.engagement_context import load_active
+
+        eng = await load_active()
+        commitments = dict(getattr(eng, "reservation_commitments", None) or {}) if eng else {}
+        return commitments or None
+    except Exception:
+        return None
+
+
+@router.post("/price-architecture")
+async def price_architecture(
+    req: PriceArchitectureRequest, _=Depends(require_user)
+) -> StreamingResponse:
+    """Stream a complete, line-by-line price list for an architecture supplied as
+    a drawing (image / draw.io XML), a diagram, free text, or explicit line
+    items. Emits status events then a single ``priced_worksheet`` SSE event."""
+    from services.architecture_pricing_service import stream_price_architecture
+
+    image = req.image_data_url or next(
+        (a for a in req.attachments if isinstance(a, str) and a.startswith("data:image/")),
+        None,
+    )
+    commitments = await _engagement_commitments()
+
+    async def gen():
+        async for ev in stream_price_architecture(
+            drawio_xml=req.drawio_xml,
+            diagram=req.diagram,
+            image_data_url=image,
+            text=req.text,
+            line_items=req.line_items,
+            region=req.region,
+            currency=req.currency,
+            optimization_tips=req.optimization_tips or None,
+            commitments=commitments,
+        ):
+            yield f"data: {json.dumps(ev, default=str)}\n\n"
+        yield "data: {\"type\": \"done\"}\n\n"
+
+    return StreamingResponse(
+        gen(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+@router.post("/worksheet/export")
+async def worksheet_export(
+    request: Request,
+    format: str = Query("csv", pattern="^(csv)$"),
+    _=Depends(require_user),
+) -> Response:
+    """Export a priced worksheet (the JSON body) as a flat, shareable CSV — one
+    row per meter with its assumptions, confidence, and citation."""
+    try:
+        worksheet = await request.json()
+    except Exception:
+        raise HTTPException(status_code=422, detail="Invalid JSON body.") from None
+    if not isinstance(worksheet, dict):
+        raise HTTPException(status_code=422, detail="Body must be a worksheet object.")
+    content = cost_template_service.worksheet_to_csv(worksheet)
+    return Response(
+        content=content,
+        media_type="text/csv",
+        headers={"Content-Disposition": 'attachment; filename="azure-price-list.csv"'},
+    )
+
+
+@router.get("/catalog")
+async def catalog(_=Depends(require_user)) -> dict:
+    """Service billing catalog: services + their billing dimensions, for the UI
+    to render dimension fields dynamically and validate input."""
+    return cost_catalog.public_catalog()
+
+
+@router.get("/template/sample")
+async def template_sample(
+    format: str = Query("yaml", pattern="^(yaml|json|csv)$"),
+    _=Depends(require_user),
+) -> Response:
+    """Download a documented sample cost-model template (yaml | json | csv)."""
+    try:
+        content, media, filename = cost_template_service.sample_template(format)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return Response(
+        content=content,
+        media_type=media,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.post("/template/parse")
+async def template_parse(request: Request, _=Depends(require_user)) -> dict:
+    """Parse + validate an uploaded cost-model template (yaml/json/csv body, or
+    pre-extracted text from an .xlsx via /api/parse). Returns a normalized
+    request shape plus per-entry validation warnings (never 500 on bad input)."""
+    fmt = (request.headers.get("X-Template-Format") or "").strip()
+    if not fmt:
+        filename = request.headers.get("X-Filename", "")
+        if "." in filename:
+            fmt = filename.rsplit(".", 1)[-1]
+    raw = await request.body()
+    if not raw:
+        raise HTTPException(status_code=422, detail="Uploaded template is empty.")
+    try:
+        text = raw.decode("utf-8")
+    except UnicodeDecodeError:
+        raise HTTPException(
+            status_code=422, detail="Template must be UTF-8 encoded text."
+        ) from None
+    return cost_template_service.parse_template(text, fmt)
 

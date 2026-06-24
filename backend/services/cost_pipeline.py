@@ -24,13 +24,14 @@ from middleware.logging import get_logger
 from prompts.cost_narration import COST_NARRATION_PROMPT
 from services import (
     carbon_service,
+    cost_recommendations_service,
+    meter_pricing_service,
     openai_service,
     reservations_service,
     retail_pricing_service,
     rightsizing_service,
 )
 from services.engagement_context import load_active
-from services.pricing_service import estimate_architecture
 
 log = get_logger("cost_pipeline")
 
@@ -41,6 +42,11 @@ class CostLineItem(BaseModel):
     region: str = "eastus"
     quantity: float = 1.0
     hours_per_month: float = 730.0
+    # Meter-aware extensions (all optional — bare {service, sku} still works).
+    dimensions: dict[str, float] = Field(default_factory=dict)
+    display_name: str = ""
+    tags: list[str] = Field(default_factory=list)
+    commitment: str = "none"  # none | 1yr_ri | 3yr_ri | savings_plan
 
 
 class ReservationCommitment(BaseModel):
@@ -70,13 +76,34 @@ async def _phase_estimate(
         return
     try:
         items_payload = [li.model_dump() for li in req.items]
-        result = await estimate_architecture(items_payload)
-        state["estimate"] = result
+        # Meter-aware breakdown: prices every billing dimension a service emits.
+        breakdown = await meter_pricing_service.price_model(
+            items_payload, region_default=req.region
+        )
+        state["cost_breakdown"] = breakdown
+        # Keep the legacy single-meter shape too, for any downstream consumer
+        # that still expects `estimate.line_items[].monthly_estimate`.
+        state["estimate"] = {
+            "line_items": [
+                {
+                    "service": line.get("service"),
+                    "sku": line.get("sku"),
+                    "region": line.get("region"),
+                    "monthly_estimate": line.get("monthly_subtotal"),
+                    "meters": line.get("meters", []),
+                }
+                for line in breakdown.get("line_items", [])
+            ],
+            "total_monthly_estimate": breakdown.get("total_monthly_estimate"),
+            "currency": breakdown.get("currency"),
+            "summary": breakdown.get("summary"),
+        }
         yield _phase_event(
             "estimate",
             "complete",
-            total_monthly_estimate=result.get("total_monthly_estimate"),
-            line_count=len(result.get("line_items", [])),
+            total_monthly_estimate=breakdown.get("total_monthly_estimate"),
+            line_count=len(breakdown.get("line_items", [])),
+            unpriced_meters=breakdown.get("summary", {}).get("unpriced_meters", 0),
         )
     except Exception as exc:
         log.warning("cost_pipeline.estimate_failed", error=str(exc))
@@ -225,6 +252,31 @@ async def _phase_break_even(state: dict[str, Any]) -> AsyncGenerator[dict, None]
         yield _phase_event("break_even", "failed", error=str(exc))
 
 
+async def _phase_recommendations(
+    req: CostOptimizeRequest, state: dict[str, Any]
+) -> AsyncGenerator[dict, None]:
+    """Deterministic, engagement-free savings recommendations grounded in the
+    meter-level breakdown. Never raises."""
+    yield _phase_event("recommendations", "started")
+    breakdown = state.get("cost_breakdown")
+    if not breakdown or not breakdown.get("line_items"):
+        yield _phase_event("recommendations", "skipped", reason="no_breakdown")
+        return
+    try:
+        items_payload = [li.model_dump() for li in req.items]
+        result = await cost_recommendations_service.recommend(breakdown, items_payload)
+        state["recommendations"] = result
+        yield _phase_event(
+            "recommendations",
+            "complete",
+            recommendation_count=result.get("count", 0),
+            total_monthly_savings=result.get("total_monthly_savings", 0),
+        )
+    except Exception as exc:
+        log.warning("cost_pipeline.recommendations_failed", error=str(exc))
+        yield _phase_event("recommendations", "failed", error=str(exc))
+
+
 async def _phase_narration(
     req: CostOptimizeRequest, state: dict[str, Any]
 ) -> AsyncGenerator[dict, None]:
@@ -233,11 +285,13 @@ async def _phase_narration(
         cost_state_json = json.dumps(
             {
                 "estimate": state.get("estimate"),
+                "cost_breakdown": state.get("cost_breakdown"),
                 "live_price": state.get("live_price"),
                 "carbon": state.get("carbon"),
                 "reservations": state.get("reservations"),
                 "rightsizing": state.get("rightsizing"),
                 "break_even": state.get("break_even"),
+                "recommendations": state.get("recommendations"),
             },
             default=str,
             indent=2,
@@ -267,7 +321,7 @@ async def _phase_narration(
 async def stream_cost_pipeline(
     req: CostOptimizeRequest,
 ) -> AsyncGenerator[dict, None]:
-    """7-phase deterministic cost optimization with final LLM narration.
+    """8-phase deterministic cost optimization with final LLM narration.
 
     Pulls engagement from `current_engagement_id()` ContextVar. Phases that
     need a subscription ID emit `phase_skipped` when the active engagement
@@ -275,11 +329,13 @@ async def stream_cost_pipeline(
     """
     state: dict[str, Any] = {
         "estimate": None,
+        "cost_breakdown": None,
         "live_price": None,
         "carbon": None,
         "reservations": None,
         "rightsizing": None,
         "break_even": None,
+        "recommendations": None,
     }
 
     try:
@@ -301,6 +357,8 @@ async def stream_cost_pipeline(
         yield ev
     async for ev in _phase_break_even(state):
         yield ev
+    async for ev in _phase_recommendations(req, state):
+        yield ev
     async for ev in _phase_narration(req, state):
         yield ev
 
@@ -310,10 +368,12 @@ async def stream_cost_pipeline(
         "generated_at": dt.datetime.now(dt.UTC).isoformat(),
         "engagement_id": getattr(engagement, "id", None) if engagement else None,
         "estimate": state.get("estimate"),
+        "cost_breakdown": state.get("cost_breakdown"),
         "live_price": state.get("live_price"),
         "carbon": state.get("carbon"),
         "reservations": state.get("reservations"),
         "rightsizing": state.get("rightsizing"),
         "break_even": state.get("break_even"),
+        "recommendations": state.get("recommendations"),
         "report": report,
     }

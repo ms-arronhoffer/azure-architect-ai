@@ -1,0 +1,487 @@
+# Azure service billing catalog — the "beyond a generic SKU pricer" core.
+#
+# Each service declares the *billing dimensions* (meters) it charges on, so the
+# meter-aware pricing engine (services/meter_pricing_service.py) can price every
+# meter a real Azure service emits — not just one retailPrice multiplied by hours.
+#
+# Schema (per service):
+#   service        Azure Retail Pricing API `serviceName` (used in the OData $filter)
+#   label          Human label shown in the UI
+#   aliases        Free-text names users might type; matched case-insensitively
+#   category       compute | storage | data | network | integration | observability
+#   sku_field      Dimension key whose `meter_match.sku_from_item` consumes the
+#                  user-facing "SKU / tier" string (e.g. VM size, plan, vCore tier)
+#   ri_eligible    Whether compute meters qualify for Reserved Instances / Savings Plans
+#   ri_discounts   Optional {one_year, three_year} fractional discount bands used by
+#                  the recommendations engine when live RI prices are unavailable
+#   dimensions[]   Billing meters; each:
+#     key              Stable id (used as the template `dimensions:` map key)
+#     label            UI label
+#     unit             Display unit (hour, GB-month, 1M requests, RU/s-month, …)
+#     quantity_field   Where the monthly quantity comes from:
+#                        __hours__     -> line item hours_per_month
+#                        __instances__ -> line item quantity (count)
+#                        <name>        -> line item dimensions[<name>] (defaults below)
+#     instance_scaled  Multiply the resolved quantity by the instance count (quantity)
+#     default_quantity Used when the field is absent from the line item
+#     included_free    Quantity granted free each month before billing (subtracted)
+#     tiered           Apply graduated tierMinimumUnits math instead of flat multiply
+#     required         A core meter (always priced); optional meters price only when >0
+#     meter_match      Retail API record disambiguation:
+#       sku_from_item    Use the line item `sku` as a skuName `contains` filter
+#       meter_from_item  Use the line item `sku` as a meterName `contains` filter
+#                        (for services whose SKU lives in meterName, e.g. Redis
+#                        cache size "C1 Cache" while skuName is only the tier)
+#       sku_contains     Literal skuName `contains` filter
+#       meter_contains   meterName `contains` filter
+#       product_contains productName `contains` filter
+#       unit_contains    unitOfMeasure substring the chosen record must match
+#       product_excludes Drop records whose productName contains any of these
+#       meter_excludes   Drop records whose meterName contains any of these
+
+version: 1
+currency_default: USD
+region_default: eastus
+
+services:
+  # ── Compute ──────────────────────────────────────────────────────────────
+  - service: Virtual Machines
+    label: Virtual Machines
+    aliases: [vm, virtual machine, azure vm, virtual machines]
+    category: compute
+    sku_field: compute
+    ri_eligible: true
+    ri_discounts: { one_year: 0.40, three_year: 0.62 }
+    # Disambiguators that must be resolved before a trustworthy price.
+    # `required: true` items should trigger request_clarification when unknown.
+    clarify:
+      - key: size
+        question: What size VM do you need?
+        why_it_matters: VM size (vCPU/RAM) is the single biggest price driver.
+        required: true
+        options:
+          - "Small — ~2 vCPU / 8 GB (e.g. D2s_v5)"
+          - "Medium — ~4 vCPU / 16 GB (e.g. D4s_v5)"
+          - "Large — ~8 vCPU / 32 GB (e.g. D8s_v5)"
+          - "Let me specify vCPU/RAM or an exact SKU"
+      - key: region
+        question: Which Azure region?
+        why_it_matters: Prices vary materially by region.
+        required: true
+        options: [eastus, westeurope, uksouth, australiaeast, "Other"]
+      - key: quantity
+        question: How many instances?
+        why_it_matters: Cost scales linearly with instance count.
+        required: false
+    dimensions:
+      - key: compute
+        label: Compute (instance hours)
+        unit: hour
+        quantity_field: __hours__
+        instance_scaled: true
+        default_quantity: 730
+        required: true
+        meter_match:
+          sku_from_item: true
+          unit_contains: Hour
+          product_excludes: [Windows, Spot, Low Priority, Cloud Services]
+          meter_excludes: [Spot]
+      - key: os_disk_gb
+        label: Managed OS/data disk (GB/month)
+        unit: GB-month
+        quantity_field: os_disk_gb
+        instance_scaled: true
+        default_quantity: 0
+        required: false
+        meter_match:
+          product_contains: Managed Disks
+          unit_contains: /Month
+
+  - service: Azure App Service
+    label: App Service
+    aliases: [app service, azure app service, web app, app service plan]
+    category: compute
+    sku_field: compute
+    ri_eligible: true
+    ri_discounts: { one_year: 0.36, three_year: 0.55 }
+    dimensions:
+      - key: compute
+        label: Plan instances (hours)
+        unit: hour
+        quantity_field: __hours__
+        instance_scaled: true
+        default_quantity: 730
+        required: true
+        meter_match:
+          sku_from_item: true
+          unit_contains: Hour
+          product_excludes: [Windows, Linux Premium Plan Windows]
+
+  - service: Azure Functions
+    label: Functions
+    aliases: [functions, azure functions, function app]
+    category: compute
+    sku_field: compute
+    ri_eligible: false
+    dimensions:
+      - key: executions_millions
+        label: Executions (millions/month)
+        unit: 1M executions
+        quantity_field: executions_millions
+        instance_scaled: false
+        default_quantity: 0
+        included_free: 1.0   # first 1M executions free (Consumption plan)
+        required: false
+        meter_match:
+          meter_contains: Total Executions
+          unit_contains: "1M"
+      - key: gb_seconds
+        label: Resource consumption (GB-seconds, millions/month)
+        unit: 1M GB-s
+        quantity_field: gb_seconds
+        instance_scaled: false
+        default_quantity: 0
+        included_free: 0.4   # 400,000 GB-s free
+        required: false
+        meter_match:
+          meter_contains: Execution Time
+          unit_contains: GB
+
+  - service: Azure Kubernetes Service
+    label: Azure Kubernetes Service
+    aliases: [aks, azure kubernetes service, kubernetes]
+    category: compute
+    sku_field: compute
+    ri_eligible: true
+    ri_discounts: { one_year: 0.40, three_year: 0.62 }
+    dimensions:
+      - key: uptime_sla
+        label: Cluster management (Standard tier hours)
+        unit: hour
+        quantity_field: __hours__
+        instance_scaled: false
+        default_quantity: 730
+        required: false
+        meter_match:
+          meter_contains: Standard
+          unit_contains: Hour
+
+  - service: Azure Cache for Redis
+    label: Azure Cache for Redis
+    aliases: [redis, azure cache for redis, cache]
+    category: data
+    sku_field: compute
+    ri_eligible: true
+    ri_discounts: { one_year: 0.35, three_year: 0.55 }
+    dimensions:
+      - key: compute
+        label: Cache instance (hours)
+        unit: hour
+        quantity_field: __hours__
+        instance_scaled: true
+        default_quantity: 730
+        required: true
+        meter_match:
+          meter_from_item: true
+          unit_contains: Hour
+
+  # ── Data ─────────────────────────────────────────────────────────────────
+  - service: SQL Database
+    label: Azure SQL Database
+    aliases: [sql database, azure sql database, azure sql, sql db]
+    category: data
+    sku_field: compute
+    ri_eligible: true
+    ri_discounts: { one_year: 0.33, three_year: 0.55 }
+    clarify:
+      - key: engine
+        question: Is this a relational database, and do you need managed SQL specifically?
+        why_it_matters: Relational vs NoSQL (Cosmos DB) and engine choice change the meters and price entirely.
+        required: true
+        options:
+          - "Relational — Azure SQL Database"
+          - "Relational — PostgreSQL / MySQL"
+          - "Non-relational — Azure Cosmos DB"
+          - "Not sure — help me choose"
+      - key: tier
+        question: Which service tier / size?
+        why_it_matters: vCore count and tier (General Purpose vs Business Critical) drive most of the cost.
+        required: true
+        options:
+          - "Small — General Purpose, 2 vCore"
+          - "Medium — General Purpose, 4 vCore"
+          - "Large — Business Critical, 8 vCore"
+          - "Let me specify vCore / DTU"
+      - key: region
+        question: Which Azure region?
+        why_it_matters: Prices vary by region.
+        required: true
+        options: [eastus, westeurope, uksouth, "Other"]
+    dimensions:
+      - key: compute
+        label: vCore compute (hours)
+        unit: hour
+        quantity_field: __hours__
+        instance_scaled: true
+        default_quantity: 730
+        required: true
+        meter_match:
+          sku_from_item: true
+          unit_contains: Hour
+          product_excludes: [Storage, Backup, License]
+      - key: storage_gb
+        label: Data storage (GB/month)
+        unit: GB-month
+        quantity_field: storage_gb
+        instance_scaled: false
+        default_quantity: 0
+        required: false
+        meter_match:
+          meter_contains: Data Stored
+          unit_contains: GB
+      - key: backup_gb
+        label: PITR/backup storage (GB/month)
+        unit: GB-month
+        quantity_field: backup_gb
+        instance_scaled: false
+        default_quantity: 0
+        required: false
+        meter_match:
+          meter_contains: Backup
+          unit_contains: GB
+
+  - service: Azure Cosmos DB
+    label: Azure Cosmos DB
+    aliases: [cosmos db, azure cosmos db, cosmosdb, cosmos]
+    category: data
+    sku_field: compute
+    ri_eligible: false
+    dimensions:
+      - key: provisioned_ru
+        label: Provisioned throughput (100 RU/s units)
+        unit: 100 RU/s-month
+        quantity_field: provisioned_ru_100s
+        instance_scaled: false
+        multiply_hours: true
+        default_quantity: 0
+        required: false
+        meter_match:
+          meter_contains: 100 RU/s
+          unit_contains: Hour
+      - key: storage_gb
+        label: Transactional storage (GB/month)
+        unit: GB-month
+        quantity_field: storage_gb
+        instance_scaled: false
+        default_quantity: 0
+        required: false
+        meter_match:
+          meter_contains: Data Stored
+          unit_contains: GB
+
+  # ── Storage ──────────────────────────────────────────────────────────────
+  - service: Storage
+    label: Storage Account
+    aliases: [storage account, blob storage, azure storage, azure blob storage, storage]
+    category: storage
+    sku_field: capacity
+    ri_eligible: false
+    dimensions:
+      - key: capacity
+        label: Capacity (GB/month)
+        unit: GB-month
+        quantity_field: capacity_gb
+        instance_scaled: false
+        default_quantity: 0
+        required: true
+        tiered: true
+        meter_match:
+          sku_from_item: true
+          meter_contains: Data Stored
+          unit_contains: GB
+      - key: write_ops_10k
+        label: Write operations (per 10k)
+        unit: 10K ops
+        quantity_field: write_ops_10k
+        instance_scaled: false
+        default_quantity: 0
+        required: false
+        meter_match:
+          meter_contains: Write Operations
+          unit_contains: "10K"
+      - key: read_ops_10k
+        label: Read operations (per 10k)
+        unit: 10K ops
+        quantity_field: read_ops_10k
+        instance_scaled: false
+        default_quantity: 0
+        required: false
+        meter_match:
+          meter_contains: Read Operations
+          unit_contains: "10K"
+
+  - service: Bandwidth
+    label: Egress Bandwidth
+    aliases: [bandwidth, egress, data transfer, outbound data]
+    category: network
+    sku_field: egress
+    ri_eligible: false
+    dimensions:
+      - key: egress_gb
+        label: Outbound data transfer (GB/month)
+        unit: GB-month
+        quantity_field: egress_gb
+        instance_scaled: false
+        default_quantity: 0
+        included_free: 100.0   # first 100 GB/month free
+        required: true
+        tiered: true
+        meter_match:
+          meter_contains: Data Transfer Out
+          unit_contains: GB
+
+  # ── Network ──────────────────────────────────────────────────────────────
+  - service: Azure Front Door
+    label: Azure Front Door
+    aliases: [front door, azure front door, afd]
+    category: network
+    sku_field: compute
+    ri_eligible: false
+    dimensions:
+      - key: base_fee
+        label: Base fee (hours)
+        unit: hour
+        quantity_field: __hours__
+        instance_scaled: false
+        default_quantity: 730
+        required: false
+        meter_match:
+          meter_contains: Base
+          unit_contains: Hour
+
+  - service: Application Gateway
+    label: Application Gateway
+    aliases: [application gateway, azure application gateway, app gateway, appgw, waf]
+    category: network
+    sku_field: compute
+    ri_eligible: false
+    dimensions:
+      - key: gateway_hours
+        label: Gateway (hours)
+        unit: hour
+        quantity_field: __hours__
+        instance_scaled: true
+        default_quantity: 730
+        required: true
+        meter_match:
+          sku_from_item: true
+          unit_contains: Hour
+          meter_excludes: [Data Processing]
+
+  # ── Integration ──────────────────────────────────────────────────────────
+  - service: Service Bus
+    label: Service Bus
+    aliases: [service bus, azure service bus]
+    category: integration
+    sku_field: compute
+    ri_eligible: false
+    dimensions:
+      - key: base_unit
+        label: Messaging unit / namespace (hours)
+        unit: hour
+        quantity_field: __hours__
+        instance_scaled: true
+        default_quantity: 730
+        required: true
+        meter_match:
+          sku_from_item: true
+          unit_contains: Hour
+
+  - service: Event Hubs
+    label: Event Hubs
+    aliases: [event hubs, azure event hubs, eventhub]
+    category: integration
+    sku_field: compute
+    ri_eligible: false
+    dimensions:
+      - key: throughput_unit
+        label: Throughput/processing unit (hours)
+        unit: hour
+        quantity_field: __hours__
+        instance_scaled: true
+        default_quantity: 730
+        required: true
+        meter_match:
+          sku_from_item: true
+          unit_contains: Hour
+
+  - service: API Management
+    label: API Management
+    aliases: [api management, azure api management, apim]
+    category: integration
+    sku_field: compute
+    ri_eligible: false
+    dimensions:
+      - key: unit
+        label: API Management unit (hours)
+        unit: hour
+        quantity_field: __hours__
+        instance_scaled: true
+        default_quantity: 730
+        required: true
+        meter_match:
+          sku_from_item: true
+          # Price the managed deployment unit (e.g. "Premium Unit"), not the much
+          # cheaper Self-Hosted Gateway meter which shares the same skuName/tier and
+          # whose lower hourly rate would otherwise win the cheapest-meter pick.
+          meter_contains: Unit
+          unit_contains: Hour
+          product_excludes: [Self Hosted Gateway, Self-Hosted Gateway]
+
+  - service: Key Vault
+    label: Key Vault
+    aliases: [key vault, azure key vault, keyvault]
+    category: integration
+    sku_field: operations
+    ri_eligible: false
+    dimensions:
+      - key: operations_10k
+        label: Operations (per 10k)
+        unit: 10K ops
+        quantity_field: operations_10k
+        instance_scaled: false
+        default_quantity: 0
+        required: true
+        meter_match:
+          meter_contains: Operations
+          unit_contains: "10K"
+
+  # ── Observability ────────────────────────────────────────────────────────
+  - service: Log Analytics
+    label: Log Analytics
+    aliases: [log analytics, azure monitor log analytics, monitor logs]
+    category: observability
+    sku_field: ingestion
+    ri_eligible: false
+    dimensions:
+      - key: ingestion_gb
+        label: Data ingestion (GB/month)
+        unit: GB-month
+        quantity_field: ingestion_gb
+        instance_scaled: false
+        default_quantity: 0
+        included_free: 5.0   # 5 GB/month free per workspace (pay-as-you-go)
+        required: true
+        meter_match:
+          meter_contains: Data Ingestion
+          unit_contains: GB
+      - key: retention_gb
+        label: Data retention beyond included (GB/month)
+        unit: GB-month
+        quantity_field: retention_gb
+        instance_scaled: false
+        default_quantity: 0
+        required: false
+        meter_match:
+          meter_contains: Data Retention
+          unit_contains: GB

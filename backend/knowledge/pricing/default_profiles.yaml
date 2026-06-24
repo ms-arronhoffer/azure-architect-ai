@@ -1,0 +1,175 @@
+# Default-quantity profiles + billability classification for the
+# architecture-pricing pipeline (services/component_model.py).
+#
+# A drawing or a one-line description rarely carries the quantities that drive
+# Azure cost (instance count, storage GB, RU/s, egress GB, requests …). To still
+# produce a number for a bare diagram, every catalog service has a *default
+# profile*. Each defaulted value is recorded as an explicit, editable assumption
+# and surfaced on the worksheet so the user can see (and correct) exactly what
+# was assumed.
+#
+# Sections:
+#   profiles      service -> {sku, quantity, hours_per_month, dimensions{}, note}
+#                 Values fill in only when the extracted component omits them.
+#   not_billable  Shapes that appear in diagrams but carry no metered retail
+#                 charge (logical containers, free control-plane resources, or
+#                 license/EA-only). Classified and reported, never silently
+#                 dropped or priced at $0 without a reason.
+#   implied       Cross-tier/egress costs a drawing implies through its edges but
+#                 does not draw as a node.
+
+version: 1
+
+profiles:
+  Virtual Machines:
+    sku: D4s_v5
+    quantity: 1
+    hours_per_month: 730
+    dimensions:
+      os_disk_gb: 128
+    note: Assumes one always-on general-purpose VM with a 128 GB managed disk.
+
+  Azure App Service:
+    sku: P1v4
+    quantity: 1
+    hours_per_month: 730
+    note: Assumes one always-on Premium v4 plan instance.
+
+  Azure Functions:
+    sku: ""
+    quantity: 1
+    dimensions:
+      executions_millions: 5
+      gb_seconds_millions: 2
+    note: Assumes 5M executions/mo on the Consumption plan.
+
+  Azure Kubernetes Service:
+    sku: D4s_v5
+    quantity: 3
+    hours_per_month: 730
+    note: Assumes a 3-node user pool of general-purpose VMs (control plane free tier).
+
+  Azure Cache for Redis:
+    sku: C1
+    quantity: 1
+    hours_per_month: 730
+    note: Assumes one Standard C1 cache instance.
+
+  SQL Database:
+    sku: GP_Gen5_2
+    quantity: 1
+    hours_per_month: 730
+    dimensions:
+      storage_gb: 32
+      backup_gb: 32
+    note: Assumes a 2-vCore General Purpose database with 32 GB data + backup.
+
+  Azure Cosmos DB:
+    sku: ""
+    quantity: 1
+    hours_per_month: 730
+    dimensions:
+      provisioned_ru_100s: 4
+      storage_gb: 25
+    note: Assumes 400 RU/s provisioned throughput and 25 GB of data.
+
+  Storage:
+    sku: Hot LRS
+    quantity: 1
+    dimensions:
+      capacity_gb: 1024
+      write_ops_10k: 100
+      read_ops_10k: 100
+    note: Assumes 1 TB of Hot LRS blob storage with light transaction volume.
+
+  Azure Front Door:
+    sku: Standard
+    quantity: 1
+    dimensions:
+      egress_gb: 500
+      requests_millions: 5
+    note: Assumes a Standard profile serving 500 GB egress / 5M requests.
+
+  Application Gateway:
+    sku: Standard_v2
+    quantity: 1
+    hours_per_month: 730
+    dimensions:
+      capacity_units: 10
+    note: Assumes one always-on Standard_v2 gateway at a modest capacity-unit load.
+
+  Service Bus:
+    sku: Standard
+    quantity: 1
+    dimensions:
+      operations_millions: 10
+    note: Assumes a Standard namespace handling 10M operations/mo.
+
+  Event Hubs:
+    sku: Standard
+    quantity: 1
+    hours_per_month: 730
+    dimensions:
+      throughput_units: 1
+      ingress_events_millions: 50
+    note: Assumes one Standard throughput unit ingesting 50M events/mo.
+
+  API Management:
+    sku: Developer
+    quantity: 1
+    hours_per_month: 730
+    note: Assumes one always-on Developer-tier unit (non-production).
+
+  Key Vault:
+    sku: Standard
+    quantity: 1
+    dimensions:
+      operations_10k: 10
+    note: Assumes a Standard vault with light operation volume.
+
+  Log Analytics:
+    sku: ""
+    quantity: 1
+    dimensions:
+      ingestion_gb: 50
+    note: Assumes 50 GB/mo of log ingestion (pay-as-you-go).
+
+  Bandwidth:
+    sku: ""
+    quantity: 1
+    dimensions:
+      egress_gb: 500
+    note: Assumes 500 GB/mo of internet egress.
+
+# Shapes that show up in architecture diagrams but carry no metered retail
+# charge. Matched case-insensitively against the resolved service name, the
+# logical shape, and the label. Reported in the completeness report with the
+# stated reason instead of being dropped.
+not_billable:
+  - match: [virtual network, vnet, subnet, virtual_network, network security group, nsg, route table, udr]
+    reason: Azure Virtual Network, subnets, NSGs, and route tables have no hourly charge.
+  - match: [resource group, management group, subscription, tenant, availability zone, region]
+    reason: Logical container / scope — not a billable resource.
+  - match: [user, users, client, browser, internet, on-premises, on premises, datacenter, mobile, device, actor]
+    reason: External actor or boundary — outside Azure billing (egress is billed separately via Bandwidth).
+  - match: [entra, entra id, azure ad, active directory, aad]
+    reason: Microsoft Entra ID free/P1/P2 tiers are licensed per-user, not metered here.
+  - match: [private endpoint, private link, service endpoint]
+    reason: Priced via the linked service / Private Link meter; flagged for explicit add.
+  - match: [availability set, proximity placement group, dns zone, private dns]
+    reason: No or negligible standalone charge — folded into the linked resource.
+  - match: [defender, microsoft defender for cloud, sentinel]
+    reason: Security plans are per-resource/per-GB add-ons priced separately from this worksheet.
+
+# Cost line items a drawing implies through its edges but does not draw as a
+# node. The architecture pricing pipeline adds these when the corresponding
+# trigger is present and no explicit egress/bandwidth node already exists.
+implied:
+  - id: internet_egress
+    when_edge_to: [internet, user, users, client, browser, on-premises, on premises, external, mobile]
+    add:
+      service: Bandwidth
+      label: Implied internet egress
+      dimensions:
+        egress_gb: 200
+    reason: Edges leaving Azure to the internet/users imply outbound data-transfer charges.
