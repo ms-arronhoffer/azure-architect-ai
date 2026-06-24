@@ -30,6 +30,7 @@ import { apiFetch } from "../config/api";
 const SOURCE_FILTERS = [
   { value: "all", label: "All Sources" },
   { value: "azure-blog", label: "Azure Blog" },
+  { value: "azure-ai", label: "Azure AI Blog" },
   { value: "azure-updates", label: "Azure Updates" },
   { value: "azure-sdk", label: "Azure SDK Blog" },
   { value: "azure-devblogs", label: "Azure DevBlogs" },
@@ -46,6 +47,7 @@ const TIME_FILTERS = [
 
 const SOURCE_COLORS: Record<string, string> = {
   "azure-blog": "#0078D4",
+  "azure-ai": "#8661C5",
   "azure-updates": "#00B7C3",
   "azure-sdk": "#008272",
   "azure-devblogs": "#5C2D91",
