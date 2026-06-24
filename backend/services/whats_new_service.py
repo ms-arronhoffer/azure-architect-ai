@@ -5,6 +5,7 @@ import re
 import time
 import xml.etree.ElementTree as ET
 from typing import Any
+from urllib.parse import urlsplit, urlunsplit
 
 import httpx
 
@@ -22,6 +23,11 @@ _FEEDS = [
         "source": "azure-blog",
         "source_label": "Azure Blog",
         "url": "https://azure.microsoft.com/en-us/blog/feed/",
+    },
+    {
+        "source": "azure-ai",
+        "source_label": "Azure AI Blog",
+        "url": "https://azure.microsoft.com/en-us/blog/product/azure-ai/feed/",
     },
     {
         "source": "azure-updates",
@@ -104,9 +110,13 @@ async def _fetch_live() -> list[dict]:
         feed_results = await asyncio.gather(
             *[_fetch_one_feed(client, feed, "whats_new.feed_fetched") for feed in _FEEDS]
         )
+    # Feeds overlap (e.g. the Azure AI category feed is a subset of the main
+    # Azure Blog feed), so the same article can appear under multiple sources.
+    # Dedupe by the normalized-URL id and keep the FIRST occurrence so feed
+    # ordering in _FEEDS decides which source_label wins.
     for items in feed_results:
         for item in items:
-            results[item["id"]] = item
+            results.setdefault(item["id"], item)
     return list(results.values())
 
 
@@ -123,8 +133,28 @@ def _truncate(text: str, max_len: int) -> str:
     return clean
 
 
+def _normalize_url(url: str) -> str:
+    """Canonicalize a feed URL for cross-feed dedup.
+
+    Same article can be syndicated by multiple feeds with cosmetic URL
+    differences (trailing slash, tracking query params, scheme/host case).
+    Collapsing those yields one stable id per article.
+    """
+    try:
+        parts = urlsplit(url.strip())
+    except ValueError:
+        return url.strip()
+    if not parts.netloc:
+        return url.strip()
+    scheme = parts.scheme.lower() or "https"
+    netloc = parts.netloc.lower()
+    path = parts.path.rstrip("/") or "/"
+    # Drop query (tracking params like utm_*, ocid) and fragment.
+    return urlunsplit((scheme, netloc, path, "", ""))
+
+
 def _make_id(url: str) -> str:
-    return hashlib.md5(url.encode()).hexdigest()[:16]
+    return hashlib.md5(_normalize_url(url).encode()).hexdigest()[:16]
 
 
 def _parse_rss(root: ET.Element, source: str, source_label: str) -> list[dict]:

@@ -158,3 +158,58 @@ async def test_db_read_failure_falls_through_to_live(monkeypatch):
 
     items = await svc.fetch_announcements()
     assert items == [_mk_item("recovered")]
+
+
+def test_make_id_normalizes_url_variants():
+    """Trailing slash, scheme/host case, and tracking query params collapse to one id."""
+    base = "https://azure.microsoft.com/en-us/blog/azure-ai-foundry/"
+    assert svc._make_id(base) == svc._make_id(base.rstrip("/"))
+    assert svc._make_id(base) == svc._make_id(base + "?ocid=aid123&utm_source=rss")
+    assert svc._make_id(base) == svc._make_id("HTTPS://Azure.Microsoft.com/en-us/blog/azure-ai-foundry/")
+
+
+@pytest.mark.asyncio
+async def test_fetch_live_dedups_overlapping_feeds(monkeypatch):
+    """An article syndicated by two feeds yields one entry; first feed wins the label."""
+    shared_url = "https://azure.microsoft.com/en-us/blog/some-ai-post/"
+
+    def blog_item():
+        return {
+            "id": svc._make_id(shared_url),
+            "title": "Some AI post",
+            "description": "",
+            "url": shared_url,
+            "pub_date": "",
+            "source": "azure-blog",
+            "source_label": "Azure Blog",
+        }
+
+    def ai_item():
+        # Same article, cosmetically different URL + more specific source.
+        return {
+            "id": svc._make_id(shared_url + "?ocid=rss"),
+            "title": "Some AI post",
+            "description": "",
+            "url": shared_url + "?ocid=rss",
+            "pub_date": "",
+            "source": "azure-ai",
+            "source_label": "Azure AI Blog",
+        }
+
+    async def fake_fetch_one_feed(client, feed, log_event):
+        return [blog_item()] if feed["source"] == "azure-blog" else [ai_item()]
+
+    monkeypatch.setattr(
+        svc,
+        "_FEEDS",
+        [
+            {"source": "azure-blog", "source_label": "Azure Blog", "url": "x"},
+            {"source": "azure-ai", "source_label": "Azure AI Blog", "url": "y"},
+        ],
+    )
+    monkeypatch.setattr(svc, "_fetch_one_feed", fake_fetch_one_feed)
+
+    items = await svc._fetch_live()
+
+    assert len(items) == 1, "overlapping feeds must collapse to a single entry"
+    assert items[0]["source"] == "azure-blog", "first feed in _FEEDS order wins"
