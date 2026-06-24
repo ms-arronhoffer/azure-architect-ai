@@ -18,6 +18,7 @@ import {
 } from "@fluentui/react-components";
 import { apiFetch } from "../config/api";
 import { TOASTER_ID } from "../constants/toaster";
+import { ToastDismissButton } from "../components/ToastDismissButton";
 import type { DemoBuilt } from "../types";
 import {
   clearDemoState,
@@ -159,7 +160,7 @@ export function DemoBuildProvider({ children }: { children: ReactNode }) {
       const published = Boolean(built.repo_url);
       dispatchToast(
         <Toast>
-          <ToastTitle>Demo ready 🎉</ToastTitle>
+          <ToastTitle action={<ToastDismissButton />}>Demo ready 🎉</ToastTitle>
           <ToastBody>
             {title} is ready to download
             {published ? " and has been pushed to GitHub." : "."}

@@ -259,6 +259,45 @@ async def get_metrics(
         for r in user_token_rows
     ]
 
+    # Token usage grouped by mode — surfaces where LLM spend actually goes
+    # (cost-optimize, demo, rerank, embedding, chat, …), including the calls now
+    # captured centrally via call_with_retry.
+    mode_token_rows = (await db.execute(
+        select(
+            TokenUsage.mode,
+            func.sum(TokenUsage.prompt_tokens).label("prompt"),
+            func.sum(TokenUsage.completion_tokens).label("completion"),
+        )
+        .where(TokenUsage.created_at >= thirty_days_ago_ms)
+        .group_by(TokenUsage.mode)
+        .order_by((func.sum(TokenUsage.prompt_tokens) + func.sum(TokenUsage.completion_tokens)).desc())
+    )).all()
+    token_by_mode = [
+        {
+            "mode": r.mode,
+            "prompt_tokens": int(r.prompt or 0),
+            "completion_tokens": int(r.completion or 0),
+        }
+        for r in mode_token_rows
+    ]
+
+    # ── token totals + intensity ──────────────────────────────────────────────
+    total_prompt_tokens_30d = sum(r["prompt_tokens"] for r in token_by_mode)
+    total_completion_tokens_30d = sum(r["completion_tokens"] for r in token_by_mode)
+    total_tokens_30d = total_prompt_tokens_30d + total_completion_tokens_30d
+
+    conversations_30d = await db.scalar(
+        select(func.count())
+        .where(Conversation.created_at >= thirty_days_ago_ms)
+        .select_from(Conversation)
+    ) or 0
+    conversations_today = await db.scalar(
+        select(func.count())
+        .where(Conversation.created_at >= today_start_ms)
+        .select_from(Conversation)
+    ) or 0
+    avg_tokens_per_conv = round(total_tokens_30d / conversations_30d) if conversations_30d else 0
+
     return {
         # totals
         "total_conversations": total,
@@ -268,6 +307,8 @@ async def get_metrics(
         "avg_duration_min": avg_duration_min,
         "output_rate_pct": output_rate_pct,
         "wow_pct": wow_pct,
+        "conversations_30d": conversations_30d,
+        "conversations_today": conversations_today,
         # engagement
         "avg_msgs_per_conv": avg_msgs_per_conv,
         "abandonment_rate_pct": abandonment_rate_pct,
@@ -278,10 +319,16 @@ async def get_metrics(
         # feature adoption
         "mode_diversity": mode_diversity,
         "output_rate_by_mode": output_rate_by_mode,
+        # token consumption
+        "total_tokens_30d": total_tokens_30d,
+        "total_prompt_tokens_30d": total_prompt_tokens_30d,
+        "total_completion_tokens_30d": total_completion_tokens_30d,
+        "avg_tokens_per_conv": avg_tokens_per_conv,
         # tables
         "mode_breakdown": mode_counts,
         "dau_30d": dau,
         "top_users": top_users,
         "token_by_model": token_by_model,
         "token_by_user": token_by_user,
+        "token_by_mode": token_by_mode,
     }

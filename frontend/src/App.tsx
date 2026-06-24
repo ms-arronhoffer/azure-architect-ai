@@ -12,6 +12,7 @@ import SettingsDrawer from "./components/SettingsDrawer";
 import HowToDrawer from "./components/HowToDrawer";
 import WorkloadContextPanel from "./components/WorkloadContextPanel";
 import TelemetryDebugDrawer from "./components/TelemetryDebugDrawer";
+import { ToastDismissButton } from "./components/ToastDismissButton";
 import EngagementDrawer from "./components/EngagementDrawer";
 // Mode panels — code-split so a visitor only downloads the panel they open.
 // Heavy transitive deps (docx, xlsx, jspdf, jszip, react-syntax-highlighter)
@@ -173,7 +174,7 @@ export default function App() {
     setErrorNotifier((message) => {
       dispatchToast(
         <Toast>
-          <ToastTitle>Error</ToastTitle>
+          <ToastTitle action={<ToastDismissButton />}>Error</ToastTitle>
           <ToastBody>{message}</ToastBody>
         </Toast>,
         { intent: "error", timeout: 5000 }

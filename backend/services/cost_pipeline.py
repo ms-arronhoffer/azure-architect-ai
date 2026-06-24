@@ -308,6 +308,7 @@ async def _phase_narration(
             ),
             max_attempts=2,
             model_name=deployment,
+            mode="cost-optimize",
         )
         text = (resp.choices[0].message.content or "").strip() if resp.choices else ""
         state["narration_text"] = text

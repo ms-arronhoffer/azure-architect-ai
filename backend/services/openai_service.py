@@ -98,11 +98,14 @@ TOOL_INCOMPATIBLE_MODELS = {
 _RETRYABLE_STATUSES = {408, 425, 429, 500, 502, 503, 504}
 
 
-def call_with_retry(fn, *, max_attempts: int = 4, base_delay: float = 0.5, max_delay: float = 8.0, model_name: str = ""):
+def call_with_retry(fn, *, max_attempts: int = 4, base_delay: float = 0.5, max_delay: float = 8.0, model_name: str = "", mode: str = "system"):
     """Run an OpenAI SDK call with exponential backoff + jitter on transient errors.
 
     Honors a Retry-After header when the SDK exposes it. Re-raises on non-retryable
-    errors or after attempts are exhausted.
+    errors or after attempts are exhausted. When the SDK response carries a
+    `usage` block, the token counts are recorded against the current request user
+    (see `token_service.record_llm_usage`) so usage from non-chat call sites is
+    captured in the metrics dashboard.
     """
     with tracer.start_as_current_span(
         "openai.chat_completion",
@@ -122,6 +125,24 @@ def call_with_retry(fn, *, max_attempts: int = 4, base_delay: float = 0.5, max_d
                     try:
                         openai_tokens_histogram.record(int(total), {"model": model_name})
                         span.set_attribute("gen_ai.usage.total_tokens", int(total))
+                    except Exception:
+                        pass
+                if usage is not None:
+                    try:
+                        from services.token_service import record_llm_usage
+                        # Chat Completions exposes prompt/completion_tokens;
+                        # the Responses API uses input/output_tokens.
+                        prompt = int(
+                            getattr(usage, "prompt_tokens", None)
+                            or getattr(usage, "input_tokens", 0)
+                            or 0
+                        )
+                        completion = int(
+                            getattr(usage, "completion_tokens", None)
+                            or getattr(usage, "output_tokens", 0)
+                            or 0
+                        )
+                        record_llm_usage(model_name, mode, prompt, completion)
                     except Exception:
                         pass
                 return result

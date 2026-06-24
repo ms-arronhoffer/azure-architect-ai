@@ -11,12 +11,20 @@ import {
   Tab,
   TabList,
   Badge,
+  Menu,
+  MenuTrigger,
+  MenuPopover,
+  MenuList,
+  MenuItem,
 } from "@fluentui/react-components";
 import {
+  ArrowDownloadRegular,
   ArrowUploadRegular,
   DismissCircleRegular,
   DocumentRegular,
 } from "@fluentui/react-icons";
+import { exportMessageToDocx } from "../utils/docxExport";
+import { exportMarkdownToPdf } from "../utils/pdfExport";
 import { useSSE } from "../hooks/useSSE";
 import type {
   SseEvent,
@@ -86,6 +94,10 @@ const useStyles = makeStyles({
     background: tokens.colorNeutralBackground1,
     borderBottom: `1px solid ${tokens.colorNeutralStroke2}`,
     flexShrink: 0,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: "12px",
   },
   tabContent: {
     flex: 1,
@@ -320,6 +332,87 @@ export default function TroubleshootingPanel({ sessionId, onRefine: _onRefine, o
     await navigator.clipboard.writeText(text);
   }
 
+  function buildMarkdown(): string {
+    const lines: string[] = ["# Troubleshooting Report", ""];
+
+    if (symptoms.trim()) {
+      lines.push("## Symptoms", "", symptoms.trim(), "");
+    }
+    if (errorLogs.trim()) {
+      lines.push("## Error Messages / Logs", "", "```", errorLogs.trim(), "```", "");
+    }
+    if (narrative.trim()) {
+      lines.push("## Analysis", "", narrative.trim(), "");
+    }
+    if (diagnosis) {
+      lines.push("## Diagnosis", "");
+      lines.push(`- **Severity:** ${(diagnosis.severity ?? "").toUpperCase()}`);
+      if (diagnosis.affected_services?.length) {
+        lines.push(`- **Affected services:** ${diagnosis.affected_services.join(", ")}`);
+      }
+      if (diagnosis.estimated_blast_radius) {
+        lines.push(`- **Estimated blast radius:** ${diagnosis.estimated_blast_radius}`);
+      }
+      lines.push("");
+      const hypotheses = diagnosis.root_cause_hypotheses ?? [];
+      if (hypotheses.length) {
+        lines.push("### Root Cause Hypotheses", "");
+        hypotheses.forEach((h, i) => {
+          lines.push(`${i + 1}. **${h.hypothesis}** _(${(h.likelihood ?? "").toUpperCase()}${h.azure_service ? `, ${h.azure_service}` : ""})_`);
+          if (h.evidence_to_confirm) {
+            lines.push(`   - Evidence needed: ${h.evidence_to_confirm}`);
+          }
+        });
+        lines.push("");
+      }
+    }
+    if (kqlQueries.length) {
+      lines.push("## KQL Queries", "");
+      kqlQueries.forEach((q) => {
+        lines.push(`### ${q.name}${q.table ? ` (${q.table})` : ""}`, "");
+        if (q.purpose) lines.push(q.purpose, "");
+        lines.push("```kql", q.query, "```", "");
+      });
+    }
+    if (runbook) {
+      lines.push("## Remediation Runbook", "");
+      if (runbook.estimated_resolution_minutes != null) {
+        lines.push(`_Estimated resolution: ${runbook.estimated_resolution_minutes} min_`, "");
+      }
+      (runbook.steps ?? []).forEach((step) => {
+        lines.push(`### Step ${step.step_number}: ${step.action}`, "");
+        if (step.command) lines.push("```", step.command, "```", "");
+        if (step.expected_output) lines.push(`Expected: ${step.expected_output}`, "");
+        if (step.if_fails) lines.push(`If fails: ${step.if_fails}`, "");
+      });
+      if (runbook.escalation_path) {
+        lines.push("### Escalation Path", "", runbook.escalation_path, "");
+      }
+    }
+
+    return lines.join("\n");
+  }
+
+  function handleExport(format: "md" | "docx" | "pdf") {
+    if (!hasResults) return;
+    const md = buildMarkdown();
+    if (format === "docx") {
+      void exportMessageToDocx(md, "troubleshooting-report.docx");
+      return;
+    }
+    if (format === "pdf") {
+      exportMarkdownToPdf(md, "troubleshooting-report.pdf");
+      return;
+    }
+    const blob = new Blob([md], { type: "text/markdown" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "troubleshooting-report.md";
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   function renderAnalysisTab() {
     if (!hasResults && !isStreaming) {
       return (
@@ -338,9 +431,9 @@ export default function TroubleshootingPanel({ sessionId, onRefine: _onRefine, o
         {diagnosis && (
           <div style={{ display: "flex", gap: "8px", marginBottom: "12px", flexWrap: "wrap" }}>
             <Badge appearance="filled" color={SEVERITY_COLOR[diagnosis.severity] ?? "informative"} size="large">
-              {diagnosis.severity.toUpperCase()}
+              {(diagnosis.severity ?? "").toUpperCase()}
             </Badge>
-            {diagnosis.affected_services.map((s) => (
+            {(diagnosis.affected_services ?? []).map((s) => (
               <Badge key={s} appearance="tint" color="brand" size="small">{s}</Badge>
             ))}
             {diagnosis.estimated_blast_radius && (
@@ -358,7 +451,8 @@ export default function TroubleshootingPanel({ sessionId, onRefine: _onRefine, o
   }
 
   function renderDiagnosisTab() {
-    if (!diagnosis) {
+    const hypotheses = diagnosis?.root_cause_hypotheses ?? [];
+    if (!diagnosis || hypotheses.length === 0) {
       return (
         <div className={styles.emptyTabHint}>
           <Text size={300} style={{ color: tokens.colorNeutralForeground3 }}>
@@ -370,11 +464,11 @@ export default function TroubleshootingPanel({ sessionId, onRefine: _onRefine, o
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
         <Text weight="semibold" size={400}>Root Cause Hypotheses</Text>
-        {diagnosis.root_cause_hypotheses.map((h, i) => (
+        {hypotheses.map((h, i) => (
           <div key={i} className={styles.hypothesisCard}>
             <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
               <Badge appearance="filled" color={LIKELIHOOD_COLOR[h.likelihood] ?? "informative"} size="small">
-                {h.likelihood.toUpperCase()}
+                {(h.likelihood ?? "").toUpperCase()}
               </Badge>
               {h.azure_service && (
                 <Badge appearance="tint" color="brand" size="small">{h.azure_service}</Badge>
@@ -443,7 +537,7 @@ export default function TroubleshootingPanel({ sessionId, onRefine: _onRefine, o
             <Badge appearance="tint" color="informative">Est. {runbook.estimated_resolution_minutes} min</Badge>
           </div>
         )}
-        {runbook.steps.map((step, i) => (
+        {(runbook.steps ?? []).map((step, i) => (
           <div key={i} className={styles.stepCard}>
             <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
               <Badge appearance="filled" color="brand" size="small">Step {step.step_number}</Badge>
@@ -583,6 +677,25 @@ export default function TroubleshootingPanel({ sessionId, onRefine: _onRefine, o
                 <Tab value="kql">KQL Queries{kqlQueries.length > 0 && <span className={styles.tabDot} />}</Tab>
                 <Tab value="runbook">Runbook{runbook && <span className={styles.tabDot} />}</Tab>
               </TabList>
+              <Menu>
+                <MenuTrigger disableButtonEnhancement>
+                  <Button
+                    size="small"
+                    appearance="outline"
+                    icon={<ArrowDownloadRegular />}
+                    disabled={!hasResults}
+                  >
+                    Export
+                  </Button>
+                </MenuTrigger>
+                <MenuPopover>
+                  <MenuList>
+                    <MenuItem onClick={() => handleExport("md")}>Markdown (.md)</MenuItem>
+                    <MenuItem onClick={() => handleExport("docx")}>Word (.docx)</MenuItem>
+                    <MenuItem onClick={() => handleExport("pdf")}>PDF (.pdf)</MenuItem>
+                  </MenuList>
+                </MenuPopover>
+              </Menu>
             </div>
 
             <div className={styles.tabContent}>

@@ -45,7 +45,11 @@ def embed_texts(texts: list[str]) -> list[list[float]]:
         return []
     client = _get_client()
     deployment = settings.azure_openai_deployment_embedding
-    resp = call_with_retry(lambda: client.embeddings.create(model=deployment, input=texts))
+    resp = call_with_retry(
+        lambda: client.embeddings.create(model=deployment, input=texts),
+        model_name=deployment,
+        mode="embedding",
+    )
     return [d.embedding for d in resp.data]
 
 
