@@ -120,6 +120,8 @@ const MODE_LABELS: Record<Mode, string> = {
   architect: "Architect",
   operations: "Operations",
   engagement: "Engagement Hub",
+  skills: "My Skills",
+  "skill-showcase": "Skill Showcase",
 };
 
 const MODE_SECTION: Partial<Record<Mode, string>> = {

@@ -136,6 +136,8 @@ interface SettingsDrawerProps {
   onClearGithubToken: () => Promise<void>;
   unifiedAgents: boolean;
   onToggleUnifiedAgents: (value: boolean) => void;
+  customSkills: boolean;
+  onToggleCustomSkills: (value: boolean) => void;
 }
 
 export default function SettingsDrawer({
@@ -148,6 +150,8 @@ export default function SettingsDrawer({
   onClearGithubToken,
   unifiedAgents,
   onToggleUnifiedAgents,
+  customSkills,
+  onToggleCustomSkills,
 }: SettingsDrawerProps) {
   const styles = useStyles();
   const { account, logout, enabled: authEnabled } = useAuth();
@@ -264,6 +268,19 @@ export default function SettingsDrawer({
             <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
               On: the streamlined 5-agent navigation. Off: the legacy 84-mode
               navigation. Applies instantly in this browser — no rebuild needed.
+            </Text>
+            <div className={styles.modeRow}>
+              <Text className={styles.modeLabel}>
+                Custom skills (My Skills + Showcase)
+              </Text>
+              <Switch
+                checked={customSkills}
+                onChange={(_, d) => onToggleCustomSkills(d.checked)}
+              />
+            </div>
+            <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
+              On: upload and run your own skills, and browse the Skill Showcase.
+              Applies instantly in this browser — no rebuild needed.
             </Text>
           </div>
 

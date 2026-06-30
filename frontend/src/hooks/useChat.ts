@@ -8,7 +8,7 @@ export interface AgentRouteInfo {
   reason: string;
 }
 
-export function useChat(mode: Mode, _conversationId?: string, onSave?: (msgs: ChatMessage[]) => void, initialMessages?: ChatMessage[], modelConfig?: ModelConfig, onDiagram?: (xml: string) => void, onPanelEvent?: (event: { type: string; [key: string]: unknown }) => void) {
+export function useChat(mode: Mode, _conversationId?: string, onSave?: (msgs: ChatMessage[]) => void, initialMessages?: ChatMessage[], modelConfig?: ModelConfig, onDiagram?: (xml: string) => void, onPanelEvent?: (event: { type: string; [key: string]: unknown }) => void, skillId?: string) {
   // If the last initialMessage is a user message, auto-send it on mount.
   // useMemo with [] deps so this only computes once (stable across renders).
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -80,6 +80,7 @@ export function useChat(mode: Mode, _conversationId?: string, onSave?: (msgs: Ch
         messages: apiMessages,
         llm_config: modelConfig ?? null,
         attachments: attachments?.length ? attachments : null,
+        skill_id: skillId ?? null,
       }, (event) => {
         if (event.type === "diagram" && typeof event.xml === "string") {
           onDiagram?.(event.xml);
@@ -127,7 +128,7 @@ export function useChat(mode: Mode, _conversationId?: string, onSave?: (msgs: Ch
         )
       );
     },
-    [messages, mode, stream, onDiagram]
+    [messages, mode, stream, onDiagram, skillId]
   );
 
   const loadMessages = useCallback((msgs: ChatMessage[]) => {

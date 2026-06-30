@@ -8,6 +8,7 @@ import {
 } from "@fluentui/react-components";
 import { SearchRegular, DismissRegular, StarFilled } from "@fluentui/react-icons";
 import type { Mode } from "../types";
+import { getCustomSkills } from "../config/runtimeFlags";
 
 const MODE_LABELS: Record<Mode, string> = {
   ask: "Ask",
@@ -106,6 +107,8 @@ const MODE_LABELS: Record<Mode, string> = {
   architect: "Architect",
   operations: "Operations",
   engagement: "Engagement Hub",
+  skills: "My Skills",
+  "skill-showcase": "Skill Showcase",
 };
 
 const MODE_SECTION: Partial<Record<Mode, string>> = {
@@ -123,6 +126,7 @@ const MODE_SECTION: Partial<Record<Mode, string>> = {
   whatsnew: "Updates", servicehealth: "Updates", modellifecycle: "Updates",
   modelmigration: "Reports",
   architect: "Agents", operations: "Agents", engagement: "Agents",
+  skills: "Skills", "skill-showcase": "Skills",
   netvnet: "Network Desk", netfirewall: "Network Desk", netsecurity: "Network Desk",
   nethybrid: "Network Desk", netprivatelink: "Network Desk", netvwan: "Network Desk",
   netdns: "Network Desk", netmonitor: "Network Desk", nettroubleshoot: "Network Desk",
@@ -239,8 +243,14 @@ export default function CommandPalette({ open, onClose, onSelect, currentMode, f
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
+  // Skill modes only appear in the palette when the CUSTOM_SKILLS flag is on.
+  const skillsEnabled = getCustomSkills();
+  const availableModes = skillsEnabled
+    ? ALL_MODES
+    : ALL_MODES.filter((m) => m !== "skills" && m !== "skill-showcase");
+
   const filtered = query.trim()
-    ? ALL_MODES.filter((m) => {
+    ? availableModes.filter((m) => {
         const q = query.toLowerCase();
         const label = MODE_LABELS[m].toLowerCase();
         const section = (MODE_SECTION[m] ?? "").toLowerCase();
@@ -248,7 +258,7 @@ export default function CommandPalette({ open, onClose, onSelect, currentMode, f
       })
     : [
         ...favorites.filter((m) => m !== currentMode),
-        ...ALL_MODES.filter((m) => m !== currentMode && !favorites.includes(m)),
+        ...availableModes.filter((m) => m !== currentMode && !favorites.includes(m)),
       ];
 
   useEffect(() => {

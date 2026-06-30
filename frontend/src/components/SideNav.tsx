@@ -43,9 +43,12 @@ import {
   StarFilled,
   StarRegular,
   PinRegular,
+  PuzzlePieceRegular,
+  PlugConnectedRegular,
 } from "@fluentui/react-icons";
 import type { Mode } from "../types";
 import { unifiedAgentsEnabled } from "../constants/modeGroups";
+import { getCustomSkills } from "../config/runtimeFlags";
 import { useAuth } from "../auth/AuthProvider";
 import NavItemHowTo from "./NavItemHowTo";
 
@@ -218,6 +221,16 @@ const UNIFIED_NAV_SECTIONS: NavSectionDef[] = [
     ],
   },
 ];
+
+// Optional "Skills" section, surfaced only when the CUSTOM_SKILLS flag is on.
+// Present in both the legacy and unified surfaces.
+const SKILLS_SECTION: NavSectionDef = {
+  label: "Skills",
+  items: [
+    { mode: "skills", label: "My Skills", icon: <PuzzlePieceRegular />, description: "Upload, enable, and run your own skills" },
+    { mode: "skill-showcase", label: "Skill Showcase", icon: <PlugConnectedRegular />, description: "Browse and install community skills" },
+  ],
+};
 
 const useStyles = makeStyles({
   nav: {
@@ -392,6 +405,7 @@ const MODE_ICON_MAP: Partial<Record<Mode, JSX.Element>> = {
   cost: <DataUsageRegular />, compliance: <ShieldCheckmarkRegular />,
   architect: <BuildingRegular />, operations: <WrenchScrewdriverRegular />,
   engagement: <FormRegular />,
+  skills: <PuzzlePieceRegular />, "skill-showcase": <PlugConnectedRegular />,
 };
 
 const MODE_LABEL_MAP: Partial<Record<Mode, string>> = {
@@ -407,6 +421,7 @@ const MODE_LABEL_MAP: Partial<Record<Mode, string>> = {
   servicehealth: "Service Health", modellifecycle: "Model Lifecycle", modelmigration: "Model IQ",
   network: "Network Design", cost: "Cost & FinOps", compliance: "Compliance & Security",
   architect: "Architect", operations: "Operations", engagement: "Engagement Hub",
+  skills: "My Skills", "skill-showcase": "Skill Showcase",
 };
 
 export default function SideNav({ mode, onModeChange, collapsed, onToggleCollapsed, badgeCounts = {}, favorites = [], onToggleFavorite }: SideNavProps) {
@@ -490,10 +505,13 @@ export default function SideNav({ mode, onModeChange, collapsed, onToggleCollaps
           </div>
         )}
 
-        {(unifiedAgentsEnabled()
-          ? UNIFIED_NAV_SECTIONS
-          : NAV_SECTIONS.filter((s) => s.label !== "Agents")
-        ).map((section, si) => {
+        {(() => {
+          const baseSections = unifiedAgentsEnabled()
+            ? UNIFIED_NAV_SECTIONS
+            : NAV_SECTIONS.filter((s) => s.label !== "Agents");
+          const sections = getCustomSkills() ? [...baseSections, SKILLS_SECTION] : baseSections;
+          return sections;
+        })().map((section, si) => {
           const isSectionCollapsed = collapsedSections.has(section.label);
           return (
             <div key={section.label}>
