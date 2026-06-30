@@ -46,6 +46,8 @@ from routes.report_analyzer import router as report_analyzer_router  # noqa: E40
 from routes.scan import router as scan_router  # noqa: E402
 from routes.security import router as security_router  # noqa: E402
 from routes.settings import router as settings_router  # noqa: E402
+from routes.skills import router as skills_router  # noqa: E402
+from routes.skills_showcase import router as skills_showcase_router  # noqa: E402
 from routes.strategy import router as strategy_router  # noqa: E402
 from routes.whats_new import router as whats_new_router  # noqa: E402
 
@@ -176,4 +178,8 @@ app.include_router(model_migration_router, prefix="/api")
 app.include_router(report_analyzer_router, prefix="/api")
 app.include_router(whats_new_router, prefix="/api")
 app.include_router(strategy_router, prefix="/api")
+# Skill showcase BEFORE the per-user skills router so `/skills/showcase` is
+# matched ahead of the `/skills/{skill_id}` path parameter route.
+app.include_router(skills_showcase_router, prefix="/api")
+app.include_router(skills_router, prefix="/api")
 app.include_router(admin_router, prefix="/api")

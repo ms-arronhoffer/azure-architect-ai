@@ -11,7 +11,7 @@ public feature-flag surface the SPA needs before the user signs in.
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 
-from services.feature_flags import unified_agents_enabled
+from services.feature_flags import custom_skills_enabled, unified_agents_enabled
 
 router = APIRouter()
 
@@ -20,4 +20,5 @@ router = APIRouter()
 async def client_config():
     return JSONResponse({
         "unified_agents": unified_agents_enabled(),
+        "custom_skills": custom_skills_enabled(),
     })
