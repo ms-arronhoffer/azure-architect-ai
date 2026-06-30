@@ -47,6 +47,7 @@ import {
 import type { Mode } from "../types";
 import { unifiedAgentsEnabled } from "../constants/modeGroups";
 import { useAuth } from "../auth/AuthProvider";
+import NavItemHowTo from "./NavItemHowTo";
 
 interface NavItemDef {
   mode: Mode;
@@ -466,6 +467,9 @@ export default function SideNav({ mode, onModeChange, collapsed, onToggleCollaps
                       <Text className={`${styles.navItemLabel} ${isActive ? styles.navItemLabelActive : ""}`}>
                         {label}
                       </Text>
+                      <span style={{ marginLeft: "auto", display: "flex" }} onClick={(e) => e.stopPropagation()}>
+                        <NavItemHowTo mode={fav} />
+                      </span>
                       {onToggleFavorite && (
                         <StarFilled
                           style={{ fontSize: "12px", color: "#FFB900", cursor: "pointer", flexShrink: 0 }}
@@ -535,6 +539,11 @@ export default function SideNav({ mode, onModeChange, collapsed, onToggleCollaps
                     <Text className={`${styles.navItemLabel} ${isActive ? styles.navItemLabelActive : ""}`}>
                       {item.label}
                     </Text>
+                  )}
+                  {!collapsed && (
+                    <span style={{ marginLeft: "auto", display: "flex" }} onClick={(e) => e.stopPropagation()}>
+                      <NavItemHowTo mode={item.mode} />
+                    </span>
                   )}
                   {!collapsed && onToggleFavorite && (
                     <span
