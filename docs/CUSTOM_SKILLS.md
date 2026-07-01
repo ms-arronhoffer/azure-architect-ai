@@ -11,9 +11,9 @@ Architecture showcases) where users publish skills and install ones authored by
 others.
 
 > **Feature flag.** The whole surface is gated behind `CUSTOM_SKILLS`
-> (backend) / `VITE_CUSTOM_SKILLS` (frontend fallback), **off by default**. Set
-> it to `true`/`1`/`yes`/`on` to enable. The flag is resolved at runtime via
-> `GET /api/config`, mirroring `UNIFIED_AGENTS`.
+> (backend) / `VITE_CUSTOM_SKILLS` (frontend fallback), **on by default**. Set
+> it to a falsy value (`false`/`0`/`no`/`off`) to disable. The flag is resolved
+> at runtime via `GET /api/config`, mirroring `UNIFIED_AGENTS`.
 
 ## What a skill is (and is not)
 

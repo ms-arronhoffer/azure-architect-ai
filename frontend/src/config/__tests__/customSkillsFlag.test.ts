@@ -13,8 +13,8 @@ beforeEach(() => {
 });
 
 describe('runtimeFlags — custom skills', () => {
-  it('defaults to disabled (env fallback) when no override and no server value', () => {
-    expect(getCustomSkills()).toBe(false);
+  it('defaults to enabled (env fallback) when no override and no server value', () => {
+    expect(getCustomSkills()).toBe(true);
     expect(hasCustomSkillsOverride()).toBe(false);
   });
 

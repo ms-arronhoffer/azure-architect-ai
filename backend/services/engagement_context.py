@@ -18,11 +18,15 @@ from typing import Any
 
 from sqlalchemy import select
 
-from db import Engagement, RagDocument, current_engagement_id, session_scope
+from db import Engagement, EngagementArtifact, RagDocument, current_engagement_id, session_scope
 from middleware.logging import get_logger
 from services.rag_service import CORPUS_TENANT_INVENTORY
 
 log = get_logger("engagement_context")
+
+# How many recent workspace artifacts to fold into the preamble. Keeps the
+# recall dense enough to be useful without blowing the ~400-token budget.
+_MAX_RECALL_ARTIFACTS = 8
 
 
 async def load_active() -> Engagement | None:
@@ -154,6 +158,44 @@ async def inventory_snapshot(engagement_id: str) -> str | None:
     return "; ".join(fragments)
 
 
+async def recent_artifacts(engagement_id: str, limit: int = _MAX_RECALL_ARTIFACTS) -> str | None:
+    """Compact recall of tool outputs saved against the engagement.
+
+    Returns a short Markdown block listing the most recent workspace artifacts
+    (tool · title — summary) so any later tool run — cost, scan, naming,
+    landing zone — recalls what earlier tools produced in the same engagement.
+    Returns None when the workspace is empty so callers can skip the section.
+    """
+    async with session_scope() as session:
+        rows = (
+            (
+                await session.execute(
+                    select(EngagementArtifact)
+                    .where(EngagementArtifact.engagement_id == engagement_id)
+                    .order_by(EngagementArtifact.updated_at.desc())
+                    .limit(limit)
+                )
+            )
+            .scalars()
+            .all()
+        )
+    if not rows:
+        return None
+    lines = ["## Engagement Workspace (saved tool outputs)"]
+    for row in rows:
+        summary = (row.summary or "").strip().replace("\n", " ")
+        if len(summary) > 160:
+            summary = summary[:157] + "…"
+        label = f"- **{row.tool}** · {row.title}"
+        lines.append(f"{label} — {summary}" if summary else label)
+    lines.append(
+        "- These are prior outputs from this engagement; reuse them for "
+        "continuity instead of re-deriving, and note when you build on them."
+    )
+    lines.append("")
+    return "\n".join(lines)
+
+
 async def preamble_for_active() -> str:
     """Return the formatted preamble for the active engagement, or "" when
     none is set. Safe to unconditionally concatenate into a system prompt.
@@ -166,21 +208,28 @@ async def preamble_for_active() -> str:
     except Exception as exc:
         log.warning("engagement.preamble_failed", engagement_id=eng.id, error=str(exc))
         return ""
+    lines = base.rstrip("\n").split("\n")
     try:
         snapshot = await inventory_snapshot(eng.id)
     except Exception as exc:
         log.warning("engagement.inventory_snapshot_failed", engagement_id=eng.id, error=str(exc))
         snapshot = None
-    if not snapshot:
-        return base
-    # Insert before the trailing blank line so the preamble stays a single block.
-    lines = base.rstrip("\n").split("\n")
-    lines.append(f"- **Tenant Inventory Snapshot**: {snapshot}")
-    lines.append(
-        "- This snapshot is a per-engagement RAG corpus; full details are "
-        "retrievable via citations when the design prompt needs them."
-    )
+    if snapshot:
+        # Insert before the trailing blank line so the preamble stays a single block.
+        lines.append(f"- **Tenant Inventory Snapshot**: {snapshot}")
+        lines.append(
+            "- This snapshot is a per-engagement RAG corpus; full details are "
+            "retrievable via citations when the design prompt needs them."
+        )
+    try:
+        artifacts = await recent_artifacts(eng.id)
+    except Exception as exc:
+        log.warning("engagement.recent_artifacts_failed", engagement_id=eng.id, error=str(exc))
+        artifacts = None
     lines.append("")
+    if artifacts:
+        lines.append(artifacts.rstrip("\n"))
+        lines.append("")
     return "\n".join(lines)
 
 
@@ -208,5 +257,7 @@ __all__ = [
     "load",
     "load_active",
     "preamble_for_active",
+    "recent_artifacts",
+    "recent_artifacts",
     "to_dict",
 ]

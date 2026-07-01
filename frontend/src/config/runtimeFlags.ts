@@ -27,9 +27,10 @@ function envDefault(): boolean {
   return TRUTHY.has(raw);
 }
 
-// Build-time default for the custom-skills surface (opt-in).
+// Build-time default for the custom-skills surface (on by default).
 function customSkillsEnvDefault(): boolean {
   const raw = (import.meta.env.VITE_CUSTOM_SKILLS ?? "").trim().toLowerCase();
+  if (raw === "") return true;
   return TRUTHY.has(raw);
 }
 
