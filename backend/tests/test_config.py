@@ -40,8 +40,17 @@ async def test_config_unified_opt_in(client, monkeypatch, value):
 
 @pytest.mark.asyncio
 async def test_config_custom_skills_default(client, monkeypatch):
-    """Unset CUSTOM_SKILLS resolves to disabled (opt-in default)."""
+    """Unset CUSTOM_SKILLS resolves to enabled (on by default)."""
     monkeypatch.delenv("CUSTOM_SKILLS", raising=False)
+    resp = await client.get("/api/config")
+    assert resp.status_code == 200
+    assert resp.json()["custom_skills"] is True
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("value", ["false", "0", "no", "off", "OFF", " False ", "anything"])
+async def test_config_custom_skills_opt_out(client, monkeypatch, value):
+    monkeypatch.setenv("CUSTOM_SKILLS", value)
     resp = await client.get("/api/config")
     assert resp.status_code == 200
     assert resp.json()["custom_skills"] is False
