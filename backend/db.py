@@ -122,6 +122,39 @@ class EngagementReference(Base):
     updated_at: Mapped[int] = mapped_column(BigInteger, nullable=False, index=True)
 
 
+class EngagementArtifact(Base):
+    """A tool output saved against an engagement for later cross-tool recall.
+
+    While an engagement is active, tools (cost worksheets, naming standards,
+    landing-zone plans, etc.) persist their notable outputs here so that: (a)
+    the chat/agent preamble can surface a compact "recent outputs" list so any
+    later tool run recalls what earlier tools produced, and (b) the Engagement
+    drawer can show the workflow's saved artifacts. A "Start over" action clears
+    every artifact for the engagement to signal the end of that workflow.
+
+    ``tool`` records the producing mode/agent (e.g. ``namingstandards``),
+    ``kind`` a coarse category (e.g. ``markdown``, ``worksheet``), ``title`` a
+    short label, ``summary`` a one-line recap surfaced in the preamble, and
+    ``data`` the full JSON payload for rehydration.
+    """
+
+    __tablename__ = "engagement_artifacts"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    engagement_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    tool: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    kind: Mapped[str] = mapped_column(String(32), nullable=False, default="note")
+    title: Mapped[str] = mapped_column(String(256), nullable=False)
+    summary: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    data: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    user_id: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    tenant_id: Mapped[str] = mapped_column(
+        String(64), nullable=False, default=current_tenant_id, index=True
+    )
+    created_at: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    updated_at: Mapped[int] = mapped_column(BigInteger, nullable=False, index=True)
+
+
 class RagDocument(Base):
     """RAG corpus entry. Embedding stored as JSON array for cross-DB portability
     (SQLite has no vector type; pgvector optimization deferred since corpus is small).
@@ -465,6 +498,7 @@ _TENANT_SCOPED = (
     Conversation,
     Engagement,
     EngagementReference,
+    EngagementArtifact,
     UserSecret,
     TokenUsage,
     AuditEvent,
