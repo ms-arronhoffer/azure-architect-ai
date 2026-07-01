@@ -387,6 +387,74 @@ class ArbCondition(Base):
     updated_at: Mapped[int] = mapped_column(BigInteger, nullable=False, index=True)
 
 
+class UserSkill(Base):
+    """Per-user installed custom skill.
+
+    A skill is a *declarative* capability authored by a user and uploaded as a
+    zip package (manifest + instructions + optional knowledge docs + optional
+    input schema). It carries no executable code: at runtime its ``instructions``
+    are appended to the chat system prompt and its knowledge docs are grounded
+    via a per-skill RAG corpus (``skill:<id>``). User-scoped exactly like
+    ``Engagement``/``EngagementReference`` (filtered by ``user_id`` plus the
+    tenant listener). The original zip bytes are kept inline for re-export.
+    """
+
+    __tablename__ = "user_skills"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    user_id: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    tenant_id: Mapped[str] = mapped_column(
+        String(64), nullable=False, default=current_tenant_id, index=True
+    )
+    slug: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    description: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    category: Mapped[str] = mapped_column(String(64), nullable=False, default="general", index=True)
+    tags: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    icon: Mapped[str | None] = mapped_column(Text, nullable=True)
+    instructions: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    inputs_schema: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    examples: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    knowledge_files: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    enabled: Mapped[bool] = mapped_column(nullable=False, default=True)
+    source: Mapped[str] = mapped_column(String(32), nullable=False, default="custom")
+    origin_skill_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    version: Mapped[str] = mapped_column(String(32), nullable=False, default="1.0.0")
+    author: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    package_data: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
+    package_size_bytes: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    created_at: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    updated_at: Mapped[int] = mapped_column(BigInteger, nullable=False, index=True)
+
+
+class ShowcaseSkill(Base):
+    """Global, shareable skill catalog entry (mirrors ``Demo``/``RefArch``).
+
+    Not user-scoped — published skills are visible to everyone. The full
+    package payload (manifest + instructions + knowledge) is stored so an
+    install can materialize a fresh user-owned ``UserSkill`` copy.
+    """
+
+    __tablename__ = "showcase_skills"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    slug: Mapped[str] = mapped_column(String(128), nullable=False, unique=True, index=True)
+    title: Mapped[str] = mapped_column(Text, nullable=False)
+    description: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    category: Mapped[str] = mapped_column(String(64), nullable=False, default="general", index=True)
+    tags: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    author: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    version: Mapped[str] = mapped_column(String(32), nullable=False, default="1.0.0")
+    icon: Mapped[str | None] = mapped_column(Text, nullable=True)
+    payload: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    package_data: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
+    downloads: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    featured: Mapped[bool] = mapped_column(nullable=False, default=False)
+    source: Mapped[str] = mapped_column(String(32), nullable=False, default="custom", index=True)
+    created_at: Mapped[str] = mapped_column(String(64), nullable=False)
+    last_synced_at: Mapped[str | None] = mapped_column(String(64), nullable=True)
+
+
 _engine = create_async_engine(settings.database_url, future=True, pool_pre_ping=True)
 _Session = async_sessionmaker(_engine, expire_on_commit=False)
 
@@ -403,6 +471,7 @@ _TENANT_SCOPED = (
     ArbSubmission,
     ArbCondition,
     MigrationJob,
+    UserSkill,
 )
 
 
@@ -502,8 +571,10 @@ __all__ = [
     "PricingMeter",
     "RagDocument",
     "RefArch",
+    "ShowcaseSkill",
     "TokenUsage",
     "UserSecret",
+    "UserSkill",
     "WhatsNewCache",
     "current_engagement_id",
     "current_tenant_id",

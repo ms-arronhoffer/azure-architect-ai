@@ -1,0 +1,5 @@
+# Starter prompts shown in the UI when this skill is opened.
+- Review the tags on my prod-rg resource group and flag any missing CostCenter.
+- title: Audit a subscription
+  prompt: Audit all resources in subscription 00000000-0000-0000-0000-000000000000 for missing Owner tags.
+- Generate Bicep snippets to add the mandatory FinOps tags to an App Service plan.

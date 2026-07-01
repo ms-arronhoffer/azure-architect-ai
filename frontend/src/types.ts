@@ -99,7 +99,11 @@ export type Mode =
   | "engagement"
   // Unified single front door — posts to /api/chat without pre-selecting an
   // agent so the backend router classifies and dispatches.
-  | "ask";
+  | "ask"
+  // Custom skills surface (gated behind CUSTOM_SKILLS). "skills" is the My
+  // Skills manager; "skill-showcase" is the shareable catalog.
+  | "skills"
+  | "skill-showcase";
 
 // ── Demo showcase ────────────────────────────────────────────────────────────
 
@@ -116,6 +120,46 @@ export interface Demo {
   created_at: string;
   source?: "microsoft_official" | "community" | "custom";
   last_synced_at?: string | null;
+}
+
+// ── Custom skills ────────────────────────────────────────────────────────────
+
+export interface UserSkill {
+  id: string;
+  slug: string;
+  name: string;
+  description: string;
+  category: string;
+  tags: string[];
+  icon: string | null;
+  instructions: string;
+  inputs_schema: Record<string, unknown>;
+  examples: unknown[];
+  knowledge_files: string[];
+  enabled: boolean;
+  source: "custom" | "showcase";
+  origin_skill_id: string | null;
+  version: string;
+  author: string | null;
+  has_package: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ShowcaseSkill {
+  id: string;
+  slug: string;
+  title: string;
+  description: string;
+  category: string;
+  tags: string[];
+  author: string | null;
+  version: string;
+  icon: string | null;
+  downloads: number;
+  featured: boolean;
+  source: string;
+  created_at: string;
 }
 
 // ── Strategy Builder ─────────────────────────────────────────────────────────

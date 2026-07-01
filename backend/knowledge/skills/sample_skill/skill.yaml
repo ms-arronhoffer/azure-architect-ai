@@ -1,0 +1,16 @@
+# Skill manifest — the single source of truth for a skill package.
+# Only `name` is strictly required; everything else has sensible defaults.
+name: FinOps Tagging Reviewer
+slug: finops-tagging-reviewer        # 3-64 chars: lowercase letters, digits, hyphens
+version: 1.0.0                        # semver (major.minor.patch)
+category: cost                        # general|architecture|cost|operations|compliance|
+                                      # security|networking|data|ai|migration|governance
+description: >-
+  Reviews Azure resource tagging against a FinOps cost-allocation standard and
+  flags resources missing the mandatory CostCenter, Environment, and Owner tags.
+author: Azure Architect AI
+tags:
+  - FinOps
+  - Tagging
+  - Governance
+  - Cost
