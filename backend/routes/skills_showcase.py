@@ -136,11 +136,20 @@ def _serialize(row: ShowcaseSkill) -> dict[str, Any]:
 
 
 async def _seed_if_empty(session: AsyncSession) -> None:
-    existing = (await session.execute(select(ShowcaseSkill).limit(1))).scalars().first()
-    if existing is not None:
+    """Ensure every curated seed skill exists in the catalog.
+
+    Seeds are backfilled by slug rather than only when the table is empty, so
+    curated skills added after an initial seed (e.g. the CAF naming skill) still
+    surface in existing deployments instead of being skipped forever.
+    """
+    existing_slugs = set(
+        (await session.execute(select(ShowcaseSkill.slug))).scalars().all()
+    )
+    missing = [s for s in _SEED_SKILLS if s["slug"] not in existing_slugs]
+    if not missing:
         return
     now = dt.datetime.now(dt.UTC).isoformat()
-    for seed in _SEED_SKILLS:
+    for seed in missing:
         session.add(ShowcaseSkill(
             id=uuid.uuid4().hex,
             slug=seed["slug"],
