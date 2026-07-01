@@ -33,6 +33,7 @@ export type Mode =
   | "ops"
   | "intake"
   | "intakechat"
+  | "plan"
   | "analyze"
   | "cost-optimize"
   | "pricing-desk"

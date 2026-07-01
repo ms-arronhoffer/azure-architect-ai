@@ -16,6 +16,7 @@ import {
   ArrowSwapRegular,
   CodeRegular,
   BoardRegular,
+  CompassNorthwestRegular,
   ChevronLeftRegular,
   ChevronRightRegular,
   ChevronDownRegular,
@@ -135,6 +136,7 @@ const NAV_SECTIONS: NavSectionDef[] = [
   {
     label: "Plan",
     items: [
+      { mode: "plan", label: "Plan Studio", icon: <CompassNorthwestRegular />, description: "Guided 4-step journey: Discover → Capture → Analyze → Strategize" },
       { mode: "intake", label: "Requirements Studio", icon: <FormRegular />, description: "Capture workload requirements — injected everywhere" },
       { mode: "intakechat", label: "Guided Discovery", icon: <FormRegular />, description: "Conversational intake driven by confidence gaps" },
       { mode: "analyze", label: "Workload Analysis", icon: <ChartMultipleRegular />, description: "Architecture + WAF + Security in one click" },
@@ -415,6 +417,7 @@ const MODE_ICON_MAP: Partial<Record<Mode, JSX.Element>> = {
   qa: <ChatRegular />, architecture: <BuildingRegular />, waf: <ShieldCheckmarkRegular />,
   review: <ClipboardTaskRegular />, drbc: <ArrowSyncRegular />, codegen: <CodeRegular />,
   learningplan: <BoardRegular />, intake: <FormRegular />, analyze: <ChartMultipleRegular />,
+  plan: <CompassNorthwestRegular />,
   landingzone: <LayerRegular />, threatmodel: <ShieldErrorRegular />, reliability: <HeartPulseRegular />,
   troubleshoot: <WrenchScrewdriverRegular />, whatsnew: <MegaphoneLoudRegular />,
   strategy: <TargetRegular />, "cost-optimize": <DataUsageRegular />, "pricing-desk": <MoneyCalculatorRegular />, pipelineforge: <BranchForkRegular />,
@@ -434,6 +437,7 @@ const MODE_LABEL_MAP: Partial<Record<Mode, string>> = {
   qa: "Expert Advisor", architecture: "Architecture Design", waf: "WAF Assessment",
   review: "Architecture Review", drbc: "DR/BC Design", codegen: "Code Generator",
   learningplan: "Learning Plan", intake: "Requirements Studio", analyze: "Workload Analysis",
+  plan: "Plan Studio",
   landingzone: "Landing Zone", threatmodel: "Threat Model", reliability: "Reliability & SLO",
   troubleshoot: "Troubleshoot", whatsnew: "What's New", strategy: "Strategy Builder",
   "cost-optimize": "Cost Optimize", pipelineforge: "Pipeline Forge", runbookstudio: "Runbook Studio",

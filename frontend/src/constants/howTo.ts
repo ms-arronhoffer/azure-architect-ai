@@ -31,7 +31,7 @@ export const HOW_TO_SECTIONS: HowToSection[] = [
   },
   {
     label: "Plan",
-    modes: ["intake", "intakechat", "analyze", "cost-optimize", "pricing-desk", "strategy"],
+    modes: ["plan", "intake", "intakechat", "analyze", "cost-optimize", "pricing-desk", "strategy"],
   },
   {
     label: "Design",
@@ -231,6 +231,20 @@ export const HOW_TO: Partial<Record<Mode, HowToEntry>> = {
   },
 
   // ── Plan ──────────────────────────────────────────────────────────────
+  plan: {
+    label: "Plan Studio",
+    whatItDoes:
+      "The guided front door for developing a plan. Reframes the four Plan tools — Guided Discovery, Requirements Studio, Workload Analysis, and Strategy Builder — as one ordered journey (Discover → Capture → Analyze → Strategize), tracking progress from your saved workload spec so the steps build on each other instead of standing alone.",
+    howToUse: [
+      "Open Plan Studio and start at the highlighted 'You are here' step.",
+      "Work through Discover → Capture → Analyze → Strategize; each button opens the matching specialist tool with your workload details already carried forward.",
+      "Come back any time — completed steps show a checkmark and can be revisited; 'Reset journey' clears the tracked progress.",
+    ],
+    outputs: [
+      "A single, ordered planning workflow with a progress bar and per-step status.",
+      "A shared workload spec that flows into every downstream design, cost, and assessment tool.",
+    ],
+  },
   intake: {
     label: "Requirements Studio",
     whatItDoes:
@@ -562,6 +576,13 @@ export const HOW_TO: Partial<Record<Mode, HowToEntry>> = {
       "Pick source and target models; provide token volume and traffic shape.",
       "Review the side-by-side scorecard and the PTU capacity plan.",
     ],
+    outputs: [
+      "Model IQ Report tab: quality / cost / latency / safety scores.",
+      "PTU capacity recommendation with monthly cost.",
+      "Migration risk summary.",
+    ],
+  },
+
   // ── Skills ────────────────────────────────────────────────────────────
   skills: {
     label: "My Skills",

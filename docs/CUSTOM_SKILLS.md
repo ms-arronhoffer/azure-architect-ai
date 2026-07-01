@@ -41,6 +41,12 @@ A ready-to-edit starter package lives at
 (**Skills → Download sample**) or `GET /api/skills/sample`. The manifest JSON
 Schema is at `backend/knowledge/skills/skill.schema.json`.
 
+A fully-worked, curated example — the **Azure Naming Standards** skill — lives at
+`backend/knowledge/skills/naming-standards/` and ships pre-installed in the
+Skill Showcase (featured). It turns the built-in Naming Standards tool into a
+portable skill; install it from **Skill Showcase**, or copy the folder as a
+template for your own governance skills.
+
 ### `skill.yaml`
 
 | Field | Required | Notes |
