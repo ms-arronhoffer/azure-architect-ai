@@ -263,6 +263,8 @@ def needs_responses_api(deployment: str | None) -> bool:
 
 
 def get_deployment(mode: str) -> str:
+    if mode == "review":
+        return settings.azure_openai_deployment_eval
     if mode in ("architecture", "waf"):
         return settings.azure_openai_deployment_arch
     if mode == "demo-build":
@@ -318,4 +320,27 @@ def resolve_async_client_and_model(
     client = AsyncOpenAI(api_key=github_token, base_url=base_url)
     model_str = model or "gpt-4o"
     return client, model_str
+
+
+def resolve_streaming_client(
+    mode: str,
+    provider: str = "azure",
+    model: str = "",
+    github_token: str = "",
+) -> tuple[AsyncAzureOpenAI | AsyncOpenAI, str, bool]:
+    """Return ``(client, deployment, use_responses)`` for a streaming tool loop.
+
+    Reasoning deployments (gpt-5 / codex / o-series) on Azure reject Chat
+    Completions and must stream via the Responses API, so this hands back a
+    Responses-capable async client and ``use_responses=True`` for those. GitHub
+    providers and gpt-4-family Azure deployments get the Chat Completions client.
+    """
+    if provider == "azure" or not provider:
+        deployment = model or get_deployment(mode)
+        if needs_responses_api(deployment):
+            return get_async_responses_client(deployment), deployment, True
+        return get_async_client(deployment), deployment, False
+
+    client, deployment = resolve_async_client_and_model(mode, provider, model, github_token)
+    return client, deployment, False
 
