@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { apiFetch } from "../config/api";
 import type { Announcement } from "../types";
 
 const POLL_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
@@ -13,7 +14,7 @@ export function useServiceHealth() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/service-health${forceRefresh ? "?refresh=true" : ""}`);
+      const res = await apiFetch(`/api/service-health${forceRefresh ? "?refresh=true" : ""}`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       setIncidents(data.incidents ?? []);

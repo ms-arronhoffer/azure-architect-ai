@@ -183,6 +183,32 @@ def _retry_after_seconds(exc: Exception) -> float | None:
         return None
 
 
+def transient_retry_delay(
+    exc: Exception,
+    attempt: int,
+    *,
+    base_delay: float = 0.5,
+    max_delay: float = 8.0,
+) -> float | None:
+    """Return seconds to wait before retrying a transient OpenAI error.
+
+    Returns ``None`` when the error is not transient (e.g. 400/401) and should be
+    surfaced to the caller immediately. Used by the streaming Chat Completions call
+    sites, which don't route through :func:`call_with_retry` and would otherwise
+    surface a single momentary 429 as a hard "rate limit" failure.
+    """
+    if isinstance(exc, RateLimitError):
+        retry_after = _retry_after_seconds(exc)
+        return retry_after if retry_after is not None else _backoff(attempt, base_delay, max_delay)
+    if isinstance(exc, APIStatusError):
+        if exc.status_code in _RETRYABLE_STATUSES:
+            return _backoff(attempt, base_delay, max_delay)
+        return None
+    if isinstance(exc, APIConnectionError):
+        return _backoff(attempt, base_delay, max_delay)
+    return None
+
+
 def get_client(deployment: str | None = None) -> AzureOpenAI:
     endpoint = _route_endpoint(deployment)
     api_version = _route_api_version(deployment, settings.azure_openai_api_version)
