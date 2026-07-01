@@ -21,6 +21,7 @@ import type { Engagement, EngagementWrite } from "../hooks/useEngagements";
 import { EngagementReferencesSection } from "./EngagementReferencesSection";
 import { EngagementInventorySection } from "./EngagementInventorySection";
 import { EngagementArbSection } from "./EngagementArbSection";
+import { EngagementWorkspaceSection } from "./EngagementWorkspaceSection";
 
 const useStyles = makeStyles({
   body: { padding: "16px 20px", display: "flex", flexDirection: "column", gap: "16px" },
@@ -308,6 +309,8 @@ export default function EngagementDrawer({
             </Field>
             {editingId && (
               <>
+                <Divider />
+                <EngagementWorkspaceSection engagementId={editingId} />
                 <Divider />
                 <EngagementInventorySection engagementId={editingId} />
                 <Divider />

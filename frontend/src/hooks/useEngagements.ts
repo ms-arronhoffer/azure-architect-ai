@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { apiFetch, setEngagementProvider } from "../config/api";
+import { notifyEngagementChange } from "./usePersistentPanelState";
 
 export interface Engagement {
   id: string;
@@ -73,6 +74,8 @@ export function useEngagements() {
     if (id) localStorage.setItem(ACTIVE_KEY, id);
     else localStorage.removeItem(ACTIVE_KEY);
     setActiveIdState(id);
+    // Let engagement-scoped persistent panels re-key to the new workspace.
+    notifyEngagementChange();
   }, []);
 
   const create = useCallback(async (body: EngagementWrite): Promise<Engagement> => {

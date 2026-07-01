@@ -8,8 +8,11 @@ import {
   Text,
   Spinner,
 } from "@fluentui/react-components";
-import { TagRegular, CopyRegular, CheckmarkRegular, ArrowDownloadRegular } from "@fluentui/react-icons";
+import { TagRegular, CopyRegular, CheckmarkRegular, ArrowDownloadRegular, ArrowResetRegular } from "@fluentui/react-icons";
 import { useSSE } from "../hooks/useSSE";
+import { usePersistentPanelState } from "../hooks/usePersistentPanelState";
+import { saveArtifactToActiveEngagement } from "../hooks/useEngagementWorkspace";
+import { currentEngagementId } from "../config/api";
 import type { ChatMessage, ConversationRecord, Mode } from "../types";
 
 const DEFAULT_ENVIRONMENTS = "dev, test, prod";
@@ -75,22 +78,43 @@ interface NamingStandardsPanelProps {
   initialSession?: ConversationRecord;
 }
 
+interface NamingDraft {
+  orgPrefix: string;
+  environments: string;
+  regions: string;
+  resourceTypes: string;
+  extraContext: string;
+  output: string;
+}
+
+const EMPTY_DRAFT: NamingDraft = {
+  orgPrefix: "",
+  environments: DEFAULT_ENVIRONMENTS,
+  regions: DEFAULT_REGIONS,
+  resourceTypes: "",
+  extraContext: "",
+  output: "",
+};
+
 export default function NamingStandardsPanel({ onRefine, sessionId, onSave }: NamingStandardsPanelProps) {
   const styles = useStyles();
   const { stream, isStreaming } = useSSE();
 
-  const [orgPrefix, setOrgPrefix] = useState("");
-  const [environments, setEnvironments] = useState(DEFAULT_ENVIRONMENTS);
-  const [regions, setRegions] = useState(DEFAULT_REGIONS);
-  const [resourceTypes, setResourceTypes] = useState("");
-  const [extraContext, setExtraContext] = useState("");
-  const [output, setOutput] = useState("");
+  // Engagement-scoped + navigation-durable: the form and generated output
+  // survive navigating to another tool and back, and switch with the engagement.
+  const { state, setState, clear } = usePersistentPanelState<NamingDraft>(
+    "namingstandards",
+    EMPTY_DRAFT,
+  );
+  const { orgPrefix, environments, regions, resourceTypes, extraContext, output } = state;
+  const setField = (patch: Partial<NamingDraft>) => setState((prev) => ({ ...prev, ...patch }));
   const [copied, setCopied] = useState(false);
-  const outputRef = useRef("");
+  const outputRef = useRef(output);
+  outputRef.current = output;
 
   async function handleGenerate() {
     outputRef.current = "";
-    setOutput("");
+    setField({ output: "" });
     const prompt = [
       "Generate a complete Azure CAF naming convention standard.",
       orgPrefix ? `Org prefix: ${orgPrefix}` : "",
@@ -104,13 +128,22 @@ export default function NamingStandardsPanel({ onRefine, sessionId, onSave }: Na
     await stream("/api/chat", { mode: "namingstandards", messages: [{ role: "user", content: prompt }] }, (event) => {
       if (event.type === "token") {
         outputRef.current += event.content;
-        setOutput(outputRef.current);
+        setField({ output: outputRef.current });
       }
     });
 
     if (outputRef.current) {
-      const msg: ChatMessage = { id: crypto.randomUUID(), role: "assistant", content: outputRef.current };
-      onSave(sessionId, "namingstandards", [msg], { text: outputRef.current });
+      const finalOutput = outputRef.current;
+      const msg: ChatMessage = { id: crypto.randomUUID(), role: "assistant", content: finalOutput };
+      onSave(sessionId, "namingstandards", [msg], { text: finalOutput });
+      // Save to the active engagement workspace so cost/scan/other tools recall it.
+      void saveArtifactToActiveEngagement(currentEngagementId(), {
+        tool: "namingstandards",
+        kind: "markdown",
+        title: orgPrefix ? `CAF naming — ${orgPrefix}` : "CAF naming standard",
+        summary: `Naming convention for ${orgPrefix || "org"} across ${environments}`,
+        data: { text: finalOutput, orgPrefix, environments, regions },
+      });
     }
   }
 
@@ -137,28 +170,33 @@ export default function NamingStandardsPanel({ onRefine, sessionId, onSave }: Na
     onRefine([msg]);
   }
 
+  function handleStartOver() {
+    outputRef.current = "";
+    clear();
+  }
+
   return (
     <div className={styles.root}>
       <div className={styles.form}>
         <div className={styles.field} style={{ minWidth: "120px" }}>
           <span className={styles.label}>Org Prefix</span>
-          <input className={styles.textInput} placeholder="contoso" value={orgPrefix} onChange={(e) => setOrgPrefix(e.target.value)} />
+          <input className={styles.textInput} placeholder="contoso" value={orgPrefix} onChange={(e) => setField({ orgPrefix: e.target.value })} />
         </div>
         <div className={styles.field} style={{ minWidth: "180px" }}>
           <span className={styles.label}>Environments</span>
-          <input className={styles.textInput} placeholder="dev, test, prod" value={environments} onChange={(e) => setEnvironments(e.target.value)} />
+          <input className={styles.textInput} placeholder="dev, test, prod" value={environments} onChange={(e) => setField({ environments: e.target.value })} />
         </div>
         <div className={styles.field} style={{ minWidth: "240px" }}>
           <span className={styles.label}>Region Abbreviations</span>
-          <input className={styles.textInput} placeholder="eastus=eus, westus2=wus2" value={regions} onChange={(e) => setRegions(e.target.value)} />
+          <input className={styles.textInput} placeholder="eastus=eus, westus2=wus2" value={regions} onChange={(e) => setField({ regions: e.target.value })} />
         </div>
         <div className={styles.field} style={{ minWidth: "200px" }}>
           <span className={styles.label}>Resource Types in Scope (optional)</span>
-          <input className={styles.textInput} placeholder="VNet, SQL, AKS, Storage…" value={resourceTypes} onChange={(e) => setResourceTypes(e.target.value)} />
+          <input className={styles.textInput} placeholder="VNet, SQL, AKS, Storage…" value={resourceTypes} onChange={(e) => setField({ resourceTypes: e.target.value })} />
         </div>
         <div className={styles.field} style={{ minWidth: "180px" }}>
           <span className={styles.label}>Additional Context (optional)</span>
-          <input className={styles.textInput} placeholder="e.g., multi-tenant SaaS, gov cloud…" value={extraContext} onChange={(e) => setExtraContext(e.target.value)} />
+          <input className={styles.textInput} placeholder="e.g., multi-tenant SaaS, gov cloud…" value={extraContext} onChange={(e) => setField({ extraContext: e.target.value })} />
         </div>
         <Button appearance="primary" icon={<TagRegular />} onClick={handleGenerate} disabled={isStreaming}>
           {isStreaming ? <Spinner size="tiny" /> : "Generate Standards"}
@@ -186,6 +224,7 @@ export default function NamingStandardsPanel({ onRefine, sessionId, onSave }: Na
           </Button>
           <Button appearance="subtle" size="small" icon={<ArrowDownloadRegular />} onClick={handleExport}>Export .md</Button>
           <Button appearance="subtle" size="small" onClick={handleRefineInChat}>Refine in Chat</Button>
+          <Button appearance="subtle" size="small" icon={<ArrowResetRegular />} onClick={handleStartOver}>Start over</Button>
         </div>
       )}
     </div>
