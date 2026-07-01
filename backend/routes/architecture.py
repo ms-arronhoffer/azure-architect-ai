@@ -10,7 +10,6 @@ from collections.abc import AsyncGenerator
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
-from openai import APIError, AuthenticationError, BadRequestError
 from pydantic import BaseModel
 
 from auth import require_user, user_id_from_claims
@@ -22,24 +21,19 @@ from services.bicep_service import build_and_preview as build_bicep_preview
 from services.citation_service import enrich_recommendations
 from services.diagram_service import generate_diagram
 from services.docs_service import search_azure_docs
-from services.error_sanitizer import sanitize_openai_error
 from services.mcp_service import call_mcp_tool, is_mcp_tool
-from services.openai_service import resolve_client_and_model, transient_retry_delay
+from services.openai_service import resolve_streaming_client
 from services.pricing_service import estimate_architecture, get_regional_pricing_context
 from services.refarch_match import match_spec
 from services.runbook_service import build_runbook
 from services.settings_service import load_settings
+from services.streaming_llm import stream_tool_completion
 from services.token_service import schedule_record_usage
 from tools.tool_definitions import get_tools_for_mode
 
 router = APIRouter()
 
 ARCHITECTURE_MODES = {"architecture", "waf", "review", "drbc", "network", "aiarchitecture", "dataplatform", "apim"}
-
-# Streaming Chat Completions bypass openai_service.call_with_retry, so a single
-# momentary 429/5xx would otherwise surface immediately as a hard error. Retry
-# transient failures with backoff before giving up.
-_MAX_STREAM_ATTEMPTS = 4
 
 # Modes that get prior architecture text injected from the caller — re-matching
 # adds noise rather than signal, so skip the seed-prompt enrichment.
@@ -220,12 +214,12 @@ DEFAULT_INCLUDE = frozenset({"diagram", "runbook", "cost"})
 
 
 async def _stream_architecture(req: ArchRequest, provider: str = "azure", model: str = "", github_token: str = "", user_id: str = "default") -> AsyncGenerator[str, None]:
+    mode = req.mode if req.mode in ARCHITECTURE_MODES else "architecture"
     try:
-        client, deployment = resolve_client_and_model("architecture", provider, model, github_token)
+        client, deployment, use_responses = resolve_streaming_client(mode, provider, model, github_token)
     except ValueError as e:
         yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
         return
-    mode = req.mode if req.mode in ARCHITECTURE_MODES else "architecture"
     system = MODE_TEMPLATES.get(mode, MODE_TEMPLATES["architecture"])
     tools = get_tools_for_mode(mode)
     usage_acc: dict[str, int] = {"prompt": 0, "completion": 0}
@@ -233,7 +227,7 @@ async def _stream_architecture(req: ArchRequest, provider: str = "azure", model:
 
     if mode == "waf":
         yield f"data: {json.dumps({'type': 'status', 'message': 'Running WAF assessment...'})}\n\n"
-        async for chunk in _stream_waf_assessment(req, client, deployment, system, usage_acc):
+        async for chunk in _stream_waf_assessment(req, client, deployment, system, use_responses, usage_acc):
             yield chunk
         schedule_record_usage(user_id, deployment, mode, usage_acc["prompt"], usage_acc["completion"])
         return
@@ -287,58 +281,37 @@ async def _stream_architecture(req: ArchRequest, provider: str = "azure", model:
     arch_data: dict = {}
 
     while True:
-        attempt = 0
-        while True:
-            attempt += 1
-            try:
-                stream = client.chat.completions.create(
-                    model=deployment,
-                    messages=full_messages,
-                    tools=tools,
-                    tool_choice="auto",
-                    stream=True,
-                    stream_options={"include_usage": True},
-                    max_completion_tokens=8000,
-                )
-                break
-            except (BadRequestError, AuthenticationError, APIError) as e:
-                delay = transient_retry_delay(e, attempt) if attempt < _MAX_STREAM_ATTEMPTS else None
-                if delay is None:
-                    msg = sanitize_openai_error(e)
-                    yield f"data: {json.dumps({'type': 'error', 'message': msg})}\n\n"
-                    return
-                yield f"data: {json.dumps({'type': 'status', 'message': 'Service busy, retrying...'})}\n\n"
-                await asyncio.sleep(delay)
-
         collected_content = ""
         tool_calls_raw: dict[int, dict] = {}
         finish_reason = None
+        stream_errored = False
 
-        for chunk in stream:
-            if chunk.usage is not None:
-                usage_acc["prompt"] += chunk.usage.prompt_tokens or 0
-                usage_acc["completion"] += chunk.usage.completion_tokens or 0
-            if not chunk.choices:
-                continue
-            delta = chunk.choices[0].delta
-            finish_reason = chunk.choices[0].finish_reason
+        async for ev in stream_tool_completion(
+            client, deployment, full_messages, tools,
+            tool_choice="auto", max_tokens=8000, use_responses=use_responses,
+        ):
+            etype = ev["type"]
+            if etype == "status":
+                yield f"data: {json.dumps({'type': 'status', 'message': ev['message']})}\n\n"
+            elif etype == "error":
+                yield f"data: {json.dumps({'type': 'error', 'message': ev['message']})}\n\n"
+                stream_errored = True
+                break
+            elif etype == "usage":
+                usage_acc["prompt"] += ev["prompt"]
+                usage_acc["completion"] += ev["completion"]
+            elif etype == "content":
+                collected_content += ev["text"]
+                yield f"data: {json.dumps({'type': 'token', 'content': ev['text']})}\n\n"
+            elif etype == "tool_call":
+                tool_calls_raw[len(tool_calls_raw)] = {
+                    "id": ev["id"], "name": ev["name"], "arguments": ev["arguments"],
+                }
+            elif etype == "finish":
+                finish_reason = ev["reason"]
 
-            if delta.content:
-                collected_content += delta.content
-                yield f"data: {json.dumps({'type': 'token', 'content': delta.content})}\n\n"
-
-            if delta.tool_calls:
-                for tc in delta.tool_calls:
-                    idx = tc.index
-                    if idx not in tool_calls_raw:
-                        tool_calls_raw[idx] = {"id": "", "name": "", "arguments": ""}
-                    if tc.id:
-                        tool_calls_raw[idx]["id"] = tc.id
-                    if tc.function:
-                        if tc.function.name:
-                            tool_calls_raw[idx]["name"] = tc.function.name
-                        if tc.function.arguments:
-                            tool_calls_raw[idx]["arguments"] += tc.function.arguments
+        if stream_errored:
+            return
 
         if finish_reason == "tool_calls" and tool_calls_raw:
             tool_calls_formatted = [
@@ -610,7 +583,7 @@ async def _stream_architecture(req: ArchRequest, provider: str = "azure", model:
     schedule_record_usage(user_id, deployment, mode, usage_acc["prompt"], usage_acc["completion"])
 
 
-async def _stream_waf_assessment(req: ArchRequest, client, deployment: str, system: str, usage_acc: dict[str, int] | None = None):
+async def _stream_waf_assessment(req: ArchRequest, client, deployment: str, system: str, use_responses: bool = False, usage_acc: dict[str, int] | None = None):
     desc = req.existing_description or req.requirements
     pillars = ["reliability", "security", "cost", "operational-excellence", "performance"]
     tools = get_tools_for_mode("waf")
@@ -632,42 +605,37 @@ async def _stream_waf_assessment(req: ArchRequest, client, deployment: str, syst
         ]
 
         while True:
-            stream = client.chat.completions.create(
-                model=deployment,
-                messages=full_messages,
-                tools=tools,
-                tool_choice="auto",
-                stream=True,
-                stream_options={"include_usage": True},
-                max_completion_tokens=1500,
-            )
-
             tool_calls_raw: dict[int, dict] = {}
             finish_reason = None
             collected = ""
+            stream_errored = False
 
-            for chunk in stream:
-                if chunk.usage is not None and usage_acc is not None:
-                    usage_acc["prompt"] += chunk.usage.prompt_tokens or 0
-                    usage_acc["completion"] += chunk.usage.completion_tokens or 0
-                if not chunk.choices:
-                    continue
-                delta = chunk.choices[0].delta
-                finish_reason = chunk.choices[0].finish_reason
-                if delta.content:
-                    collected += delta.content
-                if delta.tool_calls:
-                    for tc in delta.tool_calls:
-                        idx = tc.index
-                        if idx not in tool_calls_raw:
-                            tool_calls_raw[idx] = {"id": "", "name": "", "arguments": ""}
-                        if tc.id:
-                            tool_calls_raw[idx]["id"] = tc.id
-                        if tc.function:
-                            if tc.function.name:
-                                tool_calls_raw[idx]["name"] = tc.function.name
-                            if tc.function.arguments:
-                                tool_calls_raw[idx]["arguments"] += tc.function.arguments
+            async for ev in stream_tool_completion(
+                client, deployment, full_messages, tools,
+                tool_choice="auto", max_tokens=1500, use_responses=use_responses,
+            ):
+                etype = ev["type"]
+                if etype == "status":
+                    yield f"data: {json.dumps({'type': 'status', 'message': ev['message']})}\n\n"
+                elif etype == "error":
+                    yield f"data: {json.dumps({'type': 'error', 'message': ev['message']})}\n\n"
+                    stream_errored = True
+                    break
+                elif etype == "usage":
+                    if usage_acc is not None:
+                        usage_acc["prompt"] += ev["prompt"]
+                        usage_acc["completion"] += ev["completion"]
+                elif etype == "content":
+                    collected += ev["text"]
+                elif etype == "tool_call":
+                    tool_calls_raw[len(tool_calls_raw)] = {
+                        "id": ev["id"], "name": ev["name"], "arguments": ev["arguments"],
+                    }
+                elif etype == "finish":
+                    finish_reason = ev["reason"]
+
+            if stream_errored:
+                break
 
             if finish_reason == "tool_calls" and tool_calls_raw:
                 tool_calls_formatted = [
