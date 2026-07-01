@@ -20,6 +20,8 @@ import {
   Tooltip,
   TabList,
   Tab,
+  MessageBar,
+  MessageBarBody,
 } from "@fluentui/react-components";
 import {
   ChatRegular,
@@ -265,6 +267,7 @@ export default function ReviewPanel({ onRefine, conversationId, onSave, initialS
   const [narrative, setNarrative] = useState("");
   const [pillars, setPillars] = useState<WafPillarResult[]>([]);
   const [statusMsg, setStatusMsg] = useState("");
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [templateText, setTemplateText] = useState("");
   const [templateMode, setTemplateMode] = useState<"arm" | "bicep">("arm");
   const [detectedResources, setDetectedResources] = useState<string[]>([]);
@@ -338,6 +341,7 @@ export default function ReviewPanel({ onRefine, conversationId, onSave, initialS
     setNarrative("");
     setPillars([]);
     setStatusMsg("");
+    setErrorMsg(null);
     setCurrentDiagramXml("");
     setTargetDiagramXml("");
     setMigrationPlan("");
@@ -370,6 +374,7 @@ export default function ReviewPanel({ onRefine, conversationId, onSave, initialS
           setNarrative((n) => n + event.content);
         }
         if (event.type === "status") setStatusMsg(event.message);
+        if (event.type === "error") setErrorMsg(event.message);
         if (event.type === "waf_pillar") {
           localPillars = [...localPillars.filter((p) => p.pillar !== event.pillar.pillar), event.pillar];
           setPillars((prev) => {
@@ -396,6 +401,7 @@ export default function ReviewPanel({ onRefine, conversationId, onSave, initialS
     const tabKey = kind === "current" ? "current-arch" : "target-arch";
     setGeneratingTab(tabKey);
     setActiveTab(tabKey);
+    setErrorMsg(null);
 
     const requirements = kind === "current"
       ? description
@@ -419,6 +425,7 @@ export default function ReviewPanel({ onRefine, conversationId, onSave, initialS
           else setTargetDiagramXml(xml);
         }
         if (event.type === "status") setStatusMsg(event.message);
+        if (event.type === "error") setErrorMsg(event.message);
       }
     );
     setStatusMsg("");
@@ -434,6 +441,7 @@ export default function ReviewPanel({ onRefine, conversationId, onSave, initialS
 
     const setter = kind === "migration" ? setMigrationPlan : kind === "reference" ? setReferenceDesign : setExtractedRequirements;
     setter("");
+    setErrorMsg(null);
 
     const context = buildReviewContext();
     const promptMap: Record<string, string> = {
@@ -448,6 +456,7 @@ export default function ReviewPanel({ onRefine, conversationId, onSave, initialS
       (event: SseEvent) => {
         if (event.type === "token") setter((prev) => prev + event.content);
         if (event.type === "status") setStatusMsg(event.message);
+        if (event.type === "error") setErrorMsg(event.message);
       }
     );
     setStatusMsg("");
@@ -727,6 +736,12 @@ export default function ReviewPanel({ onRefine, conversationId, onSave, initialS
             <Spinner size="tiny" />
             <span>{statusMsg}</span>
           </div>
+        )}
+
+        {errorMsg && (
+          <MessageBar intent="error">
+            <MessageBarBody>{errorMsg}</MessageBarBody>
+          </MessageBar>
         )}
 
         {hasResults && onRefine && (
