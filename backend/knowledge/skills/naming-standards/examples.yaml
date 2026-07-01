@@ -1,0 +1,6 @@
+# Starter prompts shown in the UI when this skill is opened.
+- Generate a CAF naming standard for org prefix "contoso" across dev, test, prod in East US and West Europe.
+- title: Storage & Key Vault names
+  prompt: Show CAF-compliant names for a Storage account and a Key Vault (the hyphen-free, globally-unique resources) for workload "payments" in prod, East US.
+- title: Bicep + Terraform modules
+  prompt: Produce the naming.bicep module and locals.tf equivalent for my convention so both IaC tools stay consistent.

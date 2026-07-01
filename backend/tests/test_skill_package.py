@@ -223,3 +223,29 @@ def test_build_package_roundtrips():
     assert reparsed.slug == parsed.slug
     assert reparsed.instructions == parsed.instructions
     assert reparsed.category == parsed.category
+
+
+def _zip_folder(folder) -> bytes:
+    import pathlib
+
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        for path in sorted(pathlib.Path(folder).rglob("*")):
+            if path.is_file():
+                zf.write(path, arcname=f"{pathlib.Path(folder).name}/{path.relative_to(folder).as_posix()}")
+    return buf.getvalue()
+
+
+def test_curated_naming_standards_package_is_valid():
+    """The on-disk naming-standards curated package must parse cleanly."""
+    import pathlib
+
+    root = pathlib.Path(__file__).resolve().parent.parent / "knowledge" / "skills" / "naming-standards"
+    parsed = parse_package(_zip_folder(root))
+    assert parsed.slug == "azure-naming-standards"
+    assert parsed.category == "governance"
+    assert parsed.instructions
+    assert any(f["path"].endswith("caf-naming.md") for f in parsed.knowledge_files)
+    # declarative inputs are surfaced to the UI
+    field_names = {f["name"] for f in parsed.inputs_schema.get("fields", [])}
+    assert {"org_prefix", "environments", "regions"} <= field_names

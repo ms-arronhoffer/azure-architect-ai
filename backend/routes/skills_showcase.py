@@ -15,7 +15,10 @@ Gated behind the ``CUSTOM_SKILLS`` feature flag.
 from __future__ import annotations
 
 import datetime as dt
+import io
 import uuid
+import zipfile
+from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -27,10 +30,43 @@ from db import ShowcaseSkill, UserSkill, get_session, select
 from middleware.logging import get_logger
 from services import skill_service
 from services.feature_flags import custom_skills_enabled
-from services.skill_package import ParsedSkill
+from services.skill_package import ParsedSkill, SkillPackageError, parse_package
 
 router = APIRouter(tags=["skills-showcase"])
 _log = get_logger("skills_showcase")
+
+# Directory holding the curated, on-disk skill packages that ship with the app.
+_SKILLS_DIR = Path(__file__).resolve().parent.parent / "knowledge" / "skills"
+
+
+def _seed_from_package(folder: str, *, featured: bool = False) -> dict[str, Any]:
+    """Load an on-disk skill package folder into a showcase seed entry.
+
+    Zips the folder in memory and runs it through the same ``parse_package``
+    validator uploads use, so a curated skill can never drift out of spec.
+    """
+    root = _SKILLS_DIR / folder
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        for path in sorted(root.rglob("*")):
+            if path.is_file():
+                zf.write(path, arcname=f"{folder}/{path.relative_to(root).as_posix()}")
+    try:
+        parsed = parse_package(buf.getvalue())
+    except SkillPackageError as exc:  # pragma: no cover - authoring guard
+        raise RuntimeError(f"curated skill '{folder}' is invalid: {exc}") from exc
+    payload = parsed.to_payload()
+    return {
+        "slug": parsed.slug,
+        "title": parsed.name,
+        "description": parsed.description,
+        "category": parsed.category,
+        "tags": parsed.tags,
+        "author": parsed.author,
+        "version": parsed.version,
+        "featured": featured,
+        "payload": payload,
+    }
 
 _SEED_SKILLS: list[dict[str, Any]] = [
     {
@@ -72,6 +108,7 @@ _SEED_SKILLS: list[dict[str, Any]] = [
             "knowledge_files": [],
         },
     },
+    _seed_from_package("naming-standards", featured=True),
 ]
 
 

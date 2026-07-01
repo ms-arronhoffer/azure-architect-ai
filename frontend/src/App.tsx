@@ -36,6 +36,7 @@ const RunbookStudioPanel = lazy(() => import("./components/RunbookStudioPanel"))
 const NamingStandardsPanel = lazy(() => import("./components/NamingStandardsPanel"));
 const IntakePanel = lazy(() => import("./components/IntakePanel"));
 const IntakeChatPanel = lazy(() => import("./components/IntakeChatPanel"));
+const PlanStudioPanel = lazy(() => import("./components/PlanStudioPanel"));
 const AnalysisPanel = lazy(() => import("./components/AnalysisPanel"));
 const CostOptimizePanel = lazy(() => import("./components/CostOptimizePanel"));
 const PricingDeskPanel = lazy(() => import("./components/PricingDeskPanel"));
@@ -442,6 +443,7 @@ export default function App() {
     if (mode === "skills") return <SkillsPanel key="skills" />;
     if (mode === "skill-showcase") return <SkillShowcasePanel key="skill-showcase" />;
     if (mode === "intakechat") return <IntakeChatPanel key="intakechat" onContinueIn={handleContinueIn} />;
+    if (mode === "plan") return <PlanStudioPanel key="plan" onNavigate={handleModeChange} />;
     if (mode === "presentation") return <PresentationPanel key="presentation" />;
     if (mode === "codegen") return <CodegenPanel key="codegen" onRefine={handleRefine} />;
     if (mode === "learningplan") return <LearningPlanPanel key="learningplan" />;
