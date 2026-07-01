@@ -1,0 +1,18 @@
+# Skill manifest — the single source of truth for a skill package.
+# Only `name` is strictly required; everything else has sensible defaults.
+name: Azure Naming Standards
+slug: azure-naming-standards          # 3-64 chars: lowercase letters, digits, hyphens
+version: 1.0.0                        # semver (major.minor.patch)
+category: governance                  # general|architecture|cost|operations|compliance|
+                                      # security|networking|data|ai|migration|governance
+description: >-
+  Generates a complete Azure Cloud Adoption Framework (CAF) resource naming
+  convention — a spec table with pattern + example per resource type, plus a
+  ready-to-use Bicep naming module and a Terraform locals equivalent.
+author: Azure Architect AI
+tags:
+  - CAF
+  - Naming
+  - Governance
+  - Bicep
+  - Terraform
