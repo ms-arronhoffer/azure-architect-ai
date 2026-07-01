@@ -215,6 +215,40 @@ async def test_showcase_seed_and_install(skills_client):
 
 
 @pytest.mark.asyncio
+async def test_showcase_includes_caf_naming_skill(skills_client):
+    r = await skills_client.get("/api/skills/showcase", headers={"X-Test-User": _user()})
+    assert r.status_code == 200
+    slugs = [s["slug"] for s in r.json()["skills"]]
+    assert "azure-naming-standards" in slugs
+
+
+@pytest.mark.asyncio
+async def test_showcase_backfills_missing_curated_seeds(skills_client):
+    """A catalog seeded before a curated skill was added should backfill it."""
+    from db import ShowcaseSkill, select, session_scope
+    from routes.skills_showcase import _seed_if_empty
+
+    # Simulate a legacy catalog by removing the curated naming skill.
+    async with session_scope() as session:
+        row = (
+            await session.execute(
+                select(ShowcaseSkill).where(ShowcaseSkill.slug == "azure-naming-standards")
+            )
+        ).scalar_one_or_none()
+        if row is not None:
+            await session.delete(row)
+            await session.commit()
+
+    # The next listing (which runs seeding) should restore it.
+    async with session_scope() as session:
+        await _seed_if_empty(session)
+
+    r = await skills_client.get("/api/skills/showcase", headers={"X-Test-User": _user()})
+    slugs = [s["slug"] for s in r.json()["skills"]]
+    assert "azure-naming-standards" in slugs
+
+
+@pytest.mark.asyncio
 async def test_publish_own_skill(skills_client):
     alice = _user()
     skill = await _upload(skills_client, alice, {"skill.yaml": _MANIFEST, "instructions.md": "x"})
