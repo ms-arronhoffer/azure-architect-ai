@@ -29,6 +29,7 @@ from services.mcp_service import call_mcp_tool, is_mcp_tool
 from services.openai_service import (
     TOOL_INCOMPATIBLE_MODELS,
     resolve_async_client_and_model,
+    transient_retry_delay,
 )
 from services.pricing_service import estimate_architecture, validate_sku
 from services.rag_service import cached_learn_search, cached_learn_search_full
@@ -45,6 +46,11 @@ _unified_agents_enabled = unified_agents_enabled
 
 # Modes that use the architecture route instead (handled by architecture.py)
 ARCH_ROUTE_MODES = {"architecture", "waf", "review", "drbc"}
+
+# Streaming Chat Completions bypass openai_service.call_with_retry, so a single
+# momentary 429/5xx would otherwise surface immediately as a hard error. Retry
+# transient failures with backoff before giving up.
+_MAX_STREAM_ATTEMPTS = 4
 
 # Desk modes whose design_architecture tool call should produce a draw.io diagram
 # (mirrors the diagram pane behavior in ArchitecturePanel for the desk experience).
@@ -333,8 +339,22 @@ async def _stream_chat_impl(mode: str, messages: list[dict], provider: str = "az
         tool_calls_raw: dict[int, dict] = {}
         finish_reason = None
 
+        attempt = 0
+        while True:
+            attempt += 1
+            try:
+                stream = await client.chat.completions.create(**kwargs)
+                break
+            except (BadRequestError, AuthenticationError, APIError) as e:
+                delay = transient_retry_delay(e, attempt) if attempt < _MAX_STREAM_ATTEMPTS else None
+                if delay is None:
+                    msg = sanitize_openai_error(e)
+                    yield f"data: {json.dumps({'type': 'error', 'message': msg})}\n\n"
+                    return
+                yield f"data: {json.dumps({'type': 'status', 'message': 'Service busy, retrying...'})}\n\n"
+                await asyncio.sleep(delay)
+
         try:
-            stream = await client.chat.completions.create(**kwargs)
             async for chunk in stream:
                 if chunk.usage is not None:
                     prompt_tokens += chunk.usage.prompt_tokens or 0
