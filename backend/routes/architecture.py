@@ -3,6 +3,7 @@ Architecture route — orchestrates multi-step architecture design and WAF asses
 Streams typed SSE events including diagram, runbook, Bicep, and cost estimate.
 """
 
+import asyncio
 import json
 import re
 from collections.abc import AsyncGenerator
@@ -23,7 +24,7 @@ from services.diagram_service import generate_diagram
 from services.docs_service import search_azure_docs
 from services.error_sanitizer import sanitize_openai_error
 from services.mcp_service import call_mcp_tool, is_mcp_tool
-from services.openai_service import resolve_client_and_model
+from services.openai_service import resolve_client_and_model, transient_retry_delay
 from services.pricing_service import estimate_architecture, get_regional_pricing_context
 from services.refarch_match import match_spec
 from services.runbook_service import build_runbook
@@ -34,6 +35,11 @@ from tools.tool_definitions import get_tools_for_mode
 router = APIRouter()
 
 ARCHITECTURE_MODES = {"architecture", "waf", "review", "drbc", "network", "aiarchitecture", "dataplatform", "apim"}
+
+# Streaming Chat Completions bypass openai_service.call_with_retry, so a single
+# momentary 429/5xx would otherwise surface immediately as a hard error. Retry
+# transient failures with backoff before giving up.
+_MAX_STREAM_ATTEMPTS = 4
 
 # Modes that get prior architecture text injected from the caller — re-matching
 # adds noise rather than signal, so skip the seed-prompt enrichment.
@@ -281,20 +287,28 @@ async def _stream_architecture(req: ArchRequest, provider: str = "azure", model:
     arch_data: dict = {}
 
     while True:
-        try:
-            stream = client.chat.completions.create(
-                model=deployment,
-                messages=full_messages,
-                tools=tools,
-                tool_choice="auto",
-                stream=True,
-                stream_options={"include_usage": True},
-                max_completion_tokens=8000,
-            )
-        except (BadRequestError, AuthenticationError, APIError) as e:
-            msg = sanitize_openai_error(e)
-            yield f"data: {json.dumps({'type': 'error', 'message': msg})}\n\n"
-            return
+        attempt = 0
+        while True:
+            attempt += 1
+            try:
+                stream = client.chat.completions.create(
+                    model=deployment,
+                    messages=full_messages,
+                    tools=tools,
+                    tool_choice="auto",
+                    stream=True,
+                    stream_options={"include_usage": True},
+                    max_completion_tokens=8000,
+                )
+                break
+            except (BadRequestError, AuthenticationError, APIError) as e:
+                delay = transient_retry_delay(e, attempt) if attempt < _MAX_STREAM_ATTEMPTS else None
+                if delay is None:
+                    msg = sanitize_openai_error(e)
+                    yield f"data: {json.dumps({'type': 'error', 'message': msg})}\n\n"
+                    return
+                yield f"data: {json.dumps({'type': 'status', 'message': 'Service busy, retrying...'})}\n\n"
+                await asyncio.sleep(delay)
 
         collected_content = ""
         tool_calls_raw: dict[int, dict] = {}
@@ -400,8 +414,6 @@ async def _stream_architecture(req: ArchRequest, provider: str = "azure", model:
                         # serial hotspot (one HTTP round-trip per SKU). asyncio.as_completed
                         # lets us emit cost_update events as each item resolves, preserving
                         # the live running-total UX while collapsing wall time to ~max(item).
-                        import asyncio
-
                         from services.pricing_service import estimate_line_item
 
                         async def _price_one(item: dict) -> dict | None:
