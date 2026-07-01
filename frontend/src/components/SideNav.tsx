@@ -16,6 +16,7 @@ import {
   ArrowSwapRegular,
   CodeRegular,
   BoardRegular,
+  CompassNorthwestRegular,
   ChevronLeftRegular,
   ChevronRightRegular,
   ChevronDownRegular,
@@ -43,10 +44,14 @@ import {
   StarFilled,
   StarRegular,
   PinRegular,
+  PuzzlePieceRegular,
+  PlugConnectedRegular,
 } from "@fluentui/react-icons";
 import type { Mode } from "../types";
 import { unifiedAgentsEnabled } from "../constants/modeGroups";
+import { getCustomSkills } from "../config/runtimeFlags";
 import { useAuth } from "../auth/AuthProvider";
+import NavItemHowTo from "./NavItemHowTo";
 
 interface NavItemDef {
   mode: Mode;
@@ -102,6 +107,9 @@ const DATA_DESK_MODES: Mode[] = [
 ];
 
 const NAV_SECTIONS: NavSectionDef[] = [
+  // NOTE: the "Agents" section is consumed only by the unified 5-agent surface
+  // (UNIFIED_NAV_SECTIONS references it by label). It is filtered out of the
+  // legacy render below, so it must stay defined and first here.
   {
     label: "Agents",
     items: [
@@ -113,30 +121,33 @@ const NAV_SECTIONS: NavSectionDef[] = [
     ],
   },
   {
-    label: "Updates",
-    items: [
-      { mode: "whatsnew", label: "What's New", icon: <MegaphoneLoudRegular />, description: "Microsoft announcements & draft customer emails" },
-      { mode: "servicehealth", label: "Service Health", icon: <HeartPulseRegular />, description: "Azure service incidents and health advisories" },
-      { mode: "modellifecycle", label: "Model Lifecycle", icon: <CalendarRegular />, description: "Azure Foundry model retirement schedule" },
-    ],
-  },
-  {
     label: "Advise",
     items: [
       { mode: "qa", label: "Expert Advisor", icon: <ChatRegular />, description: "14 cross-domain advisors", activeWhen: ADVISOR_MODES },
       { mode: "learningplan", label: "Learning Plan", icon: <BoardRegular />, description: "Build structured training plans with outcomes" },
       { mode: "presentation", label: "Presentation Coach", icon: <SlideTextRegular />, description: "Structure Azure topics for any audience" },
+      { subheading: "Domain Desks" },
+      { mode: "netvnet", label: "Network Desk", icon: <GlobeRegular />, description: "11 specialist advisors for Azure networking", activeWhen: NETWORK_DESK_MODES },
+      { mode: "compsku", label: "Compute Desk", icon: <ServerRegular />, description: "10 specialist advisors for Azure compute", activeWhen: COMPUTE_DESK_MODES },
+      { mode: "datalake", label: "Data Desk", icon: <DataBarVerticalRegular />, description: "Data platforms + pipelines & Fabric tooling", activeWhen: DATA_DESK_MODES },
+      { mode: "aifoundry", label: "AI Desk", icon: <SparkleRegular />, description: "10 specialist advisors for Azure AI workloads", activeWhen: AI_DESK_MODES },
     ],
   },
   {
     label: "Plan",
     items: [
+      { mode: "plan", label: "Plan Studio", icon: <CompassNorthwestRegular />, description: "Guided 4-step journey: Discover → Capture → Analyze → Strategize" },
       { mode: "intake", label: "Requirements Studio", icon: <FormRegular />, description: "Capture workload requirements — injected everywhere" },
       { mode: "intakechat", label: "Guided Discovery", icon: <FormRegular />, description: "Conversational intake driven by confidence gaps" },
       { mode: "analyze", label: "Workload Analysis", icon: <ChartMultipleRegular />, description: "Architecture + WAF + Security in one click" },
+      { mode: "strategy", label: "Strategy Builder", icon: <TargetRegular />, description: "AI-generated Azure strategy document" },
+    ],
+  },
+  {
+    label: "Cost",
+    items: [
       { mode: "cost-optimize", label: "Cost Optimize", icon: <DataUsageRegular />, description: "Deterministic 7-phase cost pipeline with narrated report" },
       { mode: "pricing-desk", label: "Pricing Desk", icon: <MoneyCalculatorRegular />, description: "Conversational pricing for any Azure service with a live, exportable worksheet" },
-      { mode: "strategy", label: "Strategy Builder", icon: <TargetRegular />, description: "AI-generated Azure strategy document" },
     ],
   },
   {
@@ -146,14 +157,6 @@ const NAV_SECTIONS: NavSectionDef[] = [
       { mode: "landingzone", label: "Landing Zone", icon: <LayerRegular />, description: "Azure CAF landing zone design with management groups" },
       { mode: "demo-build", label: "Demo Builder", icon: <RocketRegular />, description: "Generate a clone-and-run Azure demo: app + Bicep + docs" },
       { mode: "namingstandards", label: "Naming Standards", icon: <TagRegular />, description: "CAF naming conventions + Bicep/Terraform enforcement module" },
-      { subheading: "Library" },
-      { mode: "refarch", label: "Reference Architectures", icon: <BookRegular />, description: "Official MS reference architectures + custom entries" },
-      { mode: "showcase", label: "Demo Showcase", icon: <PlayCircleRegular />, description: "Browse and contribute to the demo catalog" },
-      { subheading: "Domain Desks" },
-      { mode: "netvnet", label: "Network Desk", icon: <GlobeRegular />, description: "11 specialist advisors for Azure networking", activeWhen: NETWORK_DESK_MODES },
-      { mode: "compsku", label: "Compute Desk", icon: <ServerRegular />, description: "10 specialist advisors for Azure compute", activeWhen: COMPUTE_DESK_MODES },
-      { mode: "datalake", label: "Data Desk", icon: <DataBarVerticalRegular />, description: "Data platforms + pipelines & Fabric tooling", activeWhen: DATA_DESK_MODES },
-      { mode: "aifoundry", label: "AI Desk", icon: <SparkleRegular />, description: "10 specialist advisors for Azure AI workloads", activeWhen: AI_DESK_MODES },
     ],
   },
   {
@@ -164,6 +167,7 @@ const NAV_SECTIONS: NavSectionDef[] = [
       { mode: "threatmodel", label: "Threat Model", icon: <ShieldErrorRegular />, description: "STRIDE analysis, attack surface & security controls" },
       { mode: "drbc", label: "DR/BC Design", icon: <ArrowSyncRegular />, description: "Recovery strategies and failover runbooks" },
       { mode: "reliability", label: "Reliability & SLO", icon: <HeartPulseRegular />, description: "SLO design, FMEA, chaos experiments & toil inventory" },
+      { mode: "modelmigration", label: "Model IQ", icon: <ArrowSwapRegular />, description: "Score model migrations and plan PTU capacity" },
     ],
   },
   {
@@ -176,12 +180,29 @@ const NAV_SECTIONS: NavSectionDef[] = [
     ],
   },
   {
-    label: "Reports",
+    label: "Library",
     items: [
-      { mode: "modelmigration", label: "Model IQ", icon: <ArrowSwapRegular />, description: "Score model migrations and plan PTU capacity" },
+      { mode: "refarch", label: "Reference Architectures", icon: <BookRegular />, description: "Official MS reference architectures + custom entries" },
+      { mode: "showcase", label: "Demo Showcase", icon: <PlayCircleRegular />, description: "Browse and contribute to the demo catalog" },
+      { subheading: "Updates" },
+      { mode: "whatsnew", label: "What's New", icon: <MegaphoneLoudRegular />, description: "Microsoft announcements & draft customer emails" },
+      { mode: "servicehealth", label: "Service Health", icon: <HeartPulseRegular />, description: "Azure service incidents and health advisories" },
+      { mode: "modellifecycle", label: "Model Lifecycle", icon: <CalendarRegular />, description: "Azure Foundry model retirement schedule" },
     ],
   },
 ];
+
+// Find a nav item by mode across all sections. Used by the unified surface to
+// borrow individual items regardless of which legacy section now holds them,
+// so reorganizing NAV_SECTIONS above doesn't break the unified nav.
+function findNavItem(target: Mode): NavItemDef {
+  for (const section of NAV_SECTIONS) {
+    for (const item of section.items) {
+      if (!isSubheading(item) && item.mode === target) return item;
+    }
+  }
+  throw new Error(`SideNav: nav item not found for mode "${target}"`);
+}
 
 // Curated nav for unified-agents mode. The 5 agents absorb the 30+ desk/
 // specialist panels via chat-based flow; only a handful of standalone
@@ -196,27 +217,44 @@ const UNIFIED_NAV_SECTIONS: NavSectionDef[] = [
   NAV_SECTIONS.find((s) => s.label === "Agents")!,
   {
     label: "Tools",
-    items: [
-      NAV_SECTIONS.find((s) => s.label === "Design")!.items.find(
-        (i) => !isSubheading(i) && i.mode === "demo-build",
-      )!,
-    ],
+    items: [findNavItem("demo-build")],
   },
   {
     label: "Library",
     items: [
-      NAV_SECTIONS.find((s) => s.label === "Updates")!.items.find(
-        (i) => !isSubheading(i) && i.mode === "whatsnew",
-      )!,
-      NAV_SECTIONS.find((s) => s.label === "Design")!.items.find(
-        (i) => !isSubheading(i) && i.mode === "refarch",
-      )!,
-      NAV_SECTIONS.find((s) => s.label === "Design")!.items.find(
-        (i) => !isSubheading(i) && i.mode === "showcase",
-      )!,
+      findNavItem("whatsnew"),
+      findNavItem("refarch"),
+      findNavItem("showcase"),
     ],
   },
 ];
+
+// Optional "Skills" section, surfaced only when the CUSTOM_SKILLS flag is on.
+// Present in both the legacy and unified surfaces.
+const SKILLS_SECTION: NavSectionDef = {
+  label: "Skills",
+  items: [
+    { mode: "skills", label: "My Skills", icon: <PuzzlePieceRegular />, description: "Upload, enable, and run your own skills" },
+    { mode: "skill-showcase", label: "Skill Showcase", icon: <PlugConnectedRegular />, description: "Browse and install community skills" },
+  ],
+};
+
+// Compose the ordered list of sections to render for the active surface.
+// Single source of truth shared by the default-expand state and the render
+// loop so they can never disagree. When the CUSTOM_SKILLS flag is on, the
+// Skills section is inserted at a fixed position rather than always appended
+// last: right after "Build & Run" on the legacy surface, and after the
+// "Agents" section on the unified surface.
+function composeSections(unified: boolean, customSkills: boolean): NavSectionDef[] {
+  const base = unified
+    ? UNIFIED_NAV_SECTIONS
+    : NAV_SECTIONS.filter((s) => s.label !== "Agents");
+  if (!customSkills) return base;
+  const anchor = unified ? "Agents" : "Build & Run";
+  const idx = base.findIndex((s) => s.label === anchor);
+  if (idx === -1) return [...base, SKILLS_SECTION];
+  return [...base.slice(0, idx + 1), SKILLS_SECTION, ...base.slice(idx + 1)];
+}
 
 const useStyles = makeStyles({
   nav: {
@@ -379,6 +417,7 @@ const MODE_ICON_MAP: Partial<Record<Mode, JSX.Element>> = {
   qa: <ChatRegular />, architecture: <BuildingRegular />, waf: <ShieldCheckmarkRegular />,
   review: <ClipboardTaskRegular />, drbc: <ArrowSyncRegular />, codegen: <CodeRegular />,
   learningplan: <BoardRegular />, intake: <FormRegular />, analyze: <ChartMultipleRegular />,
+  plan: <CompassNorthwestRegular />,
   landingzone: <LayerRegular />, threatmodel: <ShieldErrorRegular />, reliability: <HeartPulseRegular />,
   troubleshoot: <WrenchScrewdriverRegular />, whatsnew: <MegaphoneLoudRegular />,
   strategy: <TargetRegular />, "cost-optimize": <DataUsageRegular />, "pricing-desk": <MoneyCalculatorRegular />, pipelineforge: <BranchForkRegular />,
@@ -391,12 +430,14 @@ const MODE_ICON_MAP: Partial<Record<Mode, JSX.Element>> = {
   cost: <DataUsageRegular />, compliance: <ShieldCheckmarkRegular />,
   architect: <BuildingRegular />, operations: <WrenchScrewdriverRegular />,
   engagement: <FormRegular />,
+  skills: <PuzzlePieceRegular />, "skill-showcase": <PlugConnectedRegular />,
 };
 
 const MODE_LABEL_MAP: Partial<Record<Mode, string>> = {
   qa: "Expert Advisor", architecture: "Architecture Design", waf: "WAF Assessment",
   review: "Architecture Review", drbc: "DR/BC Design", codegen: "Code Generator",
   learningplan: "Learning Plan", intake: "Requirements Studio", analyze: "Workload Analysis",
+  plan: "Plan Studio",
   landingzone: "Landing Zone", threatmodel: "Threat Model", reliability: "Reliability & SLO",
   troubleshoot: "Troubleshoot", whatsnew: "What's New", strategy: "Strategy Builder",
   "cost-optimize": "Cost Optimize", pipelineforge: "Pipeline Forge", runbookstudio: "Runbook Studio",
@@ -406,15 +447,22 @@ const MODE_LABEL_MAP: Partial<Record<Mode, string>> = {
   servicehealth: "Service Health", modellifecycle: "Model Lifecycle", modelmigration: "Model IQ",
   network: "Network Design", cost: "Cost & FinOps", compliance: "Compliance & Security",
   architect: "Architect", operations: "Operations", engagement: "Engagement Hub",
+  skills: "My Skills", "skill-showcase": "Skill Showcase",
 };
 
 export default function SideNav({ mode, onModeChange, collapsed, onToggleCollapsed, badgeCounts = {}, favorites = [], onToggleFavorite }: SideNavProps) {
   const styles = useStyles();
   const { roles } = useAuth();
   const isMetricsAdmin = roles.includes("Metrics.Read");
-  const [collapsedSections, setCollapsedSections] = useState<Set<string>>(
-    () => new Set(NAV_SECTIONS.map((s) => s.label).filter((l) => l !== "Agents"))
-  );
+  const [collapsedSections, setCollapsedSections] = useState<Set<string>>(() => {
+    // Keep the top two sections of the active surface expanded by default;
+    // collapse the rest. Previously this hardcoded the "Agents" label, which
+    // the legacy surface filters out — so every legacy section rendered
+    // collapsed. Deriving from the actual visible sections fixes that on both
+    // surfaces.
+    const sections = composeSections(unifiedAgentsEnabled(), getCustomSkills());
+    return new Set(sections.slice(2).map((s) => s.label));
+  });
 
   function toggleSection(label: string) {
     setCollapsedSections((prev) => {
@@ -466,6 +514,9 @@ export default function SideNav({ mode, onModeChange, collapsed, onToggleCollaps
                       <Text className={`${styles.navItemLabel} ${isActive ? styles.navItemLabelActive : ""}`}>
                         {label}
                       </Text>
+                      <span style={{ marginLeft: "auto", display: "flex" }} onClick={(e) => e.stopPropagation()}>
+                        <NavItemHowTo mode={fav} />
+                      </span>
                       {onToggleFavorite && (
                         <StarFilled
                           style={{ fontSize: "12px", color: "#FFB900", cursor: "pointer", flexShrink: 0 }}
@@ -486,10 +537,7 @@ export default function SideNav({ mode, onModeChange, collapsed, onToggleCollaps
           </div>
         )}
 
-        {(unifiedAgentsEnabled()
-          ? UNIFIED_NAV_SECTIONS
-          : NAV_SECTIONS.filter((s) => s.label !== "Agents")
-        ).map((section, si) => {
+        {composeSections(unifiedAgentsEnabled(), getCustomSkills()).map((section, si) => {
           const isSectionCollapsed = collapsedSections.has(section.label);
           return (
             <div key={section.label}>
@@ -535,6 +583,11 @@ export default function SideNav({ mode, onModeChange, collapsed, onToggleCollaps
                     <Text className={`${styles.navItemLabel} ${isActive ? styles.navItemLabelActive : ""}`}>
                       {item.label}
                     </Text>
+                  )}
+                  {!collapsed && (
+                    <span style={{ marginLeft: "auto", display: "flex" }} onClick={(e) => e.stopPropagation()}>
+                      <NavItemHowTo mode={item.mode} />
+                    </span>
                   )}
                   {!collapsed && onToggleFavorite && (
                     <span

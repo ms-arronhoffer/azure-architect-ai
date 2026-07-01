@@ -60,6 +60,7 @@ const MODE_LABELS: Record<Mode, string> = {
   ops: "Observability & SRE",
   intake: "Requirements Studio",
   intakechat: "Guided Discovery",
+  plan: "Plan Studio",
   analyze: "Workload Analysis",
   "cost-optimize": "Cost Optimize",
   "pricing-desk": "Pricing Desk",
@@ -120,10 +121,13 @@ const MODE_LABELS: Record<Mode, string> = {
   architect: "Architect",
   operations: "Operations",
   engagement: "Engagement Hub",
+  skills: "My Skills",
+  "skill-showcase": "Skill Showcase",
 };
 
 const MODE_SECTION: Partial<Record<Mode, string>> = {
   intake: "Advisory",
+  plan: "Advisory",
   analyze: "Advisory",
   "cost-optimize": "Cost",
   "pricing-desk": "Cost",

@@ -36,6 +36,7 @@ const RunbookStudioPanel = lazy(() => import("./components/RunbookStudioPanel"))
 const NamingStandardsPanel = lazy(() => import("./components/NamingStandardsPanel"));
 const IntakePanel = lazy(() => import("./components/IntakePanel"));
 const IntakeChatPanel = lazy(() => import("./components/IntakeChatPanel"));
+const PlanStudioPanel = lazy(() => import("./components/PlanStudioPanel"));
 const AnalysisPanel = lazy(() => import("./components/AnalysisPanel"));
 const CostOptimizePanel = lazy(() => import("./components/CostOptimizePanel"));
 const PricingDeskPanel = lazy(() => import("./components/PricingDeskPanel"));
@@ -54,6 +55,8 @@ const AdfPipelinePanel = lazy(() => import("./components/AdfPipelinePanel"));
 const MedallionDesignerPanel = lazy(() => import("./components/MedallionDesignerPanel"));
 const DemoShowcasePanel = lazy(() => import("./components/DemoShowcasePanel"));
 const RefArchPanel = lazy(() => import("./components/RefArchPanel"));
+const SkillShowcasePanel = lazy(() => import("./components/SkillShowcasePanel"));
+const SkillsPanel = lazy(() => import("./components/SkillsPanel"));
 const AgentPanel = lazy(() => import("./components/AgentPanel"));
 import {
   ADVISOR_MODES,
@@ -78,6 +81,7 @@ import { track } from "./utils/telemetry";
 import { setErrorNotifier } from "./config/api";
 import { loadRuntimeConfig } from "./config/runtimeFlags";
 import { useUnifiedAgents } from "./hooks/useUnifiedAgents";
+import { useCustomSkills } from "./hooks/useCustomSkills";
 import { TOASTER_ID } from "./constants/toaster";
 import { DemoBuildProvider } from "./contexts/DemoBuildContext";
 import type { Mode, ConversationRecord, ChatMessage, ContinueInSeed, DemoBuilderSeed } from "./types";
@@ -151,6 +155,7 @@ export default function App() {
   const { setSpec: setWorkloadSpec } = useWorkloadSpec();
   const { favorites, toggleFavorite } = useFavorites();
   const { enabled: unifiedAgents, setEnabled: setUnifiedAgents } = useUnifiedAgents();
+  const { enabled: customSkills, setEnabled: setCustomSkills } = useCustomSkills();
   const [analyzeAutoStart, setAnalyzeAutoStart] = useState(false);
   const [demoBuildSeed, setDemoBuildSeed] = useState<DemoBuilderSeed | null>(null);
 
@@ -167,6 +172,17 @@ export default function App() {
     const home: Mode = value ? "ask" : "qa";
     setMode(home);
     try { localStorage.setItem(LAST_MODE_KEY, home); } catch { /* ignore */ }
+  }
+
+  // Toggle the custom-skills surface. When disabling while parked on a skill
+  // mode, fall back to a safe home so the user isn't stranded on a hidden nav.
+  function handleToggleCustomSkills(value: boolean) {
+    setCustomSkills(value);
+    if (!value && (mode === "skills" || mode === "skill-showcase")) {
+      const home: Mode = unifiedAgents ? "ask" : "qa";
+      setMode(home);
+      try { localStorage.setItem(LAST_MODE_KEY, home); } catch { /* ignore */ }
+    }
   }
 
   const { dispatchToast } = useToastController(TOASTER_ID);
@@ -424,7 +440,10 @@ export default function App() {
     if (mode === "medalliondesigner") return <MedallionDesignerPanel key="medalliondesigner" />;
     if (mode === "showcase") return <DemoShowcasePanel key="showcase" onContinueIn={handleContinueIn} />;
     if (mode === "refarch") return <RefArchPanel key="refarch" onContinueIn={handleContinueIn} />;
+    if (mode === "skills") return <SkillsPanel key="skills" />;
+    if (mode === "skill-showcase") return <SkillShowcasePanel key="skill-showcase" />;
     if (mode === "intakechat") return <IntakeChatPanel key="intakechat" onContinueIn={handleContinueIn} />;
+    if (mode === "plan") return <PlanStudioPanel key="plan" onNavigate={handleModeChange} />;
     if (mode === "presentation") return <PresentationPanel key="presentation" />;
     if (mode === "codegen") return <CodegenPanel key="codegen" onRefine={handleRefine} />;
     if (mode === "learningplan") return <LearningPlanPanel key="learningplan" />;
@@ -578,6 +597,8 @@ export default function App() {
         onClearGithubToken={clearGithubToken}
         unifiedAgents={unifiedAgents}
         onToggleUnifiedAgents={handleToggleUnifiedAgents}
+        customSkills={customSkills}
+        onToggleCustomSkills={handleToggleCustomSkills}
       />
       <HowToDrawer
         open={howToOpen}

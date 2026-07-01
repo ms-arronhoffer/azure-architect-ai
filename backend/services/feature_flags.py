@@ -19,3 +19,16 @@ def unified_agents_enabled() -> bool:
     the legacy 84-mode routing.
     """
     return os.getenv("UNIFIED_AGENTS", "").strip().lower() in _TRUTHY
+
+
+def custom_skills_enabled() -> bool:
+    """Whether the per-user Custom Skills + Skill Showcase surface is active.
+
+    On by default. Set ``CUSTOM_SKILLS`` to a falsy value (``false``/``0``/
+    ``no``/``off``) to disable user-uploaded skill packages and the skill
+    showcase. An unset or truthy value keeps the feature enabled.
+    """
+    raw = os.getenv("CUSTOM_SKILLS", "").strip().lower()
+    if not raw:
+        return True
+    return raw in _TRUTHY

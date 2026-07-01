@@ -1,0 +1,18 @@
+{
+  "fields": [
+    {
+      "name": "scope",
+      "label": "Scope to review",
+      "type": "text",
+      "required": false,
+      "placeholder": "e.g. resource group prod-rg, or a subscription id"
+    },
+    {
+      "name": "environment",
+      "label": "Environment filter",
+      "type": "select",
+      "required": false,
+      "options": ["all", "prod", "staging", "dev", "test"]
+    }
+  ]
+}

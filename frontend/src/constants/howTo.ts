@@ -31,7 +31,7 @@ export const HOW_TO_SECTIONS: HowToSection[] = [
   },
   {
     label: "Plan",
-    modes: ["intake", "intakechat", "analyze", "cost-optimize", "pricing-desk", "strategy"],
+    modes: ["plan", "intake", "intakechat", "analyze", "cost-optimize", "pricing-desk", "strategy"],
   },
   {
     label: "Design",
@@ -55,6 +55,10 @@ export const HOW_TO_SECTIONS: HowToSection[] = [
   {
     label: "Build & Run",
     modes: ["codegen", "pipelineforge", "runbookstudio", "troubleshoot"],
+  },
+  {
+    label: "Skills",
+    modes: ["skills", "skill-showcase"],
   },
   {
     label: "Reports",
@@ -227,6 +231,20 @@ export const HOW_TO: Partial<Record<Mode, HowToEntry>> = {
   },
 
   // ── Plan ──────────────────────────────────────────────────────────────
+  plan: {
+    label: "Plan Studio",
+    whatItDoes:
+      "The guided front door for developing a plan. Reframes the four Plan tools — Guided Discovery, Requirements Studio, Workload Analysis, and Strategy Builder — as one ordered journey (Discover → Capture → Analyze → Strategize), tracking progress from your saved workload spec so the steps build on each other instead of standing alone.",
+    howToUse: [
+      "Open Plan Studio and start at the highlighted 'You are here' step.",
+      "Work through Discover → Capture → Analyze → Strategize; each button opens the matching specialist tool with your workload details already carried forward.",
+      "Come back any time — completed steps show a checkmark and can be revisited; 'Reset journey' clears the tracked progress.",
+    ],
+    outputs: [
+      "A single, ordered planning workflow with a progress bar and per-step status.",
+      "A shared workload spec that flows into every downstream design, cost, and assessment tool.",
+    ],
+  },
   intake: {
     label: "Requirements Studio",
     whatItDoes:
@@ -562,6 +580,36 @@ export const HOW_TO: Partial<Record<Mode, HowToEntry>> = {
       "Model IQ Report tab: quality / cost / latency / safety scores.",
       "PTU capacity recommendation with monthly cost.",
       "Migration risk summary.",
+    ],
+  },
+
+  // ── Skills ────────────────────────────────────────────────────────────
+  skills: {
+    label: "My Skills",
+    whatItDoes:
+      "Your personal library of Custom Skills — declarative, code-free skill packages that inject expert instructions (and optional grounding knowledge) into the assistant. Upload your own, enable/disable them, run them, and publish the good ones to the Skill Showcase.",
+    howToUse: [
+      "Click 'Upload skill' and drop a skill package .zip (skill.yaml + instructions.md, optionally inputs, knowledge, examples). Not sure how? 'Download sample' gives you a ready-to-edit starter.",
+      "Toggle a skill on to make the assistant use it; fill any declarative input fields the skill defines, then run it from chat.",
+      "Use 'Publish' to share a skill into the Skill Showcase for your whole org.",
+    ],
+    outputs: [
+      "An installed, versioned skill you can enable, run, export as a .zip, or delete.",
+      "Assistant answers shaped by the skill's instructions and grounded in its knowledge files.",
+    ],
+  },
+  "skill-showcase": {
+    label: "Skill Showcase",
+    whatItDoes:
+      "The org-wide catalog of shareable skill packages (mirrors the Demo Showcase). Browse curated and community skills — like the CAF Naming Standards skill — and install any of them into My Skills with one click.",
+    howToUse: [
+      "Browse the catalog (featured and most-installed first) and read each skill's description and tags.",
+      "Click 'Install' to copy a skill into My Skills as your own editable copy.",
+      "Enable it under My Skills and run it; tweak the instructions or inputs to fit your org.",
+    ],
+    outputs: [
+      "A freshly installed, user-owned copy of the chosen skill under My Skills.",
+      "Install counts that surface the most useful skills to everyone.",
     ],
   },
 };

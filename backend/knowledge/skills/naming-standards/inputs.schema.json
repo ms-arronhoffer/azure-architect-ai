@@ -1,0 +1,39 @@
+{
+  "fields": [
+    {
+      "name": "org_prefix",
+      "label": "Org prefix",
+      "type": "text",
+      "required": false,
+      "placeholder": "e.g. contoso"
+    },
+    {
+      "name": "environments",
+      "label": "Environments",
+      "type": "text",
+      "required": false,
+      "placeholder": "dev, test, prod"
+    },
+    {
+      "name": "regions",
+      "label": "Region abbreviations",
+      "type": "text",
+      "required": false,
+      "placeholder": "eastus=eus, westus2=wus2, westeurope=weu"
+    },
+    {
+      "name": "resource_types",
+      "label": "Resource types in scope",
+      "type": "text",
+      "required": false,
+      "placeholder": "VNet, SQL, AKS, Storage… (leave blank for all common types)"
+    },
+    {
+      "name": "extra_context",
+      "label": "Additional context",
+      "type": "textarea",
+      "required": false,
+      "placeholder": "e.g. multi-tenant SaaS, sovereign cloud, existing standard to align with"
+    }
+  ]
+}

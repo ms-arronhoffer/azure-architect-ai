@@ -69,6 +69,7 @@ class ChatRequest(BaseModel):
     messages: list[ChatMessage]
     llm_config: ModelConfig | None = None
     attachments: list[str] | None = None
+    skill_id: str | None = None
 
 
 # Modes that get mandatory doc pre-retrieval before the LLM call.
@@ -110,14 +111,61 @@ async def _prefetch_docs(mode: str, user_message: str, agent: str | None = None)
     return await cached_learn_search_full(query=query, top=5)
 
 
-async def _stream_chat(mode: str, messages: list[dict], provider: str = "azure", model: str = "", github_token: str = "", attachments: list[str] | None = None, user_id: str = "default") -> AsyncGenerator[str, None]:
+async def _load_skill_context(skill_id: str, user_id: str, user_message: str) -> str:
+    """Build the system-prompt augmentation for an active custom skill.
+
+    Loads the user-scoped, enabled skill, appends its instructions, and grounds
+    the turn with the top hits from the skill's private RAG corpus
+    (``skill:<id>``). Returns "" if the skill is missing/disabled or the feature
+    flag is off. Failures are swallowed so a bad skill never breaks chat.
+    """
+    from services.feature_flags import custom_skills_enabled
+
+    if not skill_id or not custom_skills_enabled():
+        return ""
+    try:
+        from db import UserSkill, session_scope
+        from db import select as db_select
+        from services import rag_service, skill_service
+
+        async with session_scope() as session:
+            row = (
+                await session.execute(
+                    db_select(UserSkill)
+                    .where(UserSkill.id == skill_id)
+                    .where(UserSkill.user_id == user_id)
+                )
+            ).scalar_one_or_none()
+            if row is None or not row.enabled:
+                return ""
+            parts = [f"## Active Skill — {row.name}", row.instructions.strip()]
+            if user_message:
+                with contextlib.suppress(Exception):
+                    hits = await rag_service.search(
+                        session,
+                        user_message[:400],
+                        corpora=[skill_service.corpus_for(row.id)],
+                        top_k=4,
+                    )
+                    snippets = [h["content"][:1200] for h in hits if h.get("content")]
+                    if snippets:
+                        parts.append(
+                            "### Skill Knowledge\n" + "\n\n---\n\n".join(snippets)
+                        )
+            return "\n\n".join(p for p in parts if p)
+    except Exception as exc:  # pragma: no cover - defensive
+        log.warning("chat.skill_context_failed", skill_id=skill_id, error=str(exc))
+        return ""
+
+
+async def _stream_chat(mode: str, messages: list[dict], provider: str = "azure", model: str = "", github_token: str = "", attachments: list[str] | None = None, user_id: str = "default", skill_id: str | None = None) -> AsyncGenerator[str, None]:
     # Emit a guaranteed first event so the client knows the stream is alive
     # even if setup raises before the LLM call. Without this, any uncaught
     # exception during routing / prefetch produces a 200 with empty body —
     # the browser shows the request as "succeeded" but no data ever arrives.
     yield f"data: {json.dumps({'type': 'stream_open', 'mode': mode})}\n\n"
     try:
-        async for chunk in _stream_chat_impl(mode, messages, provider, model, github_token, attachments, user_id):
+        async for chunk in _stream_chat_impl(mode, messages, provider, model, github_token, attachments, user_id, skill_id):
             yield chunk
     except BaseException as exc:
         # Diagnostic: catch BaseException (not just Exception) to surface
@@ -141,7 +189,7 @@ async def _stream_chat(mode: str, messages: list[dict], provider: str = "azure",
             raise
 
 
-async def _stream_chat_impl(mode: str, messages: list[dict], provider: str = "azure", model: str = "", github_token: str = "", attachments: list[str] | None = None, user_id: str = "default") -> AsyncGenerator[str, None]:
+async def _stream_chat_impl(mode: str, messages: list[dict], provider: str = "azure", model: str = "", github_token: str = "", attachments: list[str] | None = None, user_id: str = "default", skill_id: str | None = None) -> AsyncGenerator[str, None]:
     try:
         client, deployment = resolve_async_client_and_model(mode, provider, model, github_token)
     except ValueError as e:
@@ -218,6 +266,24 @@ async def _stream_chat_impl(mode: str, messages: list[dict], provider: str = "az
 
     full_messages = [{"role": "system", "content": system}, *messages]
     citations: list[dict] = []
+
+    # Active custom skill (CUSTOM_SKILLS): append the skill's instructions and
+    # ground the turn with its private RAG corpus. Additive to the existing
+    # prompt pipeline — a missing/disabled skill or flag-off is a no-op.
+    if skill_id:
+        skill_user_msg = ""
+        if messages:
+            last_content = messages[-1].get("content", "")
+            if isinstance(last_content, str):
+                skill_user_msg = last_content
+            elif isinstance(last_content, list):
+                skill_user_msg = next(
+                    (p.get("text", "") for p in last_content if isinstance(p, dict) and p.get("type") == "text"),
+                    "",
+                )
+        skill_block = await _load_skill_context(skill_id, user_id, skill_user_msg)
+        if skill_block:
+            full_messages[0]["content"] += f"\n\n{skill_block}"
 
     # Mandatory pre-retrieval for structured output modes — inject into system message
     # so every response is anchored to real Learn articles, not just training knowledge.
@@ -890,7 +956,7 @@ async def chat(request: Request, req: ChatRequest, claims=Depends(require_user))
         async with session_scope() as session:
             github_token = await get_secret(session, user_id, "github_pat") or ""
     return StreamingResponse(
-        _stream_chat(req.mode, messages, provider, model, github_token, req.attachments or [], user_id),
+        _stream_chat(req.mode, messages, provider, model, github_token, req.attachments or [], user_id, req.skill_id),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )

@@ -28,6 +28,7 @@ from routes.demo import router as demo_router  # noqa: E402
 from routes.demos import router as demos_router  # noqa: E402
 from routes.demos_admin import router as demos_admin_router  # noqa: E402
 from routes.engagement_references import router as engagement_references_router  # noqa: E402
+from routes.engagement_workspace import router as engagement_workspace_router  # noqa: E402
 from routes.engagements import router as engagements_router  # noqa: E402
 from routes.export import router as export_router  # noqa: E402
 from routes.health import router as health_router  # noqa: E402
@@ -46,6 +47,8 @@ from routes.report_analyzer import router as report_analyzer_router  # noqa: E40
 from routes.scan import router as scan_router  # noqa: E402
 from routes.security import router as security_router  # noqa: E402
 from routes.settings import router as settings_router  # noqa: E402
+from routes.skills import router as skills_router  # noqa: E402
+from routes.skills_showcase import router as skills_showcase_router  # noqa: E402
 from routes.strategy import router as strategy_router  # noqa: E402
 from routes.whats_new import router as whats_new_router  # noqa: E402
 
@@ -164,6 +167,7 @@ app.include_router(iac_router, prefix="/api")
 app.include_router(cost_router, prefix="/api")
 app.include_router(engagements_router, prefix="/api")
 app.include_router(engagement_references_router, prefix="/api")
+app.include_router(engagement_workspace_router, prefix="/api")
 app.include_router(arb_router, prefix="/api")
 app.include_router(demos_router, prefix="/api")
 app.include_router(demo_router, prefix="/api")
@@ -176,4 +180,8 @@ app.include_router(model_migration_router, prefix="/api")
 app.include_router(report_analyzer_router, prefix="/api")
 app.include_router(whats_new_router, prefix="/api")
 app.include_router(strategy_router, prefix="/api")
+# Skill showcase BEFORE the per-user skills router so `/skills/showcase` is
+# matched ahead of the `/skills/{skill_id}` path parameter route.
+app.include_router(skills_showcase_router, prefix="/api")
+app.include_router(skills_router, prefix="/api")
 app.include_router(admin_router, prefix="/api")

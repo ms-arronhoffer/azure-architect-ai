@@ -14,7 +14,8 @@ async def test_config_unified_default(client, monkeypatch):
     monkeypatch.delenv("UNIFIED_AGENTS", raising=False)
     resp = await client.get("/api/config")
     assert resp.status_code == 200
-    assert resp.json() == {"unified_agents": False}
+    body = resp.json()
+    assert body["unified_agents"] is False
 
 
 @pytest.mark.asyncio
@@ -23,7 +24,8 @@ async def test_config_unified_opt_out(client, monkeypatch, value):
     monkeypatch.setenv("UNIFIED_AGENTS", value)
     resp = await client.get("/api/config")
     assert resp.status_code == 200
-    assert resp.json() == {"unified_agents": False}
+    body = resp.json()
+    assert body["unified_agents"] is False
 
 
 @pytest.mark.asyncio
@@ -32,4 +34,32 @@ async def test_config_unified_opt_in(client, monkeypatch, value):
     monkeypatch.setenv("UNIFIED_AGENTS", value)
     resp = await client.get("/api/config")
     assert resp.status_code == 200
-    assert resp.json() == {"unified_agents": True}
+    body = resp.json()
+    assert body["unified_agents"] is True
+
+
+@pytest.mark.asyncio
+async def test_config_custom_skills_default(client, monkeypatch):
+    """Unset CUSTOM_SKILLS resolves to enabled (on by default)."""
+    monkeypatch.delenv("CUSTOM_SKILLS", raising=False)
+    resp = await client.get("/api/config")
+    assert resp.status_code == 200
+    assert resp.json()["custom_skills"] is True
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("value", ["false", "0", "no", "off", "OFF", " False ", "anything"])
+async def test_config_custom_skills_opt_out(client, monkeypatch, value):
+    monkeypatch.setenv("CUSTOM_SKILLS", value)
+    resp = await client.get("/api/config")
+    assert resp.status_code == 200
+    assert resp.json()["custom_skills"] is False
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("value", ["true", "1", "yes", "on", "TRUE", " On "])
+async def test_config_custom_skills_opt_in(client, monkeypatch, value):
+    monkeypatch.setenv("CUSTOM_SKILLS", value)
+    resp = await client.get("/api/config")
+    assert resp.status_code == 200
+    assert resp.json()["custom_skills"] is True

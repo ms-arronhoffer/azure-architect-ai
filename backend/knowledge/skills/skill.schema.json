@@ -1,0 +1,54 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://azure-architect-ai/skill.schema.json",
+  "title": "Azure Architect AI — Skill Manifest",
+  "description": "Schema for skill.yaml inside a custom skill package.",
+  "type": "object",
+  "required": ["name"],
+  "additionalProperties": true,
+  "properties": {
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200,
+      "description": "Human-readable skill name."
+    },
+    "slug": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]{1,62}[a-z0-9]$",
+      "description": "URL-safe identifier (3-64 chars, lowercase letters/digits/hyphens). Defaults to a slugified name."
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$",
+      "default": "1.0.0",
+      "description": "Semantic version."
+    },
+    "category": {
+      "type": "string",
+      "enum": [
+        "general", "architecture", "cost", "operations", "compliance",
+        "security", "networking", "data", "ai", "migration", "governance"
+      ],
+      "default": "general"
+    },
+    "description": {
+      "type": "string",
+      "maxLength": 2000
+    },
+    "author": {
+      "type": "string",
+      "maxLength": 200
+    },
+    "tags": {
+      "type": "array",
+      "items": { "type": "string", "maxLength": 40 },
+      "maxItems": 20
+    },
+    "instructions": {
+      "type": "string",
+      "maxLength": 20000,
+      "description": "Optional inline system-prompt fragment. Prefer instructions.md; the file wins when both are present."
+    }
+  }
+}
