@@ -35,6 +35,11 @@ router = APIRouter()
 
 ARCHITECTURE_MODES = {"architecture", "waf", "review", "drbc", "network", "aiarchitecture", "dataplatform", "apim"}
 
+# Streaming Chat Completions bypass openai_service.call_with_retry, so a single
+# momentary 429/5xx would otherwise surface immediately as a hard error. Retry
+# transient failures with backoff before giving up.
+_MAX_STREAM_ATTEMPTS = 4
+
 # Modes that get prior architecture text injected from the caller — re-matching
 # adds noise rather than signal, so skip the seed-prompt enrichment.
 _REFARCH_SKIP_MODES = {"waf", "review"}
@@ -281,6 +286,7 @@ async def _stream_architecture(req: ArchRequest, provider: str = "azure", model:
     arch_data: dict = {}
 
     while True:
+
         collected_content = ""
         tool_calls_raw: dict[int, dict] = {}
         finish_reason = None
