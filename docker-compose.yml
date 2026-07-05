@@ -17,6 +17,10 @@ services:
       # Mount it read-only so DefaultAzureCredential's AzureCliCredential
       # can pick them up. Required when Conditional Access blocks the SP.
       - ${HOME}/.azure:/root/.azure:ro
+      # Explicit writable mount for LLM model/evaluation config (data/model_iq/*.json).
+      # Overrides the broader ./backend:/app mount for this sub-path; edits made
+      # on the host (backend/data/model_iq/) are reflected immediately in the container.
+      - ./backend/data/model_iq:/app/data/model_iq
     command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 
   frontend:

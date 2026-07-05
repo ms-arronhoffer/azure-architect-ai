@@ -19,6 +19,9 @@ services:
       # local prod-parity runs. Drop this volume in real deployments — ACA uses
       # a managed identity instead.
       - ~/.azure:/home/app/.azure:ro
+      # Writable named volume for LLM model/evaluation config (data/model_iq/*.json).
+      # Populated from the image on first start; update files here without rebuilding.
+      - backend_model_iq:/app/data/model_iq
     restart: unless-stopped
 
   frontend:
@@ -33,3 +36,6 @@ services:
     depends_on:
       - backend
     restart: unless-stopped
+
+volumes:
+  backend_model_iq:
