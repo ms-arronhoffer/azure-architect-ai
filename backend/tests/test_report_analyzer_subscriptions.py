@@ -7,11 +7,13 @@ report. When the OU export carries no subscription column, behaviour falls back
 to the account-level ACR total.
 """
 
-from datetime import date
+from datetime import date, timedelta
 
 from services.report_analyzer_service import (
+    _recommendations_appendix,
     build_manager_name_to_tpid,
     build_org_scorecard,
+    build_tpid_subscription_models,
     build_tpid_subscriptions,
     parse_acr_subscriptions,
 )
@@ -95,7 +97,7 @@ def test_build_tpid_subscriptions_empty_when_no_subscription_column():
 # ── build_org_scorecard: subscription-scoped ACR ─────────────────────────────
 
 
-def _scorecard(acr_by_name, org_map, tpid_index, acr_subs=None, tpid_subs=None):
+def _scorecard(acr_by_name, org_map, tpid_index, acr_subs=None, tpid_subs=None, sub_models=None):
     name_to_tpid = build_manager_name_to_tpid(org_map)
     account_directors = {
         a["tpid"]: ["Dir"]
@@ -112,6 +114,7 @@ def _scorecard(acr_by_name, org_map, tpid_index, acr_subs=None, tpid_subs=None):
         today=date(2026, 7, 13),
         acr_subs_by_name=acr_subs,
         tpid_subscriptions=tpid_subs,
+        tpid_subscription_models=sub_models,
     )
 
 
@@ -176,3 +179,120 @@ def test_no_subscription_data_keeps_account_total():
     assert acct["monthlyAcr"] == 126.0
     assert acct["subscriptionScope"] == "all"
     assert acct["impactedSubscriptions"] == []
+
+
+# ── build_tpid_subscription_models ───────────────────────────────────────────
+
+
+def _ret_lookup_soon(today: date) -> dict:
+    # A retirement 30 days out → "critical" for classify_risk.
+    return {"gpt-4.1": today + timedelta(days=30)}
+
+
+def test_build_tpid_subscription_models_groups_at_risk_models_by_subscription():
+    today = date(2026, 7, 13)
+    deps = [
+        {"_tpid": "42", "SubscriptionName": "PBC-CDA-PROD", "Model": "gpt-4.1"},
+        {"_tpid": "42", "SubscriptionName": "PBC-CDA-PROD", "Model": "gpt-4.1-mini"},
+        {"_tpid": "42", "SubscriptionName": "PBC-AISE-PROD", "Model": "gpt-4.1"},
+        # Not at risk (no retirement) → excluded.
+        {"_tpid": "42", "SubscriptionName": "PBC-CORE-PROD", "Model": "gpt-4o"},
+    ]
+    ret = {
+        "gpt-4.1": today + timedelta(days=30),
+        "gpt-4.1-mini": today + timedelta(days=30),
+    }
+    result = build_tpid_subscription_models(deps, ret, today)
+    assert result == {
+        "42": {
+            "PBC-CDA-PROD": ["gpt-4.1", "gpt-4.1-mini"],
+            "PBC-AISE-PROD": ["gpt-4.1"],
+        }
+    }
+
+
+def test_build_tpid_subscription_models_empty_without_subscription_column():
+    today = date(2026, 7, 13)
+    deps = [{"_tpid": "42", "Model": "gpt-4.1"}]
+    assert build_tpid_subscription_models(deps, _ret_lookup_soon(today), today) == {}
+
+
+# ── impacted subscriptions carry models ──────────────────────────────────────
+
+
+def test_impacted_subscriptions_carry_at_risk_models():
+    org_map = {"Dir": {"accounts": [{"tpid": "42", "name": "PREMERA BLUE CROSS"}]}}
+    tpid_index = {"42": [{"_tpid": "42", "Model": "gpt-4.1"}]}
+    acr_by_name = {"PREMERA BLUE CROSS": 30_000.0}
+    acr_subs = {
+        "PREMERA BLUE CROSS": {
+            "PBC-CDA-PROD": 16_994.0,
+            "PBC-AISE-PROD": 12_692.0,
+        }
+    }
+    tpid_subs = {
+        "42": {
+            "PBC-CDA-PROD": "PBC-CDA-PROD",
+            "PBC-AISE-PROD": "PBC-AISE-PROD",
+        }
+    }
+    sub_models = {
+        "42": {
+            "PBC-CDA-PROD": ["gpt-4.1", "gpt-4.1-mini"],
+            "PBC-AISE-PROD": ["gpt-4.1"],
+        }
+    }
+
+    sc = _scorecard(acr_by_name, org_map, tpid_index, acr_subs, tpid_subs, sub_models)
+    acct = sc["allAccounts"][0]
+    by_name = {s["name"]: s for s in acct["impactedSubscriptions"]}
+    assert by_name["PBC-CDA-PROD"]["models"] == ["gpt-4.1", "gpt-4.1-mini"]
+    assert by_name["PBC-AISE-PROD"]["models"] == ["gpt-4.1"]
+
+
+# ── recommendations appendix ─────────────────────────────────────────────────
+
+
+def test_recommendations_appendix_expands_every_subscription():
+    org_scorecard = {
+        "allAccounts": [
+            {
+                "name": "PREMERA BLUE CROSS",
+                "monthlyAcr": 30_000.0,
+                "accountTotalAcr": 33_780.0,
+                "directors": ["Archana"],
+                "subscriptionScope": "impacted",
+                "impactedSubscriptions": [
+                    {"name": "PBC-CDA-PROD", "monthlyAcr": 16_994.0, "matched": True,
+                     "models": ["gpt-4.1", "gpt-4.1-mini"]},
+                    {"name": "PBC-AISE-PROD", "monthlyAcr": 12_692.0, "matched": True,
+                     "models": ["gpt-4.1"]},
+                    {"name": "PBC-CORE-PROD", "monthlyAcr": 1_314.0, "matched": True,
+                     "models": ["gpt-4.1-nano"]},
+                    {"name": "UNMATCHED", "monthlyAcr": 0.0, "matched": False, "models": []},
+                ],
+            }
+        ]
+    }
+    md = _recommendations_appendix(org_scorecard, date(2026, 7, 13))
+    assert "Appendix" in md
+    assert "PREMERA BLUE CROSS" in md
+    # All matched subscriptions appear (nothing hidden behind "+N more").
+    assert "PBC-CDA-PROD" in md
+    assert "PBC-AISE-PROD" in md
+    assert "PBC-CORE-PROD" in md
+    # Per-subscription models and revenue are shown.
+    assert "gpt-4.1-mini" in md
+    assert "$16,994" in md
+    # Unmatched subscriptions are excluded.
+    assert "UNMATCHED" not in md
+
+
+def test_recommendations_appendix_empty_when_no_scoped_accounts():
+    org_scorecard = {
+        "allAccounts": [
+            {"name": "A", "monthlyAcr": 10.0, "subscriptionScope": "all",
+             "impactedSubscriptions": []},
+        ]
+    }
+    assert _recommendations_appendix(org_scorecard, date(2026, 7, 13)) == ""
