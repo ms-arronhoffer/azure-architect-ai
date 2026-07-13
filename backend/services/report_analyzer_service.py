@@ -54,13 +54,39 @@ def _is_zip(data: bytes) -> bool:
     return data[:4] == b"PK\x03\x04" or data[:4] == b"PK\x05\x06" or data[:4] == b"PK\x07\x08"
 
 
+def _is_encrypted_ole2(data: bytes) -> bool:
+    """True if the OLE2 compound document is a password-protected OOXML file.
+
+    Modern Excel (.xlsx/.xlsm) files that are password-protected are stored as
+    an OLE2/CFB container (per MS-OFFCRYPTO) holding an "EncryptedPackage"
+    stream instead of the legacy BIFF "Workbook"/"Book" stream, which is why
+    xlrd fails with the opaque "Can't find workbook in OLE2 compound document".
+    """
+    from xlrd.compdoc import CompDoc  # type: ignore[import]
+
+    try:
+        cd = CompDoc(data, logfile=io.StringIO())
+    except Exception:
+        return False
+    return any(entry.name == "EncryptedPackage" for entry in cd.dirlist)
+
+
 def _legacy_xls_to_csv_bytes(data: bytes) -> bytes:
     """Convert legacy .xls (OLE-BIFF) bytes → csv bytes (utf-8)."""
     import csv as _csv
 
     import xlrd  # type: ignore[import]
 
-    wb = xlrd.open_workbook(file_contents=data)
+    try:
+        wb = xlrd.open_workbook(file_contents=data)
+    except xlrd.XLRDError as exc:
+        if "workbook" in str(exc).lower() and _is_encrypted_ole2(data):
+            raise ValueError(
+                "This file is password-protected. Please remove the password "
+                "(File → Info → Protect Workbook → Encrypt with Password → clear "
+                "the password) and re-upload, or re-export it as an unprotected file."
+            ) from exc
+        raise
     sheet = wb.sheet_by_index(0)
     out = io.StringIO()
     writer = _csv.writer(out)
@@ -142,20 +168,39 @@ def get_last_full_month_column(today: date) -> str:
 # ─── ACR Parsing ─────────────────────────────────────────────────────────────
 
 
+def _normalize_name(name: Any) -> str:
+    """Normalize an account name for cross-file joins (ACR ↔ OU ↔ Manager List).
+
+    Collapses internal whitespace (including NBSP) and trims, so that minor
+    formatting differences between exports — e.g. double spaces, a trailing
+    tab, or a stray non-breaking space pasted from Excel/Power BI — don't
+    silently break the join and produce a $0 ACR for an account that
+    otherwise has data.
+    """
+    if name is None:
+        return ""
+    return re.sub(r"\s+", " ", str(name).replace("\xa0", " ")).strip().upper()
+
+
 def _parse_acr_value(raw: Any) -> float:
     if raw is None:
         return 0.0
-    cleaned = str(raw).strip().replace("$", "").replace(",", "")
+    cleaned = str(raw).replace("\xa0", " ").strip().replace("$", "").replace(",", "")
     if not cleaned or cleaned in ("-", "nan", "NaN"):
         return 0.0
+    negative = False
+    if cleaned.startswith("(") and cleaned.endswith(")"):
+        negative = True
+        cleaned = cleaned[1:-1].strip()
     try:
-        return float(cleaned)
+        value = float(cleaned)
     except ValueError:
         return 0.0
+    return -value if negative else value
 
 
 def parse_acr_data(data: bytes, filename: str, month_col: str) -> dict[str, float]:
-    """Parse ACR multi-month file → {ACCOUNT_NAME_UPPER: monthly_acr_float}.
+    """Parse ACR multi-month file → {ACCOUNT_NAME_NORMALIZED: monthly_acr_float}.
 
     ACR6.csv layout:
       Row 0: FiscalMonth,,FY26-Jul,…,FY26-May,…,Total
@@ -192,11 +237,13 @@ def parse_acr_data(data: bytes, filename: str, month_col: str) -> dict[str, floa
         if not row or len(row) < 2:
             continue
         name = str(row[0]).strip() if row[0] is not None else ""
-        grouping = str(row[1]).strip() if len(row) > 1 and row[1] is not None else ""
-        if not name or grouping != "Total":
+        # Match the "Total" (all-services) grouping row case/whitespace-insensitively —
+        # some Power BI exports render it as "TOTAL", "Total " (trailing space), etc.
+        grouping = str(row[1]).strip().lower() if len(row) > 1 and row[1] is not None else ""
+        if not name or grouping != "total":
             continue
         val = row[col_idx] if len(row) > col_idx else ""
-        result[name.upper()] = _parse_acr_value(val)
+        result[_normalize_name(name)] = _parse_acr_value(val)
 
     return result
 
@@ -304,10 +351,29 @@ def build_tpid_index(deployments: list[dict]) -> dict[str, list[dict]]:
 def build_name_to_tpid(deployments: list[dict]) -> dict[str, str]:
     mapping: dict[str, str] = {}
     for dep in deployments:
-        name = dep.get("TP Name", "").strip().upper()
+        name = _normalize_name(dep.get("TP Name", ""))
         tpid = dep.get("_tpid", "")
         if name and tpid and name not in mapping:
             mapping[name] = tpid
+    return mapping
+
+
+def build_manager_name_to_tpid(org_map: dict) -> dict[str, str]:
+    """Fallback name→TPID join key sourced from the Manager List's Account Name.
+
+    The primary join (build_name_to_tpid) matches the ACR export's account name
+    against the OU deployment inventory's "TP Name" column. Those two exports
+    come from different systems and don't always agree on naming, so an ACR
+    account can go unmatched (and silently show $0) even though the Manager
+    List already carries an authoritative name ↔ TPID pairing.
+    """
+    mapping: dict[str, str] = {}
+    for data in org_map.values():
+        for acct in data["accounts"]:
+            name = _normalize_name(acct.get("name", ""))
+            tpid = acct.get("tpid", "")
+            if name and tpid and name not in mapping:
+                mapping[name] = tpid
     return mapping
 
 
@@ -529,12 +595,19 @@ def build_org_scorecard(
     today: date,
 ) -> dict:
     """Build the full org scorecard matching generateOrgScorecard() from scorecard.ts."""
-    # Match ACR account names → TPIDs
+    # Match ACR account names → TPIDs. Names that don't resolve to any known
+    # TPID (via OU deployment "TP Name" or Manager List "Account Name") are
+    # tracked so a $0 ACR caused by a naming mismatch is diagnosable instead
+    # of looking like missing data.
     acr_map: dict[str, float] = {}
+    unmatched_acr_names: list[dict[str, Any]] = []
     for name_upper, acr in acr_by_name.items():
         tpid = name_to_tpid.get(name_upper)
         if tpid:
             acr_map[tpid] = acr_map.get(tpid, 0.0) + acr
+        elif acr:
+            unmatched_acr_names.append({"name": name_upper, "monthlyAcr": acr})
+    unmatched_acr_names.sort(key=lambda a: -a["monthlyAcr"])
 
     # Process all accounts, dedup by TPID (keep highest priority score)
     all_accounts_map: dict[str, dict] = {}
@@ -606,6 +679,7 @@ def build_org_scorecard(
             "criticalAcr": sum(a["monthlyAcr"] for a in cr_accounts),
             "warningAcr": sum(a["monthlyAcr"] for a in wn_accounts),
         },
+        "unmatchedAcrAccounts": unmatched_acr_names,
     }
 
 
@@ -717,6 +791,7 @@ def render_report(
     all_accounts: list[dict] = org_scorecard["allAccounts"]
     top5: list[dict] = org_scorecard["top5"]
     dir_sums: list[dict] = org_scorecard["directorSummaries"]
+    unmatched_acr: list[dict] = org_scorecard.get("unmatchedAcrAccounts", [])
 
     L: list[str] = []
 
@@ -730,6 +805,19 @@ def render_report(
         f"- **ACR Source:** Power BI actual metered consumption ({acr_month_label})",
         "",
     ]
+
+    if unmatched_acr:
+        unmatched_total = sum(a["monthlyAcr"] for a in unmatched_acr)
+        L += [
+            f"> ⚠️ **{_fmt_acr(unmatched_total)}/mo of ACR from {acr_file_name} could not be "
+            "matched to an account in the org mapping** (name mismatch between the ACR export "
+            "and the Manager List / OU deployment files) and is excluded from the totals below. "
+            "Unmatched account names: "
+            + ", ".join(f"{a['name']} ({_fmt_acr(a['monthlyAcr'])}/mo)" for a in unmatched_acr[:10])
+            + (f", +{len(unmatched_acr) - 10} more" if len(unmatched_acr) > 10 else "")
+            + ".",
+            "",
+        ]
 
     # ── Section 1: Executive Summary ────────────────────────────────────────
     L += [
@@ -928,7 +1016,11 @@ def compute_org_data(
     ou_rows = load_file(ou_data, ou_name)
     deployments = parse_deployments(ou_rows)
     tpid_index = build_tpid_index(deployments)
-    name_to_tpid = build_name_to_tpid(deployments)
+    # Merge both name→TPID sources: OU deployment "TP Name" (primary — matches
+    # the population the report is scoped to) with the Manager List's
+    # "Account Name" as a fallback, since the ACR export's account naming
+    # doesn't always agree with one source over the other.
+    name_to_tpid = {**build_manager_name_to_tpid(org_map), **build_name_to_tpid(deployments)}
 
     org_scorecard = build_org_scorecard(
         org_map, account_directors, tpid_index,
@@ -1231,6 +1323,7 @@ def make_org_data(org_scorecard: dict[str, Any], model_summary: list[dict[str, A
     raw: dict[str, Any] = {
         "totals": org_scorecard.get("totals", {}),
         "allAccounts": org_scorecard.get("allAccounts", []),
+        "unmatchedAcrAccounts": org_scorecard.get("unmatchedAcrAccounts", []),
         "model_summary": model_summary,
         "month_label": month_col,
     }
