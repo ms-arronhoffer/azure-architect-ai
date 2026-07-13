@@ -138,6 +138,20 @@ def get_month_column_candidates(today: date, count: int = 12) -> list[str]:
 # ─── ACR Parsing ─────────────────────────────────────────────────────────────
 
 
+def _normalize_name(raw: Any) -> str:
+    """Normalize an account name for cross-file joins.
+
+    Power BI ACR exports, the OU deployment sheet ("TP Name") and the Manager
+    List ("Account Name") frequently disagree on internal whitespace, casing and
+    stray non-breaking spaces for the same account. Collapsing whitespace runs to
+    a single space and upper-casing lets the ACR figures join reliably instead of
+    silently reporting $0 when the raw strings differ only cosmetically.
+    """
+    if raw is None:
+        return ""
+    return re.sub(r"\s+", " ", str(raw).replace("\xa0", " ")).strip().upper()
+
+
 def _parse_acr_value(raw: Any) -> float:
     if raw is None:
         return 0.0
@@ -203,7 +217,7 @@ def parse_acr_data(
             if not name or grouping != "Total":
                 continue
             val = row[col_idx] if len(row) > col_idx else ""
-            parsed[name.upper()] = _parse_acr_value(val)
+            parsed[_normalize_name(name)] = _parse_acr_value(val)
         return parsed
 
     # Prefer the most-recent candidate that actually carries data. Fall back to
@@ -324,10 +338,27 @@ def build_tpid_index(deployments: list[dict]) -> dict[str, list[dict]]:
 def build_name_to_tpid(deployments: list[dict]) -> dict[str, str]:
     mapping: dict[str, str] = {}
     for dep in deployments:
-        name = dep.get("TP Name", "").strip().upper()
+        name = _normalize_name(dep.get("TP Name", ""))
         tpid = dep.get("_tpid", "")
         if name and tpid and name not in mapping:
             mapping[name] = tpid
+    return mapping
+
+
+def build_manager_name_to_tpid(org_map: dict) -> dict[str, str]:
+    """Map Manager List account names → TPID.
+
+    Some accounts carry ACR but have no OU deployment row (so they are absent
+    from ``build_name_to_tpid``). Falling back to the Manager List "Account Name"
+    lets those accounts still resolve their ACR instead of reporting $0.
+    """
+    mapping: dict[str, str] = {}
+    for data in org_map.values():
+        for acct in data.get("accounts", []):
+            name = _normalize_name(acct.get("name", ""))
+            tpid = acct.get("tpid", "")
+            if name and tpid and name not in mapping:
+                mapping[name] = tpid
     return mapping
 
 
@@ -551,10 +582,15 @@ def build_org_scorecard(
     """Build the full org scorecard matching generateOrgScorecard() from scorecard.ts."""
     # Match ACR account names → TPIDs
     acr_map: dict[str, float] = {}
+    acr_tpid_names: dict[str, str] = {}  # tpid → ACR account name (for reporting)
+    unmatched_acr: list[dict] = []
     for name_upper, acr in acr_by_name.items():
         tpid = name_to_tpid.get(name_upper)
         if tpid:
             acr_map[tpid] = acr_map.get(tpid, 0.0) + acr
+            acr_tpid_names.setdefault(tpid, name_upper)
+        elif acr != 0.0:
+            unmatched_acr.append({"name": name_upper, "monthlyAcr": acr})
 
     # Process all accounts, dedup by TPID (keep highest priority score)
     all_accounts_map: dict[str, dict] = {}
@@ -571,6 +607,13 @@ def build_org_scorecard(
             existing = all_accounts_map.get(tpid)
             if existing is None or risk["priorityScore"] > existing["priorityScore"]:
                 all_accounts_map[tpid] = risk
+
+    # ACR that resolved to a TPID but never surfaced as an account (the account
+    # has no deployment rows) would otherwise vanish from the totals — surface it.
+    for tpid, acr in acr_map.items():
+        if acr != 0.0 and tpid not in all_accounts_map:
+            unmatched_acr.append({"name": acr_tpid_names.get(tpid, tpid), "monthlyAcr": acr})
+    unmatched_acr.sort(key=lambda a: -a["monthlyAcr"])
 
     all_accounts = sorted(all_accounts_map.values(), key=lambda a: -a["priorityScore"])
     top5 = all_accounts[:5]
@@ -612,6 +655,7 @@ def build_org_scorecard(
         "allAccounts": all_accounts,
         "top5": top5,
         "directorSummaries": director_summaries,
+        "unmatchedAcrAccounts": unmatched_acr,
         "totals": {
             "directorsInOrg": len(org_map),
             "directorsWithDeployments": len(all_dir_with_deps),
@@ -921,6 +965,25 @@ def render_report(
         f"(most recent month with metered data as of {today.isoformat()})",
     ]
 
+    unmatched = org_scorecard.get("unmatchedAcrAccounts", [])
+    if unmatched:
+        total_unmatched = sum(u["monthlyAcr"] for u in unmatched)
+        L += [
+            "",
+            f"### ⚠️ Unmatched ACR Accounts ({len(unmatched)} — "
+            f"{_fmt_acr(total_unmatched)}/mo)",
+            "",
+            "These accounts carry ACR in the Power BI export but could not be "
+            "matched to a TPID via the deployment sheet (\"TP Name\") or the "
+            "Manager List (\"Account Name\"). Their ACR is **excluded** from the "
+            "totals above — reconcile the account names to include them.",
+            "",
+            "| ACR Account Name | AI ACR/mo |",
+            "|------------------|----------:|",
+        ]
+        for u in unmatched:
+            L.append(f"| {u['name']} | {_fmt_acr(u['monthlyAcr'])} |")
+
     return "\n".join(L) + "\n"
 
 
@@ -948,7 +1011,11 @@ def compute_org_data(
     ou_rows = load_file(ou_data, ou_name)
     deployments = parse_deployments(ou_rows)
     tpid_index = build_tpid_index(deployments)
-    name_to_tpid = build_name_to_tpid(deployments)
+    # ACR account names are matched against both the OU deployment "TP Name" and
+    # the Manager List "Account Name". Deployment names take precedence; the
+    # Manager List fills in accounts that carry ACR but have no deployment row.
+    name_to_tpid = build_manager_name_to_tpid(org_map)
+    name_to_tpid.update(build_name_to_tpid(deployments))
 
     org_scorecard = build_org_scorecard(
         org_map, account_directors, tpid_index,
