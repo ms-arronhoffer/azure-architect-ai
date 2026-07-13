@@ -204,26 +204,36 @@ def _parse_acr_value(raw: Any) -> float:
         return 0.0
 
 
-def parse_acr_data(
-    data: bytes, filename: str, month_col: str | list[str]
-) -> tuple[dict[str, float], str]:
-    """Parse ACR multi-month file → ({ACCOUNT_NAME_UPPER: monthly_acr_float}, month_used).
+# Second-column headers that carry a per-line breakdown of an account's ACR. The
+# classic Power BI export groups by "ServiceCompGrouping"; newer exports break the
+# account total out by "SubscriptionName" (one row per Azure subscription plus a
+# "Total" row per account). Either way the column holds "Total" on the account
+# aggregate row and the breakdown label on the detail rows.
+_ACR_GROUPING_HEADERS: frozenset[str] = frozenset(
+    {"SERVICECOMPGROUPING", "SUBSCRIPTIONNAME", "SUBSCRIPTION", "SUBSCRIPTIONID"}
+)
 
-    ``month_col`` may be a single column label or an ordered list of candidate
-    labels (most-recent first). When a list is given, the first candidate that
-    exists in the file **and** carries non-zero ACR data is used — this guards
-    against a just-closed month whose Power BI billing data has not yet landed
-    and would otherwise report $0 for impacted deployments.
 
-    ACR6.csv layout:
-      Row 0: FiscalMonth,,FY26-Jul,…,FY26-May,…,Total
-      Row 1: TPAccountName,ServiceCompGrouping,$ ACR,…   ← label row (skip)
-      Row 2+: ABBOTT LABORATORIES,Total,"$37,027",…
-    """
-    rows = _to_raw_rows(data, filename)
-    if not rows:
-        return {}, month_col if isinstance(month_col, str) else (month_col[0] if month_col else "")
+class _AcrLayout:
+    """Located structure of an ACR export (header row, grouping column, data rows)."""
 
+    def __init__(
+        self,
+        headers: list[str],
+        grouping_idx: int | None,
+        data_rows: list[list],
+        present: list[str],
+    ) -> None:
+        self.headers = headers
+        self.grouping_idx = grouping_idx
+        self.data_rows = data_rows
+        self.present = present
+
+
+def _locate_acr_layout(
+    rows: list[list], month_col: str | list[str]
+) -> _AcrLayout:
+    """Locate the header row, grouping column and data rows in an ACR export."""
     # Locate the header row (first row whose cell 0 is "FiscalMonth")
     header_row_idx: int | None = None
     for i, row in enumerate(rows):
@@ -247,37 +257,64 @@ def parse_acr_data(
 
     # The classic ACR6.csv export carries a "ServiceCompGrouping" label row after
     # the "FiscalMonth" header, with one "Total" row per account plus per-service
-    # breakdown rows. Some Power BI exports omit the grouping column entirely
-    # (one row per account, no breakdown). Detect the grouping column from the
-    # header/label rows so we only apply the "Total" filter when it exists —
-    # otherwise every row is dropped and the whole report reads $0.
+    # (or per-subscription) breakdown rows. Some Power BI exports omit the grouping
+    # column entirely (one row per account, no breakdown). Detect the grouping
+    # column from the header/label rows so we only apply the "Total" filter when it
+    # exists — otherwise every row is dropped and the whole report reads $0.
     label_row = rows[header_row_idx + 1] if header_row_idx + 1 < len(rows) else []
-
-    def _cell(row: list, idx: int) -> str:
-        return _normalize_name(row[idx]) if row and idx < len(row) else ""
 
     grouping_idx: int | None = None
     for search_row in (rows[header_row_idx], label_row):
         for j, cell in enumerate(search_row):
-            if _normalize_name(cell).replace(" ", "") == "SERVICECOMPGROUPING":
+            if _normalize_name(cell).replace(" ", "") in _ACR_GROUPING_HEADERS:
                 grouping_idx = j
                 break
         if grouping_idx is not None:
             break
 
-    # A label row (e.g. "TPAccountName,ServiceCompGrouping,$ ACR,…") sits between
+    # A label row (e.g. "TPAccountName,SubscriptionName,$ ACR,…") sits between
     # the header and the first data row in the classic export; skip it when present.
     label_cells = [_normalize_name(c) for c in label_row]
     is_label_row = bool(
         label_cells
         and (
             "TPACCOUNTNAME" in label_cells
-            or "SERVICECOMPGROUPING" in label_cells
+            or any(c.replace(" ", "") in _ACR_GROUPING_HEADERS for c in label_cells)
             or any("ACR" in c for c in label_cells)
         )
     )
     data_start = header_row_idx + 2 if is_label_row else header_row_idx + 1
-    data_rows = rows[data_start:]
+    return _AcrLayout(headers, grouping_idx, rows[data_start:], present)
+
+
+def parse_acr_data(
+    data: bytes, filename: str, month_col: str | list[str]
+) -> tuple[dict[str, float], str]:
+    """Parse ACR multi-month file → ({ACCOUNT_NAME_UPPER: monthly_acr_float}, month_used).
+
+    ``month_col`` may be a single column label or an ordered list of candidate
+    labels (most-recent first). When a list is given, the first candidate that
+    exists in the file **and** carries non-zero ACR data is used — this guards
+    against a just-closed month whose Power BI billing data has not yet landed
+    and would otherwise report $0 for impacted deployments.
+
+    ACR6.csv layout:
+      Row 0: FiscalMonth,,FY26-Jul,…,FY26-May,…,Total
+      Row 1: TPAccountName,SubscriptionName,$ ACR,…   ← label row (skip)
+      Row 2+: ABBOTT LABORATORIES,Total,"$37,027",…
+    """
+    rows = _to_raw_rows(data, filename)
+    if not rows:
+        return {}, month_col if isinstance(month_col, str) else (month_col[0] if month_col else "")
+
+    layout = _locate_acr_layout(rows, month_col)
+    headers = layout.headers
+    grouping_idx = layout.grouping_idx
+    data_rows = layout.data_rows
+    present = layout.present
+
+    def _cell(row: list, idx: int) -> str:
+        return _normalize_name(row[idx]) if row and idx < len(row) else ""
 
     def _parse_column(col_idx: int) -> dict[str, float]:
         parsed: dict[str, float] = {}
@@ -311,6 +348,72 @@ def parse_acr_data(
             month_used = candidate
 
     return result, month_used
+
+
+def parse_acr_subscriptions(
+    data: bytes, filename: str, month_col: str | list[str]
+) -> dict[str, dict[str, float]]:
+    """Parse the per-subscription ACR breakdown of a Power BI export.
+
+    Returns ``{ACCOUNT_NAME_UPPER: {SUBSCRIPTION_NAME_UPPER: monthly_acr_float}}``
+    using the same month-selection logic as :func:`parse_acr_data` (most-recent
+    month that carries data). Only exports that break an account's ACR out by
+    subscription (grouping/``SubscriptionName`` column present) produce entries;
+    exports without a breakdown column return ``{}`` and callers fall back to the
+    account-level totals.
+
+    The account name only appears on the account "Total" row; per-subscription
+    detail rows leave column 0 blank, so the account name is forward-filled.
+    """
+    rows = _to_raw_rows(data, filename)
+    if not rows:
+        return {}
+
+    layout = _locate_acr_layout(rows, month_col)
+    if layout.grouping_idx is None:
+        # No per-subscription breakdown in this export.
+        return {}
+
+    grouping_idx = layout.grouping_idx
+    data_rows = layout.data_rows
+    present = layout.present
+
+    def _cell(row: list, idx: int) -> str:
+        return _normalize_name(row[idx]) if row and idx < len(row) else ""
+
+    def _parse_column(col_idx: int) -> dict[str, dict[str, float]]:
+        parsed: dict[str, dict[str, float]] = {}
+        current_account = ""
+        for row in data_rows:
+            if not row:
+                continue
+            raw_name = str(row[0]).strip() if row[0] is not None else ""
+            if raw_name:
+                current_account = _normalize_name(raw_name)
+            grouping = _cell(row, grouping_idx)
+            # The account aggregate row (grouping == "TOTAL") carries no
+            # subscription detail; the account name it introduces is captured
+            # above for the detail rows that follow.
+            if not grouping or grouping == "TOTAL":
+                continue
+            if not current_account:
+                continue
+            val = row[col_idx] if len(row) > col_idx else ""
+            acct = parsed.setdefault(current_account, {})
+            acct[grouping] = acct.get(grouping, 0.0) + _parse_acr_value(val)
+        return parsed
+
+    # Prefer the most-recent candidate that actually carries data (mirrors
+    # parse_acr_data so the subscription split matches the reported month).
+    result: dict[str, dict[str, float]] = {}
+    for candidate in present:
+        parsed = _parse_column(layout.headers.index(candidate))
+        if any(v != 0.0 for subs in parsed.values() for v in subs.values()):
+            return parsed
+        if not result:
+            result = parsed
+
+    return result
 
 
 # ─── Org Mapping ─────────────────────────────────────────────────────────────
@@ -420,6 +523,59 @@ def build_name_to_tpid(deployments: list[dict]) -> dict[str, str]:
         tpid = dep.get("_tpid", "")
         if name and tpid and name not in mapping:
             mapping[name] = tpid
+    return mapping
+
+
+# OU-deployment column headers that identify the Azure subscription a deployment
+# lives in. Matched case-insensitively (whitespace collapsed) so exports that
+# label the column "SubscriptionName", "Subscription Name" or "Subscription Id"
+# all resolve.
+_OU_SUBSCRIPTION_HEADERS: tuple[str, ...] = (
+    "SubscriptionName",
+    "Subscription Name",
+    "Subscription",
+    "SubscriptionId",
+    "Subscription Id",
+    "Subscription ID",
+)
+
+
+def _find_deployment_subscription_key(deployments: list[dict]) -> str | None:
+    """Return the deployment dict key that holds the Azure subscription name.
+
+    OU exports vary in header casing/spacing; probe the candidate headers against
+    the first deployment row's keys (whitespace collapsed, case-insensitive).
+    """
+    for dep in deployments:
+        lookup = {re.sub(r"\s+", "", str(k)).upper(): k for k in dep if k}
+        for cand in _OU_SUBSCRIPTION_HEADERS:
+            key = lookup.get(re.sub(r"\s+", "", cand).upper())
+            if key is not None:
+                return key
+        return None  # only inspect the first non-empty row's schema
+    return None
+
+
+def build_tpid_subscriptions(deployments: list[dict]) -> dict[str, dict[str, str]]:
+    """Map TPID → {SUBSCRIPTION_NAME_UPPER: original_subscription_name}.
+
+    Returns ``{}`` when the OU deployment export has no subscription column, in
+    which case ACR is not restricted and the account-level total is used.
+    """
+    sub_key = _find_deployment_subscription_key(deployments)
+    if not sub_key:
+        return {}
+
+    mapping: dict[str, dict[str, str]] = {}
+    for dep in deployments:
+        tpid = dep.get("_tpid", "")
+        if not tpid:
+            continue
+        raw_sub = dep.get(sub_key)
+        norm = _normalize_name(raw_sub)
+        if not norm:
+            continue
+        mapping.setdefault(tpid, {}).setdefault(norm, str(raw_sub).strip())
     return mapping
 
 
@@ -648,6 +804,28 @@ def compute_account_risk(
 # ─── Org Scorecard ───────────────────────────────────────────────────────────
 
 
+def _impacted_subscriptions(
+    ou_subs: dict[str, str], acr_subs: dict[str, float]
+) -> tuple[float, list[dict]]:
+    """Match OU-deployment subscriptions to their ACR figures.
+
+    ``ou_subs`` maps ``SUB_UPPER → display name`` (from the OU deployment sheet);
+    ``acr_subs`` maps ``SUB_UPPER → monthly ACR`` (from the Power BI export).
+    Returns ``(impacted_total, [{name, monthlyAcr, matched}])`` — the impacted
+    total counts only subscriptions that appear in the OU deployments, using an
+    exact normalized name match to avoid misattributing ACR.
+    """
+    matched: list[dict] = []
+    for sub_upper, display in ou_subs.items():
+        acr_val = acr_subs.get(sub_upper, 0.0)
+        matched.append(
+            {"name": display, "monthlyAcr": acr_val, "matched": sub_upper in acr_subs}
+        )
+    matched.sort(key=lambda m: -m["monthlyAcr"])
+    impacted_total = sum(m["monthlyAcr"] for m in matched)
+    return impacted_total, matched
+
+
 def build_org_scorecard(
     org_map: dict,
     account_directors: dict[str, list[str]],
@@ -656,11 +834,27 @@ def build_org_scorecard(
     acr_by_name: dict[str, float],
     name_to_tpid: dict[str, str],
     today: date,
+    acr_subs_by_name: dict[str, dict[str, float]] | None = None,
+    tpid_subscriptions: dict[str, dict[str, str]] | None = None,
 ) -> dict:
-    """Build the full org scorecard matching generateOrgScorecard() from scorecard.ts."""
+    """Build the full org scorecard matching generateOrgScorecard() from scorecard.ts.
+
+    When ``tpid_subscriptions`` (subscriptions declared in the OU deployments) and
+    ``acr_subs_by_name`` (per-subscription ACR breakdown) are supplied, an
+    account's reported ``monthlyAcr`` is restricted to the ACR of subscriptions
+    that appear in its OU deployments. The full account total is retained in
+    ``accountTotalAcr`` and the matched subscriptions in ``impactedSubscriptions``.
+    If an account declares subscriptions but none match the ACR breakdown, the
+    account total is kept (never silently zeroed).
+    """
+    acr_subs_by_name = acr_subs_by_name or {}
+    tpid_subscriptions = tpid_subscriptions or {}
+    restrict_to_subscriptions = bool(tpid_subscriptions)
+
     # Match ACR account names → TPIDs
     acr_map: dict[str, float] = {}
     acr_tpid_names: dict[str, str] = {}  # tpid → ACR account name (for reporting)
+    tpid_sub_acr: dict[str, dict[str, float]] = {}  # tpid → {SUB_UPPER: acr}
     unmatched_acr: list[dict] = []
     # Token sets for tracker names, used only as a fallback when an ACR name has no
     # exact normalized match (e.g. Power BI legal names vs tracker short names).
@@ -672,6 +866,11 @@ def build_org_scorecard(
         if tpid:
             acr_map[tpid] = acr_map.get(tpid, 0.0) + acr
             acr_tpid_names.setdefault(tpid, name_upper)
+            subs = acr_subs_by_name.get(name_upper)
+            if subs:
+                dest = tpid_sub_acr.setdefault(tpid, {})
+                for sub_upper, sub_acr in subs.items():
+                    dest[sub_upper] = dest.get(sub_upper, 0.0) + sub_acr
         elif acr != 0.0:
             unmatched_acr.append({"name": name_upper, "monthlyAcr": acr})
 
@@ -683,9 +882,33 @@ def build_org_scorecard(
             deps = tpid_index.get(tpid, [])
             if not deps:
                 continue
-            monthly_acr = acr_map.get(tpid, 0.0)
-            risk = compute_account_risk(acct["name"], tpid, deps, ret_lookup, today, monthly_acr)
+            account_total = acr_map.get(tpid, 0.0)
+            effective_acr = account_total
+            impacted_subs: list[dict] = []
+            subscription_scope = "all"
+            if restrict_to_subscriptions:
+                ou_subs = tpid_subscriptions.get(tpid, {})
+                if ou_subs:
+                    impacted_total, impacted_subs = _impacted_subscriptions(
+                        ou_subs, tpid_sub_acr.get(tpid, {})
+                    )
+                    if any(m["matched"] for m in impacted_subs):
+                        effective_acr = impacted_total
+                        subscription_scope = "impacted"
+                    else:
+                        # OU lists subscriptions but none matched the ACR
+                        # breakdown — keep the account total rather than zero it.
+                        subscription_scope = "unmatched"
+                else:
+                    subscription_scope = "no-subscriptions"
+
+            risk = compute_account_risk(
+                acct["name"], tpid, deps, ret_lookup, today, effective_acr
+            )
             risk["directors"] = account_directors.get(tpid, [director])
+            risk["accountTotalAcr"] = account_total
+            risk["impactedSubscriptions"] = impacted_subs
+            risk["subscriptionScope"] = subscription_scope
 
             existing = all_accounts_map.get(tpid)
             if existing is None or risk["priorityScore"] > existing["priorityScore"]:
@@ -842,6 +1065,18 @@ def _key_models(models: list[str], n: int = 3) -> str:
     rest = len(models) - n
     s = ", ".join(head)
     return f"{s} +{rest}" if rest > 0 else s
+
+
+def _fmt_impacted_subs(acct: dict, n: int = 4) -> str:
+    """Format the OU-deployment subscriptions that make up an account's impacted ACR."""
+    subs = [s for s in acct.get("impactedSubscriptions", []) if s.get("matched")]
+    if not subs:
+        return "—"
+    head = subs[:n]
+    parts = [f"{s['name']} ({_fmt_acr(s['monthlyAcr'])})" for s in head]
+    rest = len(subs) - n
+    joined = "; ".join(parts)
+    return f"{joined} +{rest} more" if rest > 0 else joined
 
 
 def _ordinal(n: int) -> str:
@@ -1018,6 +1253,28 @@ def render_report(
         )
     L.append("")
 
+    # ── Section 8b: Impacted Subscriptions (only when ACR is subscription-scoped)
+    if any(a.get("subscriptionScope") == "impacted" for a in all_accounts):
+        L += [
+            "### Impacted Subscriptions by Account",
+            "",
+            "> **AI ACR** above reflects only the Azure subscriptions found in the OU "
+            "deployment inventory (Account Details). The full billed account total is "
+            "shown for reference.",
+            "",
+            "| Account | Impacted ACR/mo | Account Total/mo | Impacted Subscriptions |",
+            "|---------|----------------:|-----------------:|------------------------|",
+        ]
+        for a in all_accounts:
+            if a.get("subscriptionScope") != "impacted":
+                continue
+            L.append(
+                f"| {a['name']} | {_fmt_acr(a['monthlyAcr'])} | "
+                f"{_fmt_acr(a.get('accountTotalAcr', a['monthlyAcr']))} | "
+                f"{_fmt_impacted_subs(a)} |"
+            )
+        L.append("")
+
     # ── Section 9: Data Sources & Notes ─────────────────────────────────────
     L += [
         "## 9. Data Sources & Notes",
@@ -1090,10 +1347,12 @@ def compute_org_data(
     org_map, account_directors = build_org_map(ml_rows)
 
     acr_by_name, month_col = parse_acr_data(acr_data, acr_name, month_candidates)
+    acr_subs_by_name = parse_acr_subscriptions(acr_data, acr_name, month_candidates)
 
     ou_rows = load_file(ou_data, ou_name)
     deployments = parse_deployments(ou_rows)
     tpid_index = build_tpid_index(deployments)
+    tpid_subscriptions = build_tpid_subscriptions(deployments)
     # ACR account names are matched against both the OU deployment "TP Name" and
     # the Manager List "Account Name". Deployment names take precedence; the
     # Manager List fills in accounts that carry ACR but have no deployment row.
@@ -1103,6 +1362,8 @@ def compute_org_data(
     org_scorecard = build_org_scorecard(
         org_map, account_directors, tpid_index,
         ret_lookup, acr_by_name, name_to_tpid, today,
+        acr_subs_by_name=acr_subs_by_name,
+        tpid_subscriptions=tpid_subscriptions,
     )
     model_summary = build_model_fleet_summary(tpid_index, ret_lookup, ret_replacements, today)
     return org_scorecard, model_summary, month_col
@@ -1163,8 +1424,8 @@ def generate_recommendations(
         f"critical ACR: {_a(totals.get('criticalAcr', 0))}/mo)",
         "",
         "### Overdue & Critical Accounts",
-        "| Account | Directors | Status | Days | ACR/mo | At-Risk Models |",
-        "|---------|-----------|--------|------|--------|----------------|",
+        "| Account | Directors | Status | Days | ACR/mo | At-Risk Models | Impacted Subscriptions |",
+        "|---------|-----------|--------|------|--------|----------------|------------------------|",
     ]
     for a in urgent:
         emoji = "⚫" if a["level"] == "overdue" else "🔴"
@@ -1174,7 +1435,8 @@ def generate_recommendations(
         dirs = ", ".join(a.get("directors", []))
         ctx.append(
             f"| {a['name']} | {dirs} | {emoji} {a['level'].upper()} | "
-            f"{days_str} | {_a(a.get('monthlyAcr', 0))} | {models} |"
+            f"{days_str} | {_a(a.get('monthlyAcr', 0))} | {models} | "
+            f"{_fmt_impacted_subs(a)} |"
         )
 
     if warning_accts:
@@ -1240,10 +1502,10 @@ Produce a markdown report with these exact sections:
 3-5 bullet-point priority actions for org leadership. Lead each with the account or model name and ACR at risk.
 
 ## ⚡ Immediate Actions Required
-For every OVERDUE and CRITICAL account (list all of them): specific migration action, responsible director/CSA alias, model to migrate FROM → TO, and a realistic timeline. Group by director. Include ACR at stake.
+For every OVERDUE and CRITICAL account (list all of them): specific migration action, responsible director/CSA alias, model to migrate FROM → TO, and a realistic timeline. Group by director. Include ACR at stake, and name the specific impacted Azure subscription(s) (from the "Impacted Subscriptions" column) so the team knows exactly where the spend and workloads live.
 
 ## 📋 Priority Migration Plans
-Top 10 at-risk accounts by ACR: for each, one paragraph with current at-risk models, recommended replacement model(s), migration complexity (Low/Medium/High), and suggested completion date.
+Top 10 at-risk accounts by ACR: for each, one paragraph with current at-risk models, recommended replacement model(s), migration complexity (Low/Medium/High), suggested completion date, and the impacted Azure subscription(s) carrying the ACR.
 
 ## 🔄 Model Fleet Migration Roadmap
 For each retiring model in the fleet: recommended replacement (use known Azure OpenAI successors: gpt-4o → gpt-4.1, gpt-4o-mini → gpt-4.1-mini, gpt-35-turbo → gpt-4o-mini), migration notes (prompt compatibility, latency/cost tradeoffs), affected HLS account count, and retirement deadline.
