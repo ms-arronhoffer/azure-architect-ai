@@ -44,8 +44,45 @@ RISK_EMOJI: dict[str, str] = {
 # ─── File Loading ────────────────────────────────────────────────────────────
 
 
+def _is_legacy_xls(data: bytes) -> bool:
+    """True if bytes are the old Excel 97-2003 (.xls / OLE-BIFF) binary format."""
+    return data[:8] == b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"
+
+
+def _is_zip(data: bytes) -> bool:
+    """True if bytes look like a zip archive (xlsx is a zip container)."""
+    return data[:4] == b"PK\x03\x04" or data[:4] == b"PK\x05\x06" or data[:4] == b"PK\x07\x08"
+
+
+def _legacy_xls_to_csv_bytes(data: bytes) -> bytes:
+    """Convert legacy .xls (OLE-BIFF) bytes → csv bytes (utf-8)."""
+    import csv as _csv
+
+    import xlrd  # type: ignore[import]
+
+    wb = xlrd.open_workbook(file_contents=data)
+    sheet = wb.sheet_by_index(0)
+    out = io.StringIO()
+    writer = _csv.writer(out)
+    for rx in range(sheet.nrows):
+        writer.writerow([str(v) if v not in (None, "") else "" for v in sheet.row_values(rx)])
+    return out.getvalue().encode("utf-8")
+
+
 def _xlsx_to_csv_bytes(data: bytes) -> bytes:
-    """Convert xlsx bytes → csv bytes (utf-8) so all values are uniform strings."""
+    """Convert xlsx bytes → csv bytes (utf-8) so all values are uniform strings.
+
+    Some exports (e.g. Power BI / SharePoint) label files with a ".xlsx" extension
+    even though the actual content is the legacy .xls (OLE-BIFF) binary format, or
+    plain CSV/text. Sniff the real content instead of trusting the extension so
+    those files don't fail with a raw "File is not a zip file" error.
+    """
+    if _is_legacy_xls(data):
+        return _legacy_xls_to_csv_bytes(data)
+    if not _is_zip(data):
+        # Not actually an xlsx/zip (e.g. CSV mislabeled as .xlsx) — treat as-is.
+        return data
+
     import csv as _csv
 
     import openpyxl  # type: ignore[import]
@@ -62,19 +99,9 @@ def _xlsx_to_csv_bytes(data: bytes) -> bytes:
 
 def _to_raw_rows(data: bytes, filename: str) -> list[list[str]]:
     """Return raw rows as list[list[str]] regardless of source format."""
-    if filename.lower().endswith(".xlsx"):
+    if filename.lower().endswith((".xlsx", ".xls")) or _is_legacy_xls(data) or _is_zip(data):
         data = _xlsx_to_csv_bytes(data)
     return _csv_to_raw_rows(data)
-
-
-def _xlsx_to_raw_rows(data: bytes) -> list[list[Any]]:
-    import openpyxl  # type: ignore[import]
-
-    wb = openpyxl.load_workbook(io.BytesIO(data), read_only=True, data_only=True)
-    ws = wb.active
-    rows = [list(row) for row in ws.iter_rows(values_only=True)]
-    wb.close()
-    return rows
 
 
 def _csv_to_raw_rows(data: bytes) -> list[list[str]]:
