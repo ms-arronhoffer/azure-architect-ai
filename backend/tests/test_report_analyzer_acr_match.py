@@ -102,3 +102,62 @@ def test_acr_for_tpid_without_deployments_is_surfaced():
     assert sc["unmatchedAcrAccounts"] == [
         {"name": "NO DEPLOYMENTS ACCOUNT", "monthlyAcr": 700.0}
     ]
+
+def test_acr_matches_legal_name_to_tracker_short_name():
+    # Power BI ACR export uses the full legal entity name; the tracker uses the
+    # short name. Token-subset fallback should still resolve the ACR.
+    org_map = {"Dir": {"accounts": [{"tpid": "42", "name": "City of Hope"}]}}
+    tpid_index = {"42": [{"_tpid": "42", "Model": "gpt-4"}]}
+    name_to_tpid = build_manager_name_to_tpid(org_map)
+    acr_by_name = {"CITY OF HOPE NATIONAL MEDICAL CENTER": 8000.0}
+
+    sc = _scorecard(acr_by_name, name_to_tpid, org_map, tpid_index)
+    assert sc["allAccounts"][0]["monthlyAcr"] == 8000.0
+    assert sc["unmatchedAcrAccounts"] == []
+
+
+def test_ambiguous_fuzzy_match_is_left_unmatched():
+    # "BLUE CROSS" is a token-subset of two distinct tracker accounts, so the
+    # fuzzy fallback must refuse to guess rather than misattribute the ACR.
+    org_map = {
+        "Dir": {
+            "accounts": [
+                {"tpid": "1", "name": "Blue Cross Blue Shield of MN"},
+                {"tpid": "2", "name": "Blue Cross Blue Shield of California"},
+            ]
+        }
+    }
+    tpid_index = {
+        "1": [{"_tpid": "1", "Model": "gpt-4"}],
+        "2": [{"_tpid": "2", "Model": "gpt-4"}],
+    }
+    name_to_tpid = build_manager_name_to_tpid(org_map)
+    acr_by_name = {"BLUE CROSS": 900.0}
+
+    sc = _scorecard(acr_by_name, name_to_tpid, org_map, tpid_index)
+    assert all(a["monthlyAcr"] == 0.0 for a in sc["allAccounts"])
+    assert sc["unmatchedAcrAccounts"] == [{"name": "BLUE CROSS", "monthlyAcr": 900.0}]
+
+
+def test_parse_acr_without_grouping_column():
+    # Export variant with no ServiceCompGrouping column (one row per account).
+    # The "Total"-row filter must not drop every account → all $0.
+    csv = (
+        "FiscalMonth,FY26-May,FY26-Jun,Total\n"
+        "TPAccountName,$ ACR,$ ACR,$ ACR\n"
+        'City of Hope,"$5,000","$6,000","$11,000"\n'
+        'Abbott Laboratories,"$1,000","$2,000","$3,000"\n'
+    ).encode()
+    res, used = parse_acr_data(csv, "acr.csv", ["FY26-Jun", "FY26-May"])
+    assert used == "FY26-Jun"
+    assert res == {"CITY OF HOPE": 6000.0, "ABBOTT LABORATORIES": 2000.0}
+
+
+def test_parse_acr_without_grouping_or_label_row():
+    # No label row at all: header row immediately followed by data.
+    csv = (
+        "FiscalMonth,FY26-May,FY26-Jun,Total\n"
+        'City of Hope,"$5,000","$6,000","$11,000"\n'
+    ).encode()
+    res, used = parse_acr_data(csv, "acr.csv", ["FY26-Jun"])
+    assert res == {"CITY OF HOPE": 6000.0}

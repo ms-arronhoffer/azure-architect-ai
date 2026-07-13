@@ -152,6 +152,46 @@ def _normalize_name(raw: Any) -> str:
     return re.sub(r"\s+", " ", str(raw).replace("\xa0", " ")).strip().upper()
 
 
+# Corporate suffix / filler tokens dropped before token-subset name matching so a
+# Power BI legal-entity name ("CITY OF HOPE NATIONAL MEDICAL CENTER") can still be
+# recognised as the tracker short name ("CITY OF HOPE").
+_NAME_STOPWORDS: frozenset[str] = frozenset(
+    {
+        "THE", "INC", "INC.", "LLC", "L.L.C.", "LLP", "LP", "CORP", "CORP.",
+        "CORPORATION", "CO", "CO.", "COMPANY", "GROUP", "HOLDINGS", "HOLDING",
+        "LTD", "LTD.", "PLC", "&", "AND",
+    }
+)
+
+
+def _name_tokens(name_upper: str) -> frozenset[str]:
+    """Significant tokens of a normalized name (stopwords/punctuation removed)."""
+    tokens = {
+        re.sub(r"[^A-Z0-9]", "", tok)
+        for tok in name_upper.split()
+    }
+    return frozenset(t for t in tokens if t and t not in _NAME_STOPWORDS)
+
+
+def _fuzzy_match_tpid(
+    acr_tokens: frozenset[str],
+    tracker_tokens: dict[str, frozenset[str]],
+    name_to_tpid: dict[str, str],
+) -> str | None:
+    """Return the single TPID whose tracker name tokens are a subset of (or
+    superset of) the ACR name's tokens. Returns ``None`` when there is no match or
+    the match is ambiguous (guards against misattributing ACR to the wrong TPID).
+    """
+    if not acr_tokens:
+        return None
+    tpids = {
+        name_to_tpid[name]
+        for name, toks in tracker_tokens.items()
+        if toks and name in name_to_tpid and (toks <= acr_tokens or acr_tokens <= toks)
+    }
+    return next(iter(tpids)) if len(tpids) == 1 else None
+
+
 def _parse_acr_value(raw: Any) -> float:
     if raw is None:
         return 0.0
@@ -205,19 +245,57 @@ def parse_acr_data(
             f"Available FY columns: {fy_cols}"
         )
 
-    data_rows = rows[header_row_idx + 2:]  # skip header row + label row
+    # The classic ACR6.csv export carries a "ServiceCompGrouping" label row after
+    # the "FiscalMonth" header, with one "Total" row per account plus per-service
+    # breakdown rows. Some Power BI exports omit the grouping column entirely
+    # (one row per account, no breakdown). Detect the grouping column from the
+    # header/label rows so we only apply the "Total" filter when it exists —
+    # otherwise every row is dropped and the whole report reads $0.
+    label_row = rows[header_row_idx + 1] if header_row_idx + 1 < len(rows) else []
+
+    def _cell(row: list, idx: int) -> str:
+        return _normalize_name(row[idx]) if row and idx < len(row) else ""
+
+    grouping_idx: int | None = None
+    for search_row in (rows[header_row_idx], label_row):
+        for j, cell in enumerate(search_row):
+            if _normalize_name(cell).replace(" ", "") == "SERVICECOMPGROUPING":
+                grouping_idx = j
+                break
+        if grouping_idx is not None:
+            break
+
+    # A label row (e.g. "TPAccountName,ServiceCompGrouping,$ ACR,…") sits between
+    # the header and the first data row in the classic export; skip it when present.
+    label_cells = [_normalize_name(c) for c in label_row]
+    is_label_row = bool(
+        label_cells
+        and (
+            "TPACCOUNTNAME" in label_cells
+            or "SERVICECOMPGROUPING" in label_cells
+            or any("ACR" in c for c in label_cells)
+        )
+    )
+    data_start = header_row_idx + 2 if is_label_row else header_row_idx + 1
+    data_rows = rows[data_start:]
 
     def _parse_column(col_idx: int) -> dict[str, float]:
         parsed: dict[str, float] = {}
         for row in data_rows:
-            if not row or len(row) < 2:
+            if not row:
                 continue
             name = str(row[0]).strip() if row[0] is not None else ""
-            grouping = str(row[1]).strip() if len(row) > 1 and row[1] is not None else ""
-            if not name or grouping != "Total":
+            if not name:
+                continue
+            # Only keep account "Total" rows when the export actually breaks ACR
+            # out by service (grouping column present). Without it, every row is
+            # already an account total.
+            if grouping_idx is not None and _cell(row, grouping_idx) != "TOTAL":
                 continue
             val = row[col_idx] if len(row) > col_idx else ""
-            parsed[_normalize_name(name)] = _parse_acr_value(val)
+            parsed[_normalize_name(name)] = parsed.get(
+                _normalize_name(name), 0.0
+            ) + _parse_acr_value(val)
         return parsed
 
     # Prefer the most-recent candidate that actually carries data. Fall back to
@@ -584,8 +662,13 @@ def build_org_scorecard(
     acr_map: dict[str, float] = {}
     acr_tpid_names: dict[str, str] = {}  # tpid → ACR account name (for reporting)
     unmatched_acr: list[dict] = []
+    # Token sets for tracker names, used only as a fallback when an ACR name has no
+    # exact normalized match (e.g. Power BI legal names vs tracker short names).
+    tracker_tokens = {name: _name_tokens(name) for name in name_to_tpid}
     for name_upper, acr in acr_by_name.items():
         tpid = name_to_tpid.get(name_upper)
+        if not tpid:
+            tpid = _fuzzy_match_tpid(_name_tokens(name_upper), tracker_tokens, name_to_tpid)
         if tpid:
             acr_map[tpid] = acr_map.get(tpid, 0.0) + acr
             acr_tpid_names.setdefault(tpid, name_upper)
