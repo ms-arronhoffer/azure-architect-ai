@@ -54,13 +54,39 @@ def _is_zip(data: bytes) -> bool:
     return data[:4] == b"PK\x03\x04" or data[:4] == b"PK\x05\x06" or data[:4] == b"PK\x07\x08"
 
 
+def _is_encrypted_ole2(data: bytes) -> bool:
+    """True if the OLE2 compound document is a password-protected OOXML file.
+
+    Modern Excel (.xlsx/.xlsm) files that are password-protected are stored as
+    an OLE2/CFB container (per MS-OFFCRYPTO) holding an "EncryptedPackage"
+    stream instead of the legacy BIFF "Workbook"/"Book" stream, which is why
+    xlrd fails with the opaque "Can't find workbook in OLE2 compound document".
+    """
+    from xlrd.compdoc import CompDoc  # type: ignore[import]
+
+    try:
+        cd = CompDoc(data, logfile=io.StringIO())
+    except Exception:
+        return False
+    return any(entry.name == "EncryptedPackage" for entry in cd.dirlist)
+
+
 def _legacy_xls_to_csv_bytes(data: bytes) -> bytes:
     """Convert legacy .xls (OLE-BIFF) bytes → csv bytes (utf-8)."""
     import csv as _csv
 
     import xlrd  # type: ignore[import]
 
-    wb = xlrd.open_workbook(file_contents=data)
+    try:
+        wb = xlrd.open_workbook(file_contents=data)
+    except xlrd.XLRDError as exc:
+        if "workbook" in str(exc).lower() and _is_encrypted_ole2(data):
+            raise ValueError(
+                "This file is password-protected. Please remove the password "
+                "(File → Info → Protect Workbook → Encrypt with Password → clear "
+                "the password) and re-upload, or re-export it as an unprotected file."
+            ) from exc
+        raise
     sheet = wb.sheet_by_index(0)
     out = io.StringIO()
     writer = _csv.writer(out)
