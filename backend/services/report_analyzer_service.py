@@ -101,6 +101,15 @@ def load_file(data: bytes, filename: str) -> list[dict]:
 # ─── ACR Month Detection ─────────────────────────────────────────────────────
 
 
+def _month_column_for(d: date) -> str:
+    """Return the Power BI FY column label for the calendar month of ``d``.
+
+    Microsoft FY: Jul 1 → Jun 30  (FY = calendar_year+1 when month ≥ 7)
+    """
+    fy = d.year if d.month <= 6 else d.year + 1
+    return f"FY{str(fy)[2:]}-{d.strftime('%b')}"
+
+
 def get_last_full_month_column(today: date) -> str:
     """Return the Power BI column label for the last fully completed month.
 
@@ -108,8 +117,22 @@ def get_last_full_month_column(today: date) -> str:
     Microsoft FY: Jul 1 → Jun 30  (FY = calendar_year+1 when month ≥ 7)
     """
     last = today.replace(day=1) - timedelta(days=1)
-    fy = last.year if last.month <= 6 else last.year + 1
-    return f"FY{str(fy)[2:]}-{last.strftime('%b')}"
+    return _month_column_for(last)
+
+
+def get_month_column_candidates(today: date, count: int = 12) -> list[str]:
+    """Return FY column labels from the last full month walking backwards.
+
+    The just-closed month is preferred, but because Power BI billing/ACR data
+    lags (a freshly closed month is often not yet metered and reads $0), the
+    caller can fall back through earlier months until one carries real data.
+    """
+    candidates: list[str] = []
+    cursor = today.replace(day=1) - timedelta(days=1)  # last full month
+    for _ in range(count):
+        candidates.append(_month_column_for(cursor))
+        cursor = cursor.replace(day=1) - timedelta(days=1)  # previous month
+    return candidates
 
 
 # ─── ACR Parsing ─────────────────────────────────────────────────────────────
@@ -127,8 +150,16 @@ def _parse_acr_value(raw: Any) -> float:
         return 0.0
 
 
-def parse_acr_data(data: bytes, filename: str, month_col: str) -> dict[str, float]:
-    """Parse ACR multi-month file → {ACCOUNT_NAME_UPPER: monthly_acr_float}.
+def parse_acr_data(
+    data: bytes, filename: str, month_col: str | list[str]
+) -> tuple[dict[str, float], str]:
+    """Parse ACR multi-month file → ({ACCOUNT_NAME_UPPER: monthly_acr_float}, month_used).
+
+    ``month_col`` may be a single column label or an ordered list of candidate
+    labels (most-recent first). When a list is given, the first candidate that
+    exists in the file **and** carries non-zero ACR data is used — this guards
+    against a just-closed month whose Power BI billing data has not yet landed
+    and would otherwise report $0 for impacted deployments.
 
     ACR6.csv layout:
       Row 0: FiscalMonth,,FY26-Jul,…,FY26-May,…,Total
@@ -137,7 +168,7 @@ def parse_acr_data(data: bytes, filename: str, month_col: str) -> dict[str, floa
     """
     rows = _to_raw_rows(data, filename)
     if not rows:
-        return {}
+        return {}, month_col if isinstance(month_col, str) else (month_col[0] if month_col else "")
 
     # Locate the header row (first row whose cell 0 is "FiscalMonth")
     header_row_idx: int | None = None
@@ -151,27 +182,43 @@ def parse_acr_data(data: bytes, filename: str, month_col: str) -> dict[str, floa
 
     headers = [str(c).strip() if c is not None else "" for c in rows[header_row_idx]]
 
-    if month_col not in headers:
+    candidates = [month_col] if isinstance(month_col, str) else list(month_col)
+    present = [c for c in candidates if c in headers]
+    if not present:
         fy_cols = [h for h in headers if h.startswith("FY")]
         raise ValueError(
-            f"ACR column '{month_col}' not found in file. "
+            f"ACR column '{candidates[0] if candidates else ''}' not found in file. "
             f"Available FY columns: {fy_cols}"
         )
 
-    col_idx = headers.index(month_col)
+    data_rows = rows[header_row_idx + 2:]  # skip header row + label row
 
+    def _parse_column(col_idx: int) -> dict[str, float]:
+        parsed: dict[str, float] = {}
+        for row in data_rows:
+            if not row or len(row) < 2:
+                continue
+            name = str(row[0]).strip() if row[0] is not None else ""
+            grouping = str(row[1]).strip() if len(row) > 1 and row[1] is not None else ""
+            if not name or grouping != "Total":
+                continue
+            val = row[col_idx] if len(row) > col_idx else ""
+            parsed[name.upper()] = _parse_acr_value(val)
+        return parsed
+
+    # Prefer the most-recent candidate that actually carries data. Fall back to
+    # earlier months when the just-closed month is still empty (data lag).
     result: dict[str, float] = {}
-    for row in rows[header_row_idx + 2:]:  # skip header row + label row
-        if not row or len(row) < 2:
-            continue
-        name = str(row[0]).strip() if row[0] is not None else ""
-        grouping = str(row[1]).strip() if len(row) > 1 and row[1] is not None else ""
-        if not name or grouping != "Total":
-            continue
-        val = row[col_idx] if len(row) > col_idx else ""
-        result[name.upper()] = _parse_acr_value(val)
+    month_used = present[0]
+    for candidate in present:
+        parsed = _parse_column(headers.index(candidate))
+        if any(v != 0.0 for v in parsed.values()):
+            return parsed, candidate
+        if not result:  # remember the first (most-recent) column as last resort
+            result = parsed
+            month_used = candidate
 
-    return result
+    return result, month_used
 
 
 # ─── Org Mapping ─────────────────────────────────────────────────────────────
@@ -871,7 +918,7 @@ def render_report(
         "This is the source of truth for revenue.",
         "- Accounts are ranked by **AI ACR first**, then risk urgency as tiebreaker.",
         f"- ACR column used: **{acr_month_label}** "
-        f"(last full month as of {today.isoformat()})",
+        f"(most recent month with metered data as of {today.isoformat()})",
     ]
 
     return "\n".join(L) + "\n"
@@ -890,13 +937,13 @@ def compute_org_data(
     today: date,
 ) -> tuple[dict, list[dict], str]:
     """Load and process all input files. Returns (org_scorecard, model_summary, month_col)."""
-    month_col = get_last_full_month_column(today)
+    month_candidates = get_month_column_candidates(today)
     ret_lookup, ret_replacements = load_retirements()
 
     ml_rows = load_file(manager_list_data, manager_list_name)
     org_map, account_directors = build_org_map(ml_rows)
 
-    acr_by_name = parse_acr_data(acr_data, acr_name, month_col)
+    acr_by_name, month_col = parse_acr_data(acr_data, acr_name, month_candidates)
 
     ou_rows = load_file(ou_data, ou_name)
     deployments = parse_deployments(ou_rows)
