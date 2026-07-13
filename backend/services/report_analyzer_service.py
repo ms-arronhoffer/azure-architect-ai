@@ -579,6 +579,45 @@ def build_tpid_subscriptions(deployments: list[dict]) -> dict[str, dict[str, str
     return mapping
 
 
+def build_tpid_subscription_models(
+    deployments: list[dict],
+    ret_lookup: dict[str, date],
+    today: date,
+) -> dict[str, dict[str, list[str]]]:
+    """Map TPID → {SUBSCRIPTION_NAME_UPPER: [at-risk models]}.
+
+    For each deployment that carries an at-risk model (overdue/critical/warning/
+    watch), record the model against its Azure subscription so the recommendations
+    appendix can name exactly which model drives the spend in each subscription.
+    Returns ``{}`` when the OU export has no subscription column.
+    """
+    sub_key = _find_deployment_subscription_key(deployments)
+    if not sub_key:
+        return {}
+
+    mapping: dict[str, dict[str, set[str]]] = {}
+    for dep in deployments:
+        tpid = dep.get("_tpid", "")
+        if not tpid:
+            continue
+        norm = _normalize_name(dep.get(sub_key))
+        if not norm:
+            continue
+        model = str(dep.get("Model", "")).strip()
+        version = str(dep.get("Version") or "").strip()
+        pbi_date = str(dep.get("Retirement Date") or "").strip()
+        if pbi_date == "NaN":
+            pbi_date = ""
+        level, _ = classify_risk(model, version, ret_lookup, pbi_date, today)
+        if level in ("overdue", "critical", "warning", "watch") and model:
+            mapping.setdefault(tpid, {}).setdefault(norm, set()).add(model)
+
+    return {
+        tpid: {sub: sorted(models) for sub, models in subs.items()}
+        for tpid, subs in mapping.items()
+    }
+
+
 def build_manager_name_to_tpid(org_map: dict) -> dict[str, str]:
     """Map Manager List account names → TPID.
 
@@ -805,21 +844,30 @@ def compute_account_risk(
 
 
 def _impacted_subscriptions(
-    ou_subs: dict[str, str], acr_subs: dict[str, float]
+    ou_subs: dict[str, str],
+    acr_subs: dict[str, float],
+    sub_models: dict[str, list[str]] | None = None,
 ) -> tuple[float, list[dict]]:
     """Match OU-deployment subscriptions to their ACR figures.
 
     ``ou_subs`` maps ``SUB_UPPER → display name`` (from the OU deployment sheet);
-    ``acr_subs`` maps ``SUB_UPPER → monthly ACR`` (from the Power BI export).
-    Returns ``(impacted_total, [{name, monthlyAcr, matched}])`` — the impacted
-    total counts only subscriptions that appear in the OU deployments, using an
-    exact normalized name match to avoid misattributing ACR.
+    ``acr_subs`` maps ``SUB_UPPER → monthly ACR`` (from the Power BI export);
+    ``sub_models`` maps ``SUB_UPPER → [at-risk models]`` (from the OU deployments).
+    Returns ``(impacted_total, [{name, monthlyAcr, matched, models}])`` — the
+    impacted total counts only subscriptions that appear in the OU deployments,
+    using an exact normalized name match to avoid misattributing ACR.
     """
+    sub_models = sub_models or {}
     matched: list[dict] = []
     for sub_upper, display in ou_subs.items():
         acr_val = acr_subs.get(sub_upper, 0.0)
         matched.append(
-            {"name": display, "monthlyAcr": acr_val, "matched": sub_upper in acr_subs}
+            {
+                "name": display,
+                "monthlyAcr": acr_val,
+                "matched": sub_upper in acr_subs,
+                "models": sub_models.get(sub_upper, []),
+            }
         )
     matched.sort(key=lambda m: -m["monthlyAcr"])
     impacted_total = sum(m["monthlyAcr"] for m in matched)
@@ -836,6 +884,7 @@ def build_org_scorecard(
     today: date,
     acr_subs_by_name: dict[str, dict[str, float]] | None = None,
     tpid_subscriptions: dict[str, dict[str, str]] | None = None,
+    tpid_subscription_models: dict[str, dict[str, list[str]]] | None = None,
 ) -> dict:
     """Build the full org scorecard matching generateOrgScorecard() from scorecard.ts.
 
@@ -849,6 +898,7 @@ def build_org_scorecard(
     """
     acr_subs_by_name = acr_subs_by_name or {}
     tpid_subscriptions = tpid_subscriptions or {}
+    tpid_subscription_models = tpid_subscription_models or {}
     restrict_to_subscriptions = bool(tpid_subscriptions)
 
     # Match ACR account names → TPIDs
@@ -890,7 +940,9 @@ def build_org_scorecard(
                 ou_subs = tpid_subscriptions.get(tpid, {})
                 if ou_subs:
                     impacted_total, impacted_subs = _impacted_subscriptions(
-                        ou_subs, tpid_sub_acr.get(tpid, {})
+                        ou_subs,
+                        tpid_sub_acr.get(tpid, {}),
+                        tpid_subscription_models.get(tpid, {}),
                     )
                     if any(m["matched"] for m in impacted_subs):
                         effective_acr = impacted_total
@@ -1353,6 +1405,7 @@ def compute_org_data(
     deployments = parse_deployments(ou_rows)
     tpid_index = build_tpid_index(deployments)
     tpid_subscriptions = build_tpid_subscriptions(deployments)
+    tpid_subscription_models = build_tpid_subscription_models(deployments, ret_lookup, today)
     # ACR account names are matched against both the OU deployment "TP Name" and
     # the Manager List "Account Name". Deployment names take precedence; the
     # Manager List fills in accounts that carry ACR but have no deployment row.
@@ -1364,6 +1417,7 @@ def compute_org_data(
         ret_lookup, acr_by_name, name_to_tpid, today,
         acr_subs_by_name=acr_subs_by_name,
         tpid_subscriptions=tpid_subscriptions,
+        tpid_subscription_models=tpid_subscription_models,
     )
     model_summary = build_model_fleet_summary(tpid_index, ret_lookup, ret_replacements, today)
     return org_scorecard, model_summary, month_col
@@ -1391,6 +1445,71 @@ def generate_org_report(
         org_scorecard, model_summary, today, month_col,
         manager_list_name, acr_name, ou_name,
     )
+
+
+def _recommendations_appendix(org_scorecard: dict, today: date) -> str:
+    """Build a deterministic appendix detailing every impacted subscription.
+
+    The primary recommendations report stays concise (it may truncate long
+    subscription lists with "+N more"). This appendix expands those lists in full:
+    for every customer with subscription-scoped ACR, it names each impacted Azure
+    subscription along with the at-risk model(s) and the revenue at risk in that
+    subscription — so nothing is hidden behind a "+N more".
+    """
+    all_accounts = org_scorecard.get("allAccounts", [])
+    scoped = [
+        a
+        for a in all_accounts
+        if a.get("subscriptionScope") == "impacted"
+        and any(s.get("matched") for s in a.get("impactedSubscriptions", []))
+    ]
+    if not scoped:
+        return ""
+
+    scoped.sort(key=lambda a: -a.get("monthlyAcr", 0.0))
+
+    def _a(val: float) -> str:
+        return f"${val:,.0f}"
+
+    L: list[str] = [
+        "",
+        "---",
+        "",
+        "## 📎 Appendix — Impacted Subscriptions by Customer",
+        "",
+        "Full detail behind the summary above: every impacted Azure subscription "
+        "for each customer, with the at-risk model(s) and the revenue at risk in "
+        "that subscription. This expands any \"+N more\" shown in the primary report.",
+        "",
+    ]
+
+    for a in scoped:
+        subs = [s for s in a.get("impactedSubscriptions", []) if s.get("matched")]
+        subs.sort(key=lambda s: -s.get("monthlyAcr", 0.0))
+        dirs = ", ".join(a.get("directors", [])) or "—"
+        L += [
+            f"### {a['name']} — {_a(a.get('monthlyAcr', 0.0))}/mo "
+            f"({len(subs)} impacted subscription{'s' if len(subs) != 1 else ''})",
+            "",
+            f"*Directors:* {dirs} · *Account total ACR:* "
+            f"{_a(a.get('accountTotalAcr', a.get('monthlyAcr', 0.0)))}/mo",
+            "",
+            "| Subscription | At-Risk Model(s) | ACR/mo | FY Est. |",
+            "|--------------|------------------|-------:|--------:|",
+        ]
+        for s in subs:
+            models = ", ".join(s.get("models", [])) or "—"
+            L.append(
+                f"| {s['name']} | {models} | {_a(s.get('monthlyAcr', 0.0))} | "
+                f"{_fmt_fy(s.get('monthlyAcr', 0.0))} |"
+            )
+        L.append(
+            f"| **Total** | | **{_a(sum(s.get('monthlyAcr', 0.0) for s in subs))}** | "
+            f"**{_fmt_fy(sum(s.get('monthlyAcr', 0.0) for s in subs))}** |"
+        )
+        L.append("")
+
+    return "\n".join(L)
 
 
 def generate_recommendations(
@@ -1502,7 +1621,7 @@ Produce a markdown report with these exact sections:
 3-5 bullet-point priority actions for org leadership. Lead each with the account or model name and ACR at risk.
 
 ## ⚡ Immediate Actions Required
-For every OVERDUE and CRITICAL account (list all of them): specific migration action, responsible director/CSA alias, model to migrate FROM → TO, and a realistic timeline. Group by director. Include ACR at stake, and name the specific impacted Azure subscription(s) (from the "Impacted Subscriptions" column) so the team knows exactly where the spend and workloads live.
+For every OVERDUE and CRITICAL account (list all of them): specific migration action, responsible director/CSA alias, model to migrate FROM → TO, and a realistic timeline. Group by director. Include ACR at stake, and name the top impacted Azure subscription(s) (from the "Impacted Subscriptions" column) so the team knows where the spend lives. Keep this concise — cite only the largest one or two subscriptions and, when an account has more, write "+N more (see Appendix)" rather than listing them all. The auto-generated Appendix details every subscription.
 
 ## 📋 Priority Migration Plans
 Top 10 at-risk accounts by ACR: for each, one paragraph with current at-risk models, recommended replacement model(s), migration complexity (Low/Medium/High), suggested completion date, and the impacted Azure subscription(s) carrying the ACR.
@@ -1513,7 +1632,7 @@ For each retiring model in the fleet: recommended replacement (use known Azure O
 ## 📊 Director Action Plans
 For each director with at-risk accounts: bullet list of their accounts requiring action with specific next steps and timeline.
 
-Use exact account names, model names, and director aliases from the data. Be specific and actionable."""
+Use exact account names, model names, and director aliases from the data. Be specific and actionable. Keep the primary report concise: an Appendix listing every impacted subscription per customer is generated automatically and appended after your report, so do not enumerate every subscription inline — summarize and defer the full breakdown to the Appendix."""
 
     client = get_client()
     deployment = get_deployment("architecture")
@@ -1527,7 +1646,11 @@ Use exact account names, model names, and director aliases from the data. Be spe
         temperature=0.3,
         max_completion_tokens=4000,
     )
-    return resp.choices[0].message.content or ""
+    report = resp.choices[0].message.content or ""
+    appendix = _recommendations_appendix(org_scorecard, today)
+    if appendix:
+        report = f"{report.rstrip()}\n{appendix}" if report.strip() else appendix.lstrip()
+    return report
 
 
 # ── PDF export ────────────────────────────────────────────────────────────────
