@@ -10,6 +10,11 @@ server {
     root /usr/share/nginx/html;
     index index.html;
 
+    # Architecture reviews POST base64-encoded diagram images (PNG/JPEG/SVG),
+    # which easily exceed nginx's 1 MB default and would 413 before reaching the
+    # backend. Allow generous headroom for multi-file uploads.
+    client_max_body_size 50m;
+
     # Long cache for hashed assets; never cache the entry HTML.
     location /assets/ {
         expires 1y;
@@ -32,9 +37,19 @@ server {
         proxy_set_header Host ${BACKEND_HOST};
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
+        # The frontend ACA ingress terminates TLS and forwards plain HTTP to this
+        # container, so $scheme here is "http". Forwarding that verbatim makes the
+        # backend ingress (allowInsecure=false) 301 to its absolute internal FQDN,
+        # which then fails CORS in the browser. Pin the original client scheme.
+        proxy_set_header X-Forwarded-Proto https;
         proxy_ssl_server_name on;
         proxy_ssl_name ${BACKEND_HOST};
+
+        # Safety net: if the backend still emits an absolute redirect to its own
+        # internal FQDN, rewrite the Location back to same-origin so the browser
+        # never follows a cross-origin (and unreachable) internal URL.
+        proxy_redirect https://${BACKEND_HOST}:${BACKEND_PORT}/ /;
+        proxy_redirect https://${BACKEND_HOST}/ /;
 
         # SSE / streaming
         proxy_buffering off;
