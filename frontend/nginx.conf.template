@@ -10,6 +10,11 @@ server {
     root /usr/share/nginx/html;
     index index.html;
 
+    # Architecture reviews POST base64-encoded diagram images (PNG/JPEG/SVG),
+    # which easily exceed nginx's 1 MB default and would 413 before reaching the
+    # backend. Allow generous headroom for multi-file uploads.
+    client_max_body_size 50m;
+
     # Long cache for hashed assets; never cache the entry HTML.
     location /assets/ {
         expires 1y;
