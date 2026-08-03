@@ -54,6 +54,28 @@ def _is_zip(data: bytes) -> bool:
     return data.startswith((b"PK\x03\x04", b"PK\x05\x06", b"PK\x07\x08"))
 
 
+# OLE2 directory entry names are stored as UTF-16LE. An encrypted OOXML file
+# (password protected, or carrying a Purview/AIP sensitivity label) is an OLE2
+# container holding the real workbook inside these streams.
+_OLE_ENCRYPTION_MARKERS: tuple[bytes, ...] = (
+    "EncryptedPackage".encode("utf-16-le"),
+    "EncryptionInfo".encode("utf-16-le"),
+    "DRMContent".encode("utf-16-le"),
+)
+
+_PROTECTED_FILE_HINT = (
+    "it is encrypted or protected (for example a password-protected workbook, or "
+    "one carrying a Microsoft Purview sensitivity label). Open it in Excel and use "
+    "File \u2192 Save As to save an unprotected copy as .xlsx or .csv, then upload "
+    "that copy."
+)
+
+
+def _is_protected_office_document(data: bytes) -> bool:
+    """Return whether ``data`` is an OLE2 container wrapping an encrypted workbook."""
+    return _is_legacy_xls(data) and any(m in data for m in _OLE_ENCRYPTION_MARKERS)
+
+
 def _xlsx_to_csv_bytes(data: bytes) -> bytes:
     """Convert xlsx bytes → csv bytes (utf-8) so all values are uniform strings."""
     import csv as _csv
@@ -89,11 +111,28 @@ def _xls_to_csv_bytes(data: bytes) -> bytes:
 
 def _to_raw_rows(data: bytes, filename: str) -> list[list[str]]:
     """Return raw rows as list[list[str]] regardless of source format."""
+    label = filename or "uploaded file"
     if _is_legacy_xls(data):
-        data = _xls_to_csv_bytes(data)
+        if _is_protected_office_document(data):
+            raise ValueError(f"Could not read '{label}' \u2014 {_PROTECTED_FILE_HINT}")
+        try:
+            data = _xls_to_csv_bytes(data)
+        except Exception as exc:
+            raise ValueError(_excel_error_message(label, exc)) from exc
     elif _is_zip(data):
-        data = _xlsx_to_csv_bytes(data)
+        try:
+            data = _xlsx_to_csv_bytes(data)
+        except Exception as exc:
+            raise ValueError(f"Could not read '{label}' as an Excel workbook: {exc}") from exc
     return _csv_to_raw_rows(data)
+
+
+def _excel_error_message(label: str, exc: Exception) -> str:
+    """Build an actionable message for a legacy Excel workbook that failed to parse."""
+    text = str(exc).lower()
+    if "encrypted" in text or ("workbook" in text and "find" in text):
+        return f"Could not read '{label}' \u2014 {_PROTECTED_FILE_HINT}"
+    return f"Could not read '{label}' as an Excel workbook: {exc}"
 
 
 def _xlsx_to_raw_rows(data: bytes) -> list[list[Any]]:
