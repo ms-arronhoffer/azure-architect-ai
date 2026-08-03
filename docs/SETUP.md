@@ -7,7 +7,7 @@ Full developer setup for Azure Architect AI.
 | Tool | Version | Purpose |
 | --- | --- | --- |
 | Python | 3.11+ | Backend runtime |
-| Node.js | 20+ | Frontend build, MCP subprocess (`npx @azure/mcp`) |
+| Node.js | 22+ | Frontend build, MCP subprocess (`npx @azure/mcp`) |
 | Docker Desktop | latest | Optional, for Compose workflows |
 | Azure CLI | latest | `az login` powers `DefaultAzureCredential` |
 | An Azure OpenAI resource | with `gpt-4.1`, `gpt-4o-mini`, `text-embedding-3-small` deployments | Or use API key |

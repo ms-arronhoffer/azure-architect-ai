@@ -224,7 +224,7 @@ A release is acceptable when:
 - **Region**: Default deploy target is `eastus2` (matches workflows). Other regions require parameter override.
 - **Concurrency**: SQLite is single-writer; Postgres is required for prod multi-replica.
 - **Secrets**: `SECRET_ENCRYPTION_KEY` rotation invalidates stored ciphertexts — re-issue user PATs.
-- **MCP**: Node 20+ on `PATH` required for `npx -y @azure/mcp@latest` spawn.
+- **MCP**: Node 22+ on `PATH` required for `npx -y @azure/mcp@latest` spawn.
 
 ## 8. Risks and mitigations
 
