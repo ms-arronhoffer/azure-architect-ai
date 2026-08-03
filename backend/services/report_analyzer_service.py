@@ -44,6 +44,16 @@ RISK_EMOJI: dict[str, str] = {
 # ─── File Loading ────────────────────────────────────────────────────────────
 
 
+def _is_legacy_xls(data: bytes) -> bool:
+    """Return whether ``data`` is an OLE/BIFF Excel workbook."""
+    return data.startswith(b"\xd0\xcf\x11\xe0")
+
+
+def _is_zip(data: bytes) -> bool:
+    """Return whether ``data`` has a ZIP signature (the XLSX container format)."""
+    return data.startswith((b"PK\x03\x04", b"PK\x05\x06", b"PK\x07\x08"))
+
+
 def _xlsx_to_csv_bytes(data: bytes) -> bytes:
     """Convert xlsx bytes → csv bytes (utf-8) so all values are uniform strings."""
     import csv as _csv
@@ -60,9 +70,28 @@ def _xlsx_to_csv_bytes(data: bytes) -> bytes:
     return out.getvalue().encode("utf-8")
 
 
+def _xls_to_csv_bytes(data: bytes) -> bytes:
+    """Convert legacy xls bytes → csv bytes (utf-8)."""
+    import csv as _csv
+
+    import xlrd  # type: ignore[import-untyped]
+
+    wb = xlrd.open_workbook(file_contents=data)
+    ws = wb.sheet_by_index(0)
+    out = io.StringIO()
+    writer = _csv.writer(out)
+    for row_idx in range(ws.nrows):
+        writer.writerow(
+            [ws.cell_value(row_idx, col_idx) for col_idx in range(ws.ncols)]
+        )
+    return out.getvalue().encode("utf-8")
+
+
 def _to_raw_rows(data: bytes, filename: str) -> list[list[str]]:
     """Return raw rows as list[list[str]] regardless of source format."""
-    if filename.lower().endswith(".xlsx"):
+    if _is_legacy_xls(data):
+        data = _xls_to_csv_bytes(data)
+    elif _is_zip(data):
         data = _xlsx_to_csv_bytes(data)
     return _csv_to_raw_rows(data)
 
