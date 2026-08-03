@@ -193,6 +193,20 @@ function deltaLabel(val: number, unit = "%"): string {
   return `${val > 0 ? "+" : ""}${val}${unit}`;
 }
 
+/** Pull the FastAPI `detail` message out of an error body, falling back to raw text. */
+function extractErrorDetail(body: string): string {
+  const text = body.trim();
+  if (!text) return "";
+  try {
+    const parsed = JSON.parse(text) as { detail?: unknown };
+    if (typeof parsed.detail === "string") return parsed.detail;
+    if (parsed.detail != null) return JSON.stringify(parsed.detail);
+  } catch {
+    // Not JSON — fall through to the raw body.
+  }
+  return text;
+}
+
 function deltaColor(val: number, invertGood = false): string {
   const good = invertGood ? val > 0 : val < 0;
   if (val === 0) return tokens.colorNeutralForeground1;
@@ -236,8 +250,8 @@ export default function ModelMigrationPanel() {
       form.append("ou_data", ouFile, ouFile.name);
       const r = await apiFetch("/api/report-analyzer/generate", { method: "POST", body: form });
       if (!r.ok) {
-        const t = await r.text().catch(() => r.statusText);
-        throw new Error(`${r.status}: ${t}`);
+        const t = await r.text().catch(() => "");
+        throw new Error(extractErrorDetail(t) || r.statusText || `Request failed (${r.status})`);
       }
       const data = await r.json() as { markdown: string; recommendations_markdown: string; generated: string; org_data: Record<string, unknown> };
       setOrgReportMarkdown(data.markdown);
