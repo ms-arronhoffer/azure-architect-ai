@@ -34,7 +34,7 @@ The `architecture` route additionally emits Bicep, Terraform, ARM, draw.io XML, 
 ## Quick start (local, no Docker)
 
 ```bash
-# Prereqs: Python 3.11+, Node 20+, Azure OpenAI endpoint, az login
+# Prereqs: Python 3.11+, Node 22+, Azure OpenAI endpoint, az login
 
 # Backend
 cd backend
@@ -246,7 +246,7 @@ azure-architect-ai/
 | Symptom | Likely cause | Fix |
 | --- | --- | --- |
 | `DefaultAzureCredential failed to retrieve a token` | Not logged in / wrong tenant | `az login --tenant <tenantId>`; or set `AZURE_OPENAI_KEY` |
-| MCP tools missing from a mode | `MCP_ENABLED=false` or `npx` not on PATH | Install Node 20+; check backend logs for `mcp.init_failed` |
+| MCP tools missing from a mode | `MCP_ENABLED=false` or `npx` not on PATH | Install Node 22+; check backend logs for `mcp.init_failed` |
 | RAG returns no results | Reindex not run | `POST /api/rag/reindex/reference-archs` |
 | Frontend 401s after `AUTH_ENABLED=true` | No bearer token | Sign in via MSAL; check `VITE_ENTRA_*` env vars |
 | Container Apps revision unhealthy | Image pull denied | Confirm UAMI has `AcrPull` on ACR (see `infra/modules/containerregistry.bicep`) |
