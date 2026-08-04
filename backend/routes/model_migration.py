@@ -8,7 +8,7 @@ import time
 import uuid
 from typing import Any
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse, Response, StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -106,9 +106,14 @@ def list_retirements() -> dict:
 
 
 @router.get("/lifecycle")
-async def model_lifecycle() -> dict:
-    """Azure Foundry model retirement schedule, refreshed daily from Learn."""
-    return await fetch_lifecycle()
+async def model_lifecycle(refresh: bool = Query(default=False)) -> dict:
+    """Azure Foundry model retirement schedule, refreshed daily from Learn.
+
+    `?refresh=true` (the panel's Refresh button) forces a live pull instead of
+    waiting for the daily job; the service throttles back-to-back forced
+    fetches so the button can't hammer the docs source.
+    """
+    return await fetch_lifecycle(force_refresh=refresh)
 
 
 @router.post("/score")

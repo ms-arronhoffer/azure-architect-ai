@@ -203,3 +203,50 @@ async def test_memory_cache_avoids_repeat_work(monkeypatch):
     await svc.fetch_lifecycle()
     await svc.fetch_lifecycle()
     assert calls["n"] == 1
+
+
+@pytest.mark.asyncio
+async def test_force_refresh_bypasses_fresh_db_rows(monkeypatch):
+    """The Refresh button must pull from Learn, not replay the day-old cache."""
+    fetched_at = svc._now() - dt.timedelta(hours=2)
+
+    async def _db():
+        return [_entry("cached")], fetched_at
+
+    async def _live():
+        return [_entry("fresh")]
+
+    async def _persist(models):
+        return None
+
+    monkeypatch.setattr(svc, "_load_from_db", _db)
+    monkeypatch.setattr(svc, "_fetch_live", _live)
+    monkeypatch.setattr(svc, "_persist_to_db", _persist)
+
+    result = await svc.fetch_lifecycle(force_refresh=True)
+    assert result["models"][0]["model"] == "fresh"
+    assert result["stale"] is False
+
+
+@pytest.mark.asyncio
+async def test_back_to_back_force_refresh_is_throttled(monkeypatch):
+    """Repeated Refresh clicks must not hammer the docs source."""
+    calls = {"n": 0}
+
+    async def _db():
+        return [], None
+
+    async def _live():
+        calls["n"] += 1
+        return [_entry("fresh")]
+
+    async def _persist(models):
+        return None
+
+    monkeypatch.setattr(svc, "_load_from_db", _db)
+    monkeypatch.setattr(svc, "_fetch_live", _live)
+    monkeypatch.setattr(svc, "_persist_to_db", _persist)
+
+    await svc.fetch_lifecycle(force_refresh=True)
+    await svc.fetch_lifecycle(force_refresh=True)
+    assert calls["n"] == 1

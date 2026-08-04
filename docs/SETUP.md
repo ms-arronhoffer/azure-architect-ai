@@ -134,6 +134,7 @@ When `INGEST_ENABLED=true`, `backend/services/scheduler.py` registers two APSche
 - `refarch_ingest_weekly` — Sun 04:17 UTC, pulls Microsoft Learn ContentBrowser → `RefArch` table
 - `demo_ingest_weekly` — Sun 04:42 UTC, pulls `Azure/awesome-azd` (msft-tagged only) → `Demo` table
 - `model_lifecycle_refresh_daily` — daily 03:41 UTC, pulls the Learn "Model retirement schedule" docs source → `ModelLifecycleCache` table (the AI Model Lifecycle panel also refreshes lazily every 24h, so it stays current with `INGEST_ENABLED=false`)
+- `model_lifecycle_refresh_startup` — one-shot, 30s after start-up, so a new deployment primes the schedule immediately instead of waiting for the 03:41 cron
 
 Both ingests preserve user-toggled `featured` flags and any `custom`-sourced rows. To trigger on demand instead of waiting for the cron, hit `POST /api/refarch/ingest` or `POST /api/demos/ingest` with a token whose JWT carries the `Metrics.Read` app role. To disable entirely: `INGEST_ENABLED=false` (the default). The default User-Agent is `AzureArchitectAI-Ingest/1.0` (override via `INGEST_USER_AGENT`).
 
