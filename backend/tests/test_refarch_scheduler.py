@@ -85,6 +85,24 @@ async def test_start_scheduler_registers_pricing_ingest_daily(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_start_scheduler_registers_model_lifecycle_daily(monkeypatch):
+    monkeypatch.setattr(settings, "ingest_enabled", True)
+    scheduler_module.start_scheduler()
+    assert scheduler_module._scheduler is not None
+
+    jobs = {j.id: j for j in scheduler_module._scheduler.get_jobs()}
+    # issubset (not strict equality) per the scheduler test convention.
+    assert {"model_lifecycle_refresh_daily"}.issubset(jobs.keys())
+
+    lifecycle = jobs["model_lifecycle_refresh_daily"]
+    assert lifecycle.max_instances == 1
+    assert lifecycle.coalesce is True
+    fields = {f.name: str(f) for f in lifecycle.trigger.fields}
+    assert fields["hour"] == "3"
+    assert fields["minute"] == "41"
+
+
+@pytest.mark.asyncio
 async def test_shutdown_clears_singleton(monkeypatch):
     monkeypatch.setattr(settings, "ingest_enabled", True)
     scheduler_module.start_scheduler()

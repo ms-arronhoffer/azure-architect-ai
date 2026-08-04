@@ -274,6 +274,23 @@ class WhatsNewCache(Base):
     )
 
 
+class ModelLifecycleCache(Base):
+    """Singleton-keyed cache of the Azure Foundry model retirement schedule.
+
+    One row (key "default") holding the parsed Learn schedule as JSON. Shared
+    by every replica and user so the source docs are fetched at most once a
+    day. Global catalog — not tenant-scoped.
+    """
+
+    __tablename__ = "model_lifecycle_cache"
+
+    cache_key: Mapped[str] = mapped_column(String(64), primary_key=True)
+    models: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    fetched_at: Mapped[dt.datetime] = mapped_column(
+        nullable=False, default=lambda: dt.datetime.now(dt.UTC).replace(tzinfo=None)
+    )
+
+
 class RefArch(Base):
     """Reference architecture catalog entry — global library of MS-official + custom architectures."""
 
@@ -602,6 +619,7 @@ __all__ = [
     "Engagement",
     "EngagementReference",
     "MigrationJob",
+    "ModelLifecycleCache",
     "PricingMeter",
     "RagDocument",
     "RefArch",

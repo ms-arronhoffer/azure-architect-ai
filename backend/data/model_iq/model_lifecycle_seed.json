@@ -1,0 +1,1464 @@
+{
+  "fetchedAt": "2026-08-04T17:50:20Z",
+  "source": "https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/model-retirement-schedule",
+  "models": [
+    {
+      "provider": "Azure OpenAI",
+      "model": "codex-mini",
+      "version": "2025-05-16",
+      "lifecycle": "Deprecated",
+      "retirement": "2026-11-15",
+      "replacement": null,
+      "soldBy": "Azure"
+    },
+    {
+      "provider": "Azure OpenAI",
+      "model": "gpt-4.1",
+      "version": "2025-04-14",
+      "lifecycle": "Deprecated",
+      "retirement": "2027-04-14",
+      "replacement": null,
+      "soldBy": "Azure"
+    },
+    {
+      "provider": "Azure OpenAI",
+      "model": "gpt-4.1-mini",
+      "version": "2025-04-14",
+      "lifecycle": "Deprecated",
+      "retirement": "2027-04-14",
+      "replacement": null,
+      "soldBy": "Azure"
+    },
+    {
+      "provider": "Azure OpenAI",
+      "model": "gpt-4.1-nano",
+      "version": "2025-04-14",
+      "lifecycle": "Deprecated",
+      "retirement": "2026-10-14",
+      "replacement": null,
+      "soldBy": "Azure"
+    },
+    {
+      "provider": "Azure OpenAI",
+      "model": "gpt-4o",
+      "version": "2024-05-13",
+      "lifecycle": "Deprecated",
+      "retirement": "2026-10-01",
+      "replacement": "gpt-5.1",
+      "soldBy": "Azure"
+    },
+    {
+      "provider": "Azure OpenAI",
+      "model": "gpt-4o",
+      "version": "2024-08-06",
+      "lifecycle": "Deprecated",
+      "retirement": "2027-04-14",
+      "replacement": "gpt-5.1",
+      "soldBy": "Azure"
+    },
+    {
+      "provider": "Azure OpenAI",
+      "model": "gpt-4o",
+      "version": "2024-11-20",
+      "lifecycle": "Deprecated",
+      "retirement": "2027-04-14",
+      "replacement": "gpt-5.1",
+      "soldBy": "Azure"
+    },
+    {
+      "provider": "Azure OpenAI",
+      "model": "gpt-4o-mini",
+      "version": "2024-07-18",
+      "lifecycle": "Deprecated",
+      "retirement": "2027-04-14",
+      "replacement": null,
+      "soldBy": "Azure"
+    },
+    {
+      "provider": "Azure OpenAI",
+      "model": "gpt-4o-mini-transcribe",
+      "version": "2025-03-20",
+      "lifecycle": "GA",
+      "retirement": "2026-10-15",
+      "replacement": null,
+      "soldBy": "Azure"
+    },
+    {
+      "provider": "Azure OpenAI",
+      "model": "gpt-4o-mini-transcribe",
+      "version": "2025-12-15",
+      "lifecycle": "GA",
+      "retirement": "2027-06-15",
+      "replacement": null,
+      "soldBy": "Azure"
+    },
+    {
+      "provider": "Azure OpenAI",
+      "model": "gpt-4o-mini-tts",
+      "version": "2025-03-20",
+      "lifecycle": "Preview",
+      "retirement": "2026-10-15",
+      "replacement": null,
+      "soldBy": "Azure"
+    },
+    {
+      "provider": "Azure OpenAI",
+      "model": "gpt-4o-mini-tts",
+      "version": "2025-12-15",
+      "lifecycle": "GA",
+      "retirement": "2027-06-15",
+      "replacement": null,
+      "soldBy": "Azure"
+    },
+    {
+      "provider": "Azure OpenAI",
+      "model": "gpt-4o-transcribe",
+      "version": "2025-03-20",
+      "lifecycle": "GA",
+      "retirement": "2026-10-15",
+      "replacement": null,
+      "soldBy": "Azure"
+    },
+    {
+      "provider": "Azure OpenAI",
+      "model": "gpt-4o-transcribe-diarize",
+      "version": "2025-10-15",
+      "lifecycle": "GA",
+      "retirement": "2027-04-15",
+      "replacement": null,
+      "soldBy": "Azure"
+    },
+    {
+      "provider": "Azure OpenAI",
+      "model": "gpt-5",
+      "version": "2025-08-07",
+      "lifecycle": "GA",
+      "retirement": "2027-02-09",
+      "replacement": null,
+      "soldBy": "Azure"
+    },
+    {
+      "provider": "Azure OpenAI",
+      "model": "gpt-5-chat",
+      "version": "2025-08-07",
+      "lifecycle": "Retired",
+      "retirement": "2026-06-29",
+      "replacement": "gpt-chat-latest",
+      "soldBy": "Azure"
+    },
+    {
+      "provider": "Azure OpenAI",
+      "model": "gpt-5-chat",
+      "version": "2025-10-03",
+      "lifecycle": "Retired",
+      "retirement": "2026-05-13",
+      "replacement": "gpt-chat-latest",
+      "soldBy": "Azure"
+    },
+    {
+      "provider": "Azure OpenAI",
+      "model": "gpt-5-codex",
+      "version": "2025-09-15",
+      "lifecycle": "GA",
+      "retirement": "2027-03-17",
+      "replacement": null,
+      "soldBy": "Azure"
+    },
+    {
+      "provider": "Azure OpenAI",
+      "model": "gpt-5-mini",
+      "version": "2025-08-07",
+      "lifecycle": "GA",
+      "retirement": "2027-02-09",
+      "replacement": null,
+      "soldBy": "Azure"
+    },
+    {
+      "provider": "Azure OpenAI",
+      "model": "gpt-5-nano",
+      "version": "2025-08-07",
+      "lifecycle": "GA",
+      "retirement": "2027-02-09",
+      "replacement": null,
+      "soldBy": "Azure"
+    },
+    {
+      "provider": "Azure OpenAI",
+      "model": "gpt-5-pro",
+      "version": "2025-10-06",
+      "lifecycle": "GA",
+      "retirement": "2027-04-07",
+      "replacement": null,
+      "soldBy": "Azure"
+    },
+    {
+      "provider": "Azure OpenAI",
+      "model": "gpt-5.1",
+      "version": "2025-11-13",
+      "lifecycle": "GA",
+      "retirement": "2027-05-15",
+      "replacement": null,
+      "soldBy": "Azure"
+    },
+    {
+      "provider": "Azure OpenAI",
+      "model": "gpt-5.1-chat",
+      "version": "2025-11-13",
+      "lifecycle": "Retired",
+      "retirement": "2026-06-29",
+      "replacement": "gpt-chat-latest",
+      "soldBy": "Azure"
+    },
+    {
+      "provider": "Azure OpenAI",
+      "model": "gpt-5.1-codex",
+      "version": "2025-11-13",
+      "lifecycle": "GA",
+      "retirement": "2027-05-15",
+      "replacement": null,
+      "soldBy": "Azure"
+    },
+    {
+      "provider": "Azure OpenAI",
+      "model": "gpt-5.1-codex-max",
+      "version": "2025-12-04",
+      "lifecycle": "GA",
+      "retirement": "2027-05-18",
+      "replacement": null,
+      "soldBy": "Azure"
+    },
+    {
+      "provider": "Azure OpenAI",
+      "model": "gpt-5.1-codex-mini",
+      "version": "2025-11-13",
+      "lifecycle": "GA",
+      "retirement": "2027-05-15",
+      "replacement": null,
+      "soldBy": "Azure"
+    },
+    {
+      "provider": "Azure OpenAI",
+      "model": "gpt-5.2",
+      "version": "2025-12-11",
+      "lifecycle": "GA",
+      "retirement": "2027-06-08",
+      "replacement": null,
+      "soldBy": "Azure"
+    },
+    {
+      "provider": "Azure OpenAI",
+      "model": "gpt-5.2-chat",
+      "version": "2025-12-11",
+      "lifecycle": "Retired",
+      "retirement": "2026-05-13",
+      "replacement": "gpt-chat-latest",
+      "soldBy": "Azure"
+    },
+    {
+      "provider": "Azure OpenAI",
+      "model": "gpt-5.2-chat",
+      "version": "2026-02-10",
+      "lifecycle": "Retired",
+      "retirement": "2026-06-29",
+      "replacement": "gpt-chat-latest",
+      "soldBy": "Azure"
+    },
+    {
+      "provider": "Azure OpenAI",
+      "model": "gpt-5.2-codex",
+      "version": "2026-01-14",
+      "lifecycle": "GA",
+      "retirement": "2027-07-13",
+      "replacement": null,
+      "soldBy": "Azure"
+    },
+    {
+      "provider": "Azure OpenAI",
+      "model": "gpt-5.3-chat",
+      "version": "2026-03-03",
+      "lifecycle": "Retired",
+      "retirement": "2026-06-29",
+      "replacement": "gpt-chat-latest",
+      "soldBy": "Azure"
+    },
+    {
+      "provider": "Azure OpenAI",
+      "model": "gpt-5.3-codex",
+      "version": "2026-02-24",
+      "lifecycle": "GA",
+      "retirement": "2027-08-24",
+      "replacement": null,
+      "soldBy": "Azure"
+    },
+    {
+      "provider": "Azure OpenAI",
+      "model": "gpt-5.4",
+      "version": "2026-03-05",
+      "lifecycle": "GA",
+      "retirement": "2027-09-02",
+      "replacement": null,
+      "soldBy": "Azure"
+    },
+    {
+      "provider": "Azure OpenAI",
+      "model": "gpt-5.4-mini",
+      "version": "2026-03-17",
+      "lifecycle": "GA",
+      "retirement": "2027-09-21",
+      "replacement": null,
+      "soldBy": "Azure"
+    },
+    {
+      "provider": "Azure OpenAI",
+      "model": "gpt-5.4-nano",
+      "version": "2026-03-17",
+      "lifecycle": "GA",
+      "retirement": "2027-09-21",
+      "replacement": null,
+      "soldBy": "Azure"
+    },
+    {
+      "provider": "Azure OpenAI",
+      "model": "gpt-5.4-pro",
+      "version": "2026-03-05",
+      "lifecycle": "GA",
+      "retirement": "2027-09-07",
+      "replacement": null,
+      "soldBy": "Azure"
+    },
+    {
+      "provider": "Azure OpenAI",
+      "model": "gpt-5.5",
+      "version": "2026-04-24",
+      "lifecycle": "GA",
+      "retirement": "2027-10-26",
+      "replacement": null,
+      "soldBy": "Azure"
+    },
+    {
+      "provider": "Azure OpenAI",
+      "model": "gpt-5.6-luna",
+      "version": "2026-07-09",
+      "lifecycle": "GA",
+      "retirement": "2028-01-11",
+      "replacement": null,
+      "soldBy": "Azure"
+    },
+    {
+      "provider": "Azure OpenAI",
+      "model": "gpt-5.6-sol",
+      "version": "2026-07-09",
+      "lifecycle": "GA",
+      "retirement": "2028-01-11",
+      "replacement": null,
+      "soldBy": "Azure"
+    },
+    {
+      "provider": "Azure OpenAI",
+      "model": "gpt-5.6-terra",
+      "version": "2026-07-09",
+      "lifecycle": "GA",
+      "retirement": "2028-01-11",
+      "replacement": null,
+      "soldBy": "Azure"
+    },
+    {
+      "provider": "Azure OpenAI",
+      "model": "gpt-audio",
+      "version": "2025-08-28",
+      "lifecycle": "GA",
+      "retirement": "2027-03-02",
+      "replacement": null,
+      "soldBy": "Azure"
+    },
+    {
+      "provider": "Azure OpenAI",
+      "model": "gpt-audio-1.5",
+      "version": "2026-02-23",
+      "lifecycle": "GA",
+      "retirement": "2027-08-24",
+      "replacement": null,
+      "soldBy": "Azure"
+    },
+    {
+      "provider": "Azure OpenAI",
+      "model": "gpt-audio-mini",
+      "version": "2025-10-06",
+      "lifecycle": "GA",
+      "retirement": "2027-04-06",
+      "replacement": null,
+      "soldBy": "Azure"
+    },
+    {
+      "provider": "Azure OpenAI",
+      "model": "gpt-audio-mini",
+      "version": "2025-12-15",
+      "lifecycle": "GA",
+      "retirement": "2027-06-15",
+      "replacement": null,
+      "soldBy": "Azure"
+    },
+    {
+      "provider": "Azure OpenAI",
+      "model": "gpt-chat-latest",
+      "version": "2026-05-05",
+      "lifecycle": "Preview",
+      "retirement": "2026-08-05",
+      "replacement": null,
+      "soldBy": "Azure"
+    },
+    {
+      "provider": "Azure OpenAI",
+      "model": "gpt-chat-latest",
+      "version": "2026-05-28",
+      "lifecycle": "Preview",
+      "retirement": "2026-08-28",
+      "replacement": null,
+      "soldBy": "Azure"
+    },
+    {
+      "provider": "Azure OpenAI",
+      "model": "gpt-chat-latest",
+      "version": "2026-06-24",
+      "lifecycle": "Preview",
+      "retirement": "2026-08-28",
+      "replacement": null,
+      "soldBy": "Azure"
+    },
+    {
+      "provider": "Azure OpenAI",
+      "model": "gpt-image-1",
+      "version": "2025-04-15",
+      "lifecycle": "Preview",
+      "retirement": "2026-10-23",
+      "replacement": null,
+      "soldBy": "Azure"
+    },
+    {
+      "provider": "Azure OpenAI",
+      "model": "gpt-image-1-mini",
+      "version": "2025-10-06",
+      "lifecycle": "GA",
+      "retirement": "2027-04-07",
+      "replacement": null,
+      "soldBy": "Azure"
+    },
+    {
+      "provider": "Azure OpenAI",
+      "model": "gpt-image-1.5",
+      "version": "2025-12-16",
+      "lifecycle": "GA",
+      "retirement": "2027-06-16",
+      "replacement": null,
+      "soldBy": "Azure"
+    },
+    {
+      "provider": "Azure OpenAI",
+      "model": "gpt-image-2",
+      "version": "2026-04-21",
+      "lifecycle": "GA",
+      "retirement": "2027-10-21",
+      "replacement": null,
+      "soldBy": "Azure"
+    },
+    {
+      "provider": "Azure OpenAI",
+      "model": "gpt-realtime",
+      "version": "2025-08-28",
+      "lifecycle": "GA",
+      "retirement": "2027-03-02",
+      "replacement": null,
+      "soldBy": "Azure"
+    },
+    {
+      "provider": "Azure OpenAI",
+      "model": "gpt-realtime-1.5",
+      "version": "2026-02-23",
+      "lifecycle": "GA",
+      "retirement": "2027-08-24",
+      "replacement": null,
+      "soldBy": "Azure"
+    },
+    {
+      "provider": "Azure OpenAI",
+      "model": "gpt-realtime-2",
+      "version": "2026-05-06",
+      "lifecycle": "Preview",
+      "retirement": "2026-08-31",
+      "replacement": null,
+      "soldBy": "Azure"
+    },
+    {
+      "provider": "Azure OpenAI",
+      "model": "gpt-realtime-2.1",
+      "version": "2026-07-07",
+      "lifecycle": "Preview",
+      "retirement": "2027-06-25",
+      "replacement": null,
+      "soldBy": "Azure"
+    },
+    {
+      "provider": "Azure OpenAI",
+      "model": "gpt-realtime-2.1-mini",
+      "version": "2026-07-07",
+      "lifecycle": "Preview",
+      "retirement": "2027-06-25",
+      "replacement": null,
+      "soldBy": "Azure"
+    },
+    {
+      "provider": "Azure OpenAI",
+      "model": "gpt-realtime-mini",
+      "version": "2025-10-06",
+      "lifecycle": "GA",
+      "retirement": "2027-04-06",
+      "replacement": null,
+      "soldBy": "Azure"
+    },
+    {
+      "provider": "Azure OpenAI",
+      "model": "gpt-realtime-mini",
+      "version": "2025-12-15",
+      "lifecycle": "GA",
+      "retirement": "2027-06-15",
+      "replacement": null,
+      "soldBy": "Azure"
+    },
+    {
+      "provider": "Azure OpenAI",
+      "model": "o1",
+      "version": "2024-12-17",
+      "lifecycle": "Deprecated",
+      "retirement": "2026-10-21",
+      "replacement": "gpt-5.6-sol",
+      "soldBy": "Azure"
+    },
+    {
+      "provider": "Azure OpenAI",
+      "model": "o1-pro",
+      "version": "2025-03-19",
+      "lifecycle": "GA",
+      "retirement": "2026-10-21",
+      "replacement": "gpt-5.6-sol",
+      "soldBy": "Azure"
+    },
+    {
+      "provider": "Azure OpenAI",
+      "model": "o3",
+      "version": "2025-04-16",
+      "lifecycle": "GA",
+      "retirement": "2026-10-21",
+      "replacement": "gpt-5.6-sol",
+      "soldBy": "Azure"
+    },
+    {
+      "provider": "Azure OpenAI",
+      "model": "o3-deep-research",
+      "version": "2025-06-26",
+      "lifecycle": "GA",
+      "retirement": "2026-12-26",
+      "replacement": null,
+      "soldBy": "Azure"
+    },
+    {
+      "provider": "Azure OpenAI",
+      "model": "o3-mini",
+      "version": "2025-01-31",
+      "lifecycle": "Deprecated",
+      "retirement": "2026-10-01",
+      "replacement": "o4-mini",
+      "soldBy": "Azure"
+    },
+    {
+      "provider": "Azure OpenAI",
+      "model": "o3-pro",
+      "version": "2025-06-10",
+      "lifecycle": "GA",
+      "retirement": "2026-12-17",
+      "replacement": null,
+      "soldBy": "Azure"
+    },
+    {
+      "provider": "Azure OpenAI",
+      "model": "o4-mini",
+      "version": "2025-04-16",
+      "lifecycle": "Deprecated",
+      "retirement": "2026-10-16",
+      "replacement": null,
+      "soldBy": "Azure"
+    },
+    {
+      "provider": "Azure OpenAI",
+      "model": "sora-2",
+      "version": "2025-10-06",
+      "lifecycle": "Preview",
+      "retirement": "2026-07-15",
+      "replacement": "sora-2 (2025-12-08)",
+      "soldBy": "Azure"
+    },
+    {
+      "provider": "Azure OpenAI",
+      "model": "sora-2",
+      "version": "2025-12-08",
+      "lifecycle": "Preview",
+      "retirement": "2026-09-15",
+      "replacement": null,
+      "soldBy": "Azure"
+    },
+    {
+      "provider": "Azure OpenAI",
+      "model": "text-embedding-3-large",
+      "version": "1",
+      "lifecycle": "GA",
+      "retirement": "2028-02-09",
+      "replacement": null,
+      "soldBy": "Azure"
+    },
+    {
+      "provider": "Azure OpenAI",
+      "model": "text-embedding-3-small",
+      "version": "1",
+      "lifecycle": "GA",
+      "retirement": "2028-02-09",
+      "replacement": null,
+      "soldBy": "Azure"
+    },
+    {
+      "provider": "Azure OpenAI",
+      "model": "text-embedding-ada-002",
+      "version": "1",
+      "lifecycle": "GA",
+      "retirement": "2028-02-09",
+      "replacement": null,
+      "soldBy": "Azure"
+    },
+    {
+      "provider": "Azure OpenAI",
+      "model": "text-embedding-ada-002",
+      "version": "2",
+      "lifecycle": "GA",
+      "retirement": "2028-02-09",
+      "replacement": null,
+      "soldBy": "Azure"
+    },
+    {
+      "provider": "Azure OpenAI",
+      "model": "tts",
+      "version": "001",
+      "lifecycle": "Preview",
+      "retirement": "2026-12-15",
+      "replacement": null,
+      "soldBy": "Azure"
+    },
+    {
+      "provider": "Azure OpenAI",
+      "model": "tts-hd",
+      "version": "001",
+      "lifecycle": "GA",
+      "retirement": "2026-12-15",
+      "replacement": null,
+      "soldBy": "Azure"
+    },
+    {
+      "provider": "Azure OpenAI",
+      "model": "whisper",
+      "version": "001",
+      "lifecycle": "GA",
+      "retirement": "2026-12-15",
+      "replacement": null,
+      "soldBy": "Azure"
+    },
+    {
+      "provider": "Black Forest Labs",
+      "model": "FLUX-1.1-pro",
+      "version": "1",
+      "lifecycle": "GA",
+      "retirement": null,
+      "replacement": null,
+      "soldBy": "Azure"
+    },
+    {
+      "provider": "Black Forest Labs",
+      "model": "FLUX.1-Kontext-pro",
+      "version": "1",
+      "lifecycle": "GA",
+      "retirement": null,
+      "replacement": null,
+      "soldBy": "Azure"
+    },
+    {
+      "provider": "Black Forest Labs",
+      "model": "FLUX.2-flex",
+      "version": "1",
+      "lifecycle": "GA",
+      "retirement": null,
+      "replacement": null,
+      "soldBy": "Azure"
+    },
+    {
+      "provider": "Black Forest Labs",
+      "model": "FLUX.2-pro",
+      "version": "1",
+      "lifecycle": "GA",
+      "retirement": null,
+      "replacement": null,
+      "soldBy": "Azure"
+    },
+    {
+      "provider": "Cohere",
+      "model": "Cohere-rerank-v4.0-fast",
+      "version": "1",
+      "lifecycle": "GA",
+      "retirement": null,
+      "replacement": null,
+      "soldBy": "Azure"
+    },
+    {
+      "provider": "Cohere",
+      "model": "Cohere-rerank-v4.0-pro",
+      "version": "1",
+      "lifecycle": "GA",
+      "retirement": null,
+      "replacement": null,
+      "soldBy": "Azure"
+    },
+    {
+      "provider": "Cohere",
+      "model": "cohere-command-a",
+      "version": "1",
+      "lifecycle": "GA",
+      "retirement": null,
+      "replacement": null,
+      "soldBy": "Azure"
+    },
+    {
+      "provider": "Cohere",
+      "model": "Cohere-command-a-plus-05-2026",
+      "version": "1",
+      "lifecycle": "Preview",
+      "retirement": "2026-10-13",
+      "replacement": null,
+      "soldBy": "Azure"
+    },
+    {
+      "provider": "Cohere",
+      "model": "embed-v-4-0",
+      "version": "1",
+      "lifecycle": "GA",
+      "retirement": null,
+      "replacement": null,
+      "soldBy": "Azure"
+    },
+    {
+      "provider": "DeepSeek",
+      "model": "DeepSeek-R1",
+      "version": "1",
+      "lifecycle": "Legacy",
+      "retirement": "2026-08-13",
+      "replacement": "DeepSeek-V4-Pro",
+      "soldBy": "Azure"
+    },
+    {
+      "provider": "DeepSeek",
+      "model": "DeepSeek-R1-0528",
+      "version": "1",
+      "lifecycle": "Retired",
+      "retirement": "2026-07-13",
+      "replacement": "DeepSeek-V4-Pro",
+      "soldBy": "Azure"
+    },
+    {
+      "provider": "DeepSeek",
+      "model": "DeepSeek-V3-0324",
+      "version": "1",
+      "lifecycle": "Retired",
+      "retirement": "2026-07-13",
+      "replacement": "DeepSeek-V4-Flash",
+      "soldBy": "Azure"
+    },
+    {
+      "provider": "DeepSeek",
+      "model": "DeepSeek-V3.1",
+      "version": "1",
+      "lifecycle": "Retired",
+      "retirement": "2026-07-13",
+      "replacement": "DeepSeek-V4-Flash",
+      "soldBy": "Azure"
+    },
+    {
+      "provider": "DeepSeek",
+      "model": "DeepSeek-V3.2",
+      "version": "1",
+      "lifecycle": "GA",
+      "retirement": null,
+      "replacement": null,
+      "soldBy": "Azure"
+    },
+    {
+      "provider": "DeepSeek",
+      "model": "DeepSeek-V3.2-Speciale",
+      "version": "1",
+      "lifecycle": "GA",
+      "retirement": null,
+      "replacement": null,
+      "soldBy": "Azure"
+    },
+    {
+      "provider": "DeepSeek",
+      "model": "DeepSeek-V4-Flash",
+      "version": "2026-04-23",
+      "lifecycle": "GA",
+      "retirement": "2028-02-20",
+      "replacement": null,
+      "soldBy": "Azure"
+    },
+    {
+      "provider": "DeepSeek",
+      "model": "DeepSeek-V4-Pro",
+      "version": "2026-04-23",
+      "lifecycle": "GA",
+      "retirement": "2028-02-20",
+      "replacement": null,
+      "soldBy": "Azure"
+    },
+    {
+      "provider": "Meta",
+      "model": "Llama-3.3-70B-Instruct",
+      "version": "\u2014",
+      "lifecycle": "GA",
+      "retirement": null,
+      "replacement": null,
+      "soldBy": "Azure"
+    },
+    {
+      "provider": "Meta",
+      "model": "Llama-4-Maverick-17B-128E-Instruct-FP8",
+      "version": "\u2014",
+      "lifecycle": "GA",
+      "retirement": null,
+      "replacement": null,
+      "soldBy": "Azure"
+    },
+    {
+      "provider": "Microsoft",
+      "model": "model-router",
+      "version": "2025-05-19",
+      "lifecycle": "Preview",
+      "retirement": "2026-08-30",
+      "replacement": null,
+      "soldBy": "Azure"
+    },
+    {
+      "provider": "Microsoft",
+      "model": "model-router",
+      "version": "2025-08-07",
+      "lifecycle": "Preview",
+      "retirement": "2026-08-30",
+      "replacement": null,
+      "soldBy": "Azure"
+    },
+    {
+      "provider": "Microsoft",
+      "model": "model-router",
+      "version": "2025-11-18",
+      "lifecycle": "GA",
+      "retirement": "2027-05-20",
+      "replacement": null,
+      "soldBy": "Azure"
+    },
+    {
+      "provider": "Microsoft",
+      "model": "MAI-Image-2e",
+      "version": "2026-04-09",
+      "lifecycle": "Preview",
+      "retirement": "2026-08-15",
+      "replacement": "MAI-Image-2.5-Flash",
+      "soldBy": "Azure"
+    },
+    {
+      "provider": "Microsoft",
+      "model": "MAI-Image-2",
+      "version": "2026-02-20",
+      "lifecycle": "Preview",
+      "retirement": "2026-08-15",
+      "replacement": "MAI-Image-2.5",
+      "soldBy": "Azure"
+    },
+    {
+      "provider": "Mistral AI",
+      "model": "Mistral-Large-3",
+      "version": "1",
+      "lifecycle": "GA",
+      "retirement": null,
+      "replacement": null,
+      "soldBy": "Azure"
+    },
+    {
+      "provider": "Mistral AI",
+      "model": "mistral-document-ai-2505",
+      "version": "1",
+      "lifecycle": "Retired",
+      "retirement": "2026-07-20",
+      "replacement": "mistral-document-ai-2512, mistral-ocr-4-0",
+      "soldBy": "Azure"
+    },
+    {
+      "provider": "Mistral AI",
+      "model": "mistral-document-ai-2512",
+      "version": "1",
+      "lifecycle": "GA",
+      "retirement": null,
+      "replacement": "mistral-ocr-4-0",
+      "soldBy": "Azure"
+    },
+    {
+      "provider": "MoonshotAI",
+      "model": "Kimi-K2.5",
+      "version": "1",
+      "lifecycle": "Preview",
+      "retirement": "2027-01-26",
+      "replacement": null,
+      "soldBy": "Azure"
+    },
+    {
+      "provider": "MoonshotAI",
+      "model": "Kimi-K2.6",
+      "version": "2026-04-20",
+      "lifecycle": "Preview",
+      "retirement": "2027-04-16",
+      "replacement": null,
+      "soldBy": "Azure"
+    },
+    {
+      "provider": "MoonshotAI",
+      "model": "Kimi-K2.7-Code",
+      "version": "2026-06-12",
+      "lifecycle": "Preview",
+      "retirement": "2026-10-03",
+      "replacement": null,
+      "soldBy": "Azure"
+    },
+    {
+      "provider": "OpenAI-OSS",
+      "model": "gpt-oss-120b",
+      "version": "1",
+      "lifecycle": "GA",
+      "retirement": null,
+      "replacement": null,
+      "soldBy": "Azure"
+    },
+    {
+      "provider": "xAI",
+      "model": "grok-3",
+      "version": "1",
+      "lifecycle": "Retired",
+      "retirement": "2026-05-01",
+      "replacement": "grok-4",
+      "soldBy": "Azure"
+    },
+    {
+      "provider": "xAI",
+      "model": "grok-3-mini",
+      "version": "1",
+      "lifecycle": "Retired",
+      "retirement": "2026-05-01",
+      "replacement": "grok-4-1-fast-reasoning",
+      "soldBy": "Azure"
+    },
+    {
+      "provider": "xAI",
+      "model": "grok-4",
+      "version": "1",
+      "lifecycle": "GA",
+      "retirement": null,
+      "replacement": null,
+      "soldBy": "Azure"
+    },
+    {
+      "provider": "xAI",
+      "model": "grok-4-1-fast-non-reasoning",
+      "version": "1",
+      "lifecycle": "GA",
+      "retirement": null,
+      "replacement": null,
+      "soldBy": "Azure"
+    },
+    {
+      "provider": "xAI",
+      "model": "grok-4-1-fast-reasoning",
+      "version": "1",
+      "lifecycle": "GA",
+      "retirement": null,
+      "replacement": null,
+      "soldBy": "Azure"
+    },
+    {
+      "provider": "xAI",
+      "model": "grok-4-20-non-reasoning",
+      "version": "1",
+      "lifecycle": "Preview",
+      "retirement": "2027-04-06",
+      "replacement": null,
+      "soldBy": "Azure"
+    },
+    {
+      "provider": "xAI",
+      "model": "grok-4-20-reasoning",
+      "version": "1",
+      "lifecycle": "Preview",
+      "retirement": "2027-04-06",
+      "replacement": null,
+      "soldBy": "Azure"
+    },
+    {
+      "provider": "xAI",
+      "model": "grok-4-fast-non-reasoning",
+      "version": "1",
+      "lifecycle": "Retired",
+      "retirement": "2026-05-01",
+      "replacement": "grok-4-1-fast-non-reasoning",
+      "soldBy": "Azure"
+    },
+    {
+      "provider": "xAI",
+      "model": "grok-4-fast-reasoning",
+      "version": "1",
+      "lifecycle": "Retired",
+      "retirement": "2026-05-01",
+      "replacement": "grok-4-1-fast-reasoning",
+      "soldBy": "Azure"
+    },
+    {
+      "provider": "xAI",
+      "model": "grok-code-fast-1",
+      "version": "1",
+      "lifecycle": "GA",
+      "retirement": null,
+      "replacement": null,
+      "soldBy": "Azure"
+    },
+    {
+      "provider": "Anthropic",
+      "model": "claude-haiku-4-5",
+      "version": "\u2014",
+      "lifecycle": "Preview",
+      "retirement": "2026-10-19",
+      "replacement": null,
+      "soldBy": "Partner"
+    },
+    {
+      "provider": "Anthropic",
+      "model": "claude-mythos-preview (gated research preview)",
+      "version": "\u2014",
+      "lifecycle": "Preview",
+      "retirement": "2027-04-02",
+      "replacement": null,
+      "soldBy": "Partner"
+    },
+    {
+      "provider": "Anthropic",
+      "model": "claude-opus-4-1",
+      "version": "\u2014",
+      "lifecycle": "Preview",
+      "retirement": "2026-08-05",
+      "replacement": "claude-opus-4-8",
+      "soldBy": "Partner"
+    },
+    {
+      "provider": "Anthropic",
+      "model": "claude-opus-4-5",
+      "version": "\u2014",
+      "lifecycle": "Preview",
+      "retirement": "2026-10-19",
+      "replacement": null,
+      "soldBy": "Partner"
+    },
+    {
+      "provider": "Anthropic",
+      "model": "claude-opus-4-6",
+      "version": "\u2014",
+      "lifecycle": "Preview",
+      "retirement": "2027-02-02",
+      "replacement": null,
+      "soldBy": "Partner"
+    },
+    {
+      "provider": "Anthropic",
+      "model": "claude-opus-4-7",
+      "version": "\u2014",
+      "lifecycle": "Preview",
+      "retirement": "2027-04-06",
+      "replacement": null,
+      "soldBy": "Partner"
+    },
+    {
+      "provider": "Anthropic",
+      "model": "claude-sonnet-4-5",
+      "version": "\u2014",
+      "lifecycle": "Preview",
+      "retirement": "2026-10-19",
+      "replacement": null,
+      "soldBy": "Partner"
+    },
+    {
+      "provider": "Anthropic",
+      "model": "claude-sonnet-4-6",
+      "version": "\u2014",
+      "lifecycle": "Preview",
+      "retirement": "2027-02-10",
+      "replacement": null,
+      "soldBy": "Partner"
+    },
+    {
+      "provider": "Cohere",
+      "model": "Cohere-command-r-08-2024",
+      "version": "1",
+      "lifecycle": "Retired",
+      "retirement": "2026-05-12",
+      "replacement": null,
+      "soldBy": "Partner"
+    },
+    {
+      "provider": "Cohere",
+      "model": "Cohere-command-r-plus-08-2024",
+      "version": "1",
+      "lifecycle": "Retired",
+      "retirement": "2026-05-12",
+      "replacement": null,
+      "soldBy": "Partner"
+    },
+    {
+      "provider": "Cohere",
+      "model": "Cohere-rerank-v3.5",
+      "version": "1",
+      "lifecycle": "Retired",
+      "retirement": "2026-05-14",
+      "replacement": "Cohere-rerank-v4.0-pro, Cohere-rerank-v4.0-fast",
+      "soldBy": "Partner"
+    },
+    {
+      "provider": "Cohere",
+      "model": "Cohere-embed-v3-english",
+      "version": "1",
+      "lifecycle": "GA",
+      "retirement": null,
+      "replacement": null,
+      "soldBy": "Partner"
+    },
+    {
+      "provider": "Cohere",
+      "model": "Cohere-embed-v3-multilingual",
+      "version": "1",
+      "lifecycle": "GA",
+      "retirement": null,
+      "replacement": null,
+      "soldBy": "Partner"
+    },
+    {
+      "provider": "Fireworks",
+      "model": "FW-DeepSeek-V3.1",
+      "version": "1",
+      "lifecycle": "GA",
+      "retirement": "2027-07-01",
+      "replacement": null,
+      "soldBy": "Partner"
+    },
+    {
+      "provider": "Fireworks",
+      "model": "FW-DeepSeek-V3.2",
+      "version": "1",
+      "lifecycle": "GA",
+      "retirement": "2027-07-01",
+      "replacement": null,
+      "soldBy": "Partner"
+    },
+    {
+      "provider": "Fireworks",
+      "model": "FW-GLM-4.7",
+      "version": "1",
+      "lifecycle": "GA",
+      "retirement": "2027-07-01",
+      "replacement": null,
+      "soldBy": "Partner"
+    },
+    {
+      "provider": "Fireworks",
+      "model": "FW-GLM-5",
+      "version": "1",
+      "lifecycle": "GA",
+      "retirement": "2027-07-01",
+      "replacement": null,
+      "soldBy": "Partner"
+    },
+    {
+      "provider": "Fireworks",
+      "model": "FW-GLM-5.1",
+      "version": "1",
+      "lifecycle": "GA",
+      "retirement": "2027-07-01",
+      "replacement": null,
+      "soldBy": "Partner"
+    },
+    {
+      "provider": "Fireworks",
+      "model": "FW-GPT-OSS-120B",
+      "version": "1",
+      "lifecycle": "GA",
+      "retirement": "2027-07-01",
+      "replacement": null,
+      "soldBy": "Partner"
+    },
+    {
+      "provider": "Fireworks",
+      "model": "FW-Kimi-K2-Instruct-0905",
+      "version": "1",
+      "lifecycle": "GA",
+      "retirement": "2027-07-01",
+      "replacement": null,
+      "soldBy": "Partner"
+    },
+    {
+      "provider": "Fireworks",
+      "model": "FW-Kimi-K2-Thinking",
+      "version": "1",
+      "lifecycle": "GA",
+      "retirement": "2027-07-01",
+      "replacement": null,
+      "soldBy": "Partner"
+    },
+    {
+      "provider": "Fireworks",
+      "model": "FW-Kimi-K2.5",
+      "version": "1",
+      "lifecycle": "GA",
+      "retirement": "2027-07-01",
+      "replacement": null,
+      "soldBy": "Partner"
+    },
+    {
+      "provider": "Fireworks",
+      "model": "FW-MiniMax-M2.5",
+      "version": "1",
+      "lifecycle": "GA",
+      "retirement": "2027-07-01",
+      "replacement": null,
+      "soldBy": "Partner"
+    },
+    {
+      "provider": "Fireworks",
+      "model": "FW-Qwen3-14B",
+      "version": "1",
+      "lifecycle": "GA",
+      "retirement": "2027-07-01",
+      "replacement": null,
+      "soldBy": "Partner"
+    },
+    {
+      "provider": "Fireworks",
+      "model": "FW-Qwen3.5-122B-A10B",
+      "version": "1",
+      "lifecycle": "GA",
+      "retirement": "2027-07-01",
+      "replacement": null,
+      "soldBy": "Partner"
+    },
+    {
+      "provider": "Fireworks",
+      "model": "FW-Qwen3.5-397B-A17B",
+      "version": "1",
+      "lifecycle": "GA",
+      "retirement": "2027-07-01",
+      "replacement": null,
+      "soldBy": "Partner"
+    },
+    {
+      "provider": "Meta",
+      "model": "Llama-3.2-11B-Vision-Instruct",
+      "version": "\u2014",
+      "lifecycle": "Retired",
+      "retirement": "2026-06-13",
+      "replacement": null,
+      "soldBy": "Partner"
+    },
+    {
+      "provider": "Meta",
+      "model": "Llama-3.2-90B-Vision-Instruct",
+      "version": "\u2014",
+      "lifecycle": "Retired",
+      "retirement": "2026-06-13",
+      "replacement": null,
+      "soldBy": "Partner"
+    },
+    {
+      "provider": "Meta",
+      "model": "Llama-4-Scout-17B-16E-Instruct",
+      "version": "\u2014",
+      "lifecycle": "GA",
+      "retirement": null,
+      "replacement": null,
+      "soldBy": "Partner"
+    },
+    {
+      "provider": "Meta",
+      "model": "Meta-Llama-3.1-405B-Instruct",
+      "version": "\u2014",
+      "lifecycle": "Retired",
+      "retirement": "2026-06-13",
+      "replacement": null,
+      "soldBy": "Partner"
+    },
+    {
+      "provider": "Meta",
+      "model": "Meta-Llama-3.1-8B",
+      "version": "\u2014",
+      "lifecycle": "Retired",
+      "retirement": "2026-06-13",
+      "replacement": null,
+      "soldBy": "Partner"
+    },
+    {
+      "provider": "Meta",
+      "model": "Meta-Llama-3.1-8B-Instruct",
+      "version": "\u2014",
+      "lifecycle": "Retired",
+      "retirement": "2026-06-13",
+      "replacement": null,
+      "soldBy": "Partner"
+    },
+    {
+      "provider": "Microsoft",
+      "model": "Phi-4",
+      "version": "\u2014",
+      "lifecycle": "GA",
+      "retirement": null,
+      "replacement": null,
+      "soldBy": "Partner"
+    },
+    {
+      "provider": "Microsoft",
+      "model": "Phi-4-mini-instruct",
+      "version": "\u2014",
+      "lifecycle": "GA",
+      "retirement": null,
+      "replacement": null,
+      "soldBy": "Partner"
+    },
+    {
+      "provider": "Microsoft",
+      "model": "Phi-4-mini-reasoning",
+      "version": "\u2014",
+      "lifecycle": "GA",
+      "retirement": null,
+      "replacement": null,
+      "soldBy": "Partner"
+    },
+    {
+      "provider": "Microsoft",
+      "model": "Phi-4-multimodal-instruct",
+      "version": "\u2014",
+      "lifecycle": "GA",
+      "retirement": null,
+      "replacement": null,
+      "soldBy": "Partner"
+    },
+    {
+      "provider": "Microsoft",
+      "model": "Phi-4-reasoning",
+      "version": "\u2014",
+      "lifecycle": "GA",
+      "retirement": null,
+      "replacement": null,
+      "soldBy": "Partner"
+    },
+    {
+      "provider": "Mistral AI",
+      "model": "Codestral-2501",
+      "version": "2",
+      "lifecycle": "GA",
+      "retirement": null,
+      "replacement": null,
+      "soldBy": "Partner"
+    },
+    {
+      "provider": "Mistral AI",
+      "model": "Ministral-3B",
+      "version": "1",
+      "lifecycle": "GA",
+      "retirement": null,
+      "replacement": null,
+      "soldBy": "Partner"
+    },
+    {
+      "provider": "Mistral AI",
+      "model": "Mistral-large",
+      "version": "1",
+      "lifecycle": "GA",
+      "retirement": null,
+      "replacement": null,
+      "soldBy": "Partner"
+    },
+    {
+      "provider": "Mistral AI",
+      "model": "mistral-medium-2505",
+      "version": "1",
+      "lifecycle": "GA",
+      "retirement": null,
+      "replacement": null,
+      "soldBy": "Partner"
+    },
+    {
+      "provider": "Mistral AI",
+      "model": "mistral-small-2503",
+      "version": "1",
+      "lifecycle": "GA",
+      "retirement": null,
+      "replacement": null,
+      "soldBy": "Partner"
+    },
+    {
+      "provider": "Nixtla",
+      "model": "TimeGEN-1",
+      "version": "1",
+      "lifecycle": "Deprecated",
+      "retirement": "2026-08-31",
+      "replacement": "TimeGPT-1, TimegGPT-2.1",
+      "soldBy": "Partner"
+    },
+    {
+      "provider": "NTT Data",
+      "model": "tsuzumi-7b",
+      "version": "2",
+      "lifecycle": "Legacy",
+      "retirement": "2026-08-31",
+      "replacement": "tsuzumi2",
+      "soldBy": "Partner"
+    },
+    {
+      "provider": "StabilityAI",
+      "model": "Stable-Diffusion-3.5-Large",
+      "version": "1",
+      "lifecycle": "Deprecated",
+      "retirement": "2026-07-31",
+      "replacement": null,
+      "soldBy": "Partner"
+    },
+    {
+      "provider": "StabilityAI",
+      "model": "Stable-Image-Core",
+      "version": "1",
+      "lifecycle": "Deprecated",
+      "retirement": "2026-07-31",
+      "replacement": null,
+      "soldBy": "Partner"
+    },
+    {
+      "provider": "StabilityAI",
+      "model": "Stable-Image-Ultra",
+      "version": "1",
+      "lifecycle": "Deprecated",
+      "retirement": "2026-07-31",
+      "replacement": null,
+      "soldBy": "Partner"
+    }
+  ]
+}

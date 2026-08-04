@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   makeStyles,
   tokens,
@@ -6,14 +6,23 @@ import {
   Badge,
   Button,
   Input,
+  Spinner,
+  MessageBar,
   Tab,
   TabList,
   Link,
 } from "@fluentui/react-components";
-import { CalendarRegular, OpenRegular, SearchRegular, ArrowDownloadRegular } from "@fluentui/react-icons";
+import {
+  CalendarRegular,
+  OpenRegular,
+  SearchRegular,
+  ArrowDownloadRegular,
+  ArrowClockwiseRegular,
+} from "@fluentui/react-icons";
 import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
+import { apiFetch } from "../config/api";
 
 type Lifecycle = "GA" | "Preview" | "Deprecated" | "Retired" | "Legacy";
 type FilterTab = "soon" | "atrisk" | "retired" | "all";
@@ -28,180 +37,15 @@ interface ModelEntry {
   soldBy: "Azure" | "Partner";
 }
 
-const MODELS: ModelEntry[] = [
-  // Azure OpenAI
-  { provider: "Azure OpenAI", model: "codex-mini", version: "2025-05-16", lifecycle: "GA", retirement: "2026-11-15", replacement: null, soldBy: "Azure" },
-  { provider: "Azure OpenAI", model: "gpt-4.1", version: "2025-04-14", lifecycle: "GA", retirement: "2026-10-14", replacement: null, soldBy: "Azure" },
-  { provider: "Azure OpenAI", model: "gpt-4.1-mini", version: "2025-04-14", lifecycle: "GA", retirement: "2026-10-14", replacement: null, soldBy: "Azure" },
-  { provider: "Azure OpenAI", model: "gpt-4.1-nano", version: "2025-04-14", lifecycle: "GA", retirement: "2026-10-14", replacement: null, soldBy: "Azure" },
-  { provider: "Azure OpenAI", model: "gpt-4o", version: "2024-05-13", lifecycle: "Deprecated", retirement: "2026-10-01", replacement: "gpt-5.1", soldBy: "Azure" },
-  { provider: "Azure OpenAI", model: "gpt-4o", version: "2024-08-06", lifecycle: "Deprecated", retirement: "2026-10-01", replacement: "gpt-5.1", soldBy: "Azure" },
-  { provider: "Azure OpenAI", model: "gpt-4o", version: "2024-11-20", lifecycle: "GA", retirement: "2026-10-01", replacement: "gpt-5.1", soldBy: "Azure" },
-  { provider: "Azure OpenAI", model: "gpt-4o-mini", version: "2024-07-18", lifecycle: "GA", retirement: "2026-10-01", replacement: "gpt-4.1-mini", soldBy: "Azure" },
-  { provider: "Azure OpenAI", model: "gpt-4o-mini-transcribe", version: "2025-03-20", lifecycle: "GA", retirement: "2026-10-15", replacement: null, soldBy: "Azure" },
-  { provider: "Azure OpenAI", model: "gpt-4o-mini-transcribe", version: "2025-12-15", lifecycle: "GA", retirement: "2026-12-15", replacement: null, soldBy: "Azure" },
-  { provider: "Azure OpenAI", model: "gpt-4o-mini-tts", version: "2025-03-20", lifecycle: "Preview", retirement: "2026-10-15", replacement: null, soldBy: "Azure" },
-  { provider: "Azure OpenAI", model: "gpt-4o-mini-tts", version: "2025-12-15", lifecycle: "GA", retirement: "2026-12-15", replacement: null, soldBy: "Azure" },
-  { provider: "Azure OpenAI", model: "gpt-4o-transcribe", version: "2025-03-20", lifecycle: "GA", retirement: "2026-10-15", replacement: null, soldBy: "Azure" },
-  { provider: "Azure OpenAI", model: "gpt-4o-transcribe-diarize", version: "2025-10-15", lifecycle: "GA", retirement: "2026-10-15", replacement: null, soldBy: "Azure" },
-  { provider: "Azure OpenAI", model: "gpt-5", version: "2025-08-07", lifecycle: "GA", retirement: "2027-02-06", replacement: null, soldBy: "Azure" },
-  { provider: "Azure OpenAI", model: "gpt-5-chat", version: "2025-08-07", lifecycle: "Preview", retirement: "2026-06-29", replacement: "gpt-chat-latest", soldBy: "Azure" },
-  { provider: "Azure OpenAI", model: "gpt-5-chat", version: "2025-10-03", lifecycle: "Preview", retirement: "2026-06-29", replacement: "gpt-chat-latest", soldBy: "Azure" },
-  { provider: "Azure OpenAI", model: "gpt-5-codex", version: "2025-09-15", lifecycle: "GA", retirement: "2027-03-17", replacement: null, soldBy: "Azure" },
-  { provider: "Azure OpenAI", model: "gpt-5-mini", version: "2025-08-07", lifecycle: "GA", retirement: "2027-02-06", replacement: null, soldBy: "Azure" },
-  { provider: "Azure OpenAI", model: "gpt-5-nano", version: "2025-08-07", lifecycle: "GA", retirement: "2027-02-06", replacement: null, soldBy: "Azure" },
-  { provider: "Azure OpenAI", model: "gpt-5-pro", version: "2025-10-06", lifecycle: "GA", retirement: "2027-04-07", replacement: null, soldBy: "Azure" },
-  { provider: "Azure OpenAI", model: "gpt-5.1", version: "2025-11-13", lifecycle: "GA", retirement: "2027-05-15", replacement: null, soldBy: "Azure" },
-  { provider: "Azure OpenAI", model: "gpt-5.1-chat", version: "2025-11-13", lifecycle: "Preview", retirement: "2026-06-29", replacement: "gpt-chat-latest", soldBy: "Azure" },
-  { provider: "Azure OpenAI", model: "gpt-5.1-codex", version: "2025-11-13", lifecycle: "GA", retirement: "2027-05-15", replacement: null, soldBy: "Azure" },
-  { provider: "Azure OpenAI", model: "gpt-5.1-codex-max", version: "2025-12-04", lifecycle: "GA", retirement: "2026-12-05", replacement: null, soldBy: "Azure" },
-  { provider: "Azure OpenAI", model: "gpt-5.1-codex-mini", version: "2025-11-13", lifecycle: "GA", retirement: "2027-05-15", replacement: null, soldBy: "Azure" },
-  { provider: "Azure OpenAI", model: "gpt-5.2", version: "2025-12-11", lifecycle: "GA", retirement: "2026-12-12", replacement: null, soldBy: "Azure" },
-  { provider: "Azure OpenAI", model: "gpt-5.2-chat", version: "2025-12-11", lifecycle: "Preview", retirement: "2026-06-29", replacement: "gpt-chat-latest", soldBy: "Azure" },
-  { provider: "Azure OpenAI", model: "gpt-5.2-chat", version: "2026-02-10", lifecycle: "Preview", retirement: "2026-06-29", replacement: "gpt-chat-latest", soldBy: "Azure" },
-  { provider: "Azure OpenAI", model: "gpt-5.2-codex", version: "2026-01-14", lifecycle: "GA", retirement: "2027-01-14", replacement: null, soldBy: "Azure" },
-  { provider: "Azure OpenAI", model: "gpt-5.3-chat", version: "2026-03-03", lifecycle: "Preview", retirement: "2026-06-29", replacement: "gpt-chat-latest", soldBy: "Azure" },
-  { provider: "Azure OpenAI", model: "gpt-5.3-codex", version: "2026-02-24", lifecycle: "GA", retirement: "2027-02-25", replacement: null, soldBy: "Azure" },
-  { provider: "Azure OpenAI", model: "gpt-5.4", version: "2026-03-05", lifecycle: "GA", retirement: "2027-03-05", replacement: null, soldBy: "Azure" },
-  { provider: "Azure OpenAI", model: "gpt-5.4-mini", version: "2026-03-17", lifecycle: "GA", retirement: "2027-03-18", replacement: null, soldBy: "Azure" },
-  { provider: "Azure OpenAI", model: "gpt-5.4-nano", version: "2026-03-17", lifecycle: "GA", retirement: "2027-03-18", replacement: null, soldBy: "Azure" },
-  { provider: "Azure OpenAI", model: "gpt-5.4-pro", version: "2026-03-05", lifecycle: "GA", retirement: "2027-03-06", replacement: null, soldBy: "Azure" },
-  { provider: "Azure OpenAI", model: "gpt-5.5", version: "2026-04-24", lifecycle: "GA", retirement: "2027-04-23", replacement: null, soldBy: "Azure" },
-  { provider: "Azure OpenAI", model: "gpt-audio", version: "2025-08-28", lifecycle: "GA", retirement: "2027-02-28", replacement: null, soldBy: "Azure" },
-  { provider: "Azure OpenAI", model: "gpt-audio-1.5", version: "2026-02-23", lifecycle: "GA", retirement: "2027-02-23", replacement: null, soldBy: "Azure" },
-  { provider: "Azure OpenAI", model: "gpt-audio-mini", version: "2025-10-06", lifecycle: "GA", retirement: "2026-07-23", replacement: null, soldBy: "Azure" },
-  { provider: "Azure OpenAI", model: "gpt-audio-mini", version: "2025-12-15", lifecycle: "GA", retirement: "2026-12-15", replacement: null, soldBy: "Azure" },
-  { provider: "Azure OpenAI", model: "gpt-chat-latest", version: "2026-05-05", lifecycle: "Preview", retirement: "2026-11-05", replacement: null, soldBy: "Azure" },
-  { provider: "Azure OpenAI", model: "gpt-image-1", version: "2025-04-15", lifecycle: "Preview", retirement: "2026-10-23", replacement: null, soldBy: "Azure" },
-  { provider: "Azure OpenAI", model: "gpt-image-1-mini", version: "2025-10-06", lifecycle: "GA", retirement: "2027-04-07", replacement: null, soldBy: "Azure" },
-  { provider: "Azure OpenAI", model: "gpt-image-1.5", version: "2025-12-16", lifecycle: "GA", retirement: "2026-12-16", replacement: null, soldBy: "Azure" },
-  { provider: "Azure OpenAI", model: "gpt-image-2", version: "2026-04-21", lifecycle: "GA", retirement: "2027-04-21", replacement: null, soldBy: "Azure" },
-  { provider: "Azure OpenAI", model: "gpt-realtime", version: "2025-08-28", lifecycle: "GA", retirement: "2027-02-28", replacement: null, soldBy: "Azure" },
-  { provider: "Azure OpenAI", model: "gpt-realtime-1.5", version: "2026-02-23", lifecycle: "GA", retirement: "2027-02-23", replacement: null, soldBy: "Azure" },
-  { provider: "Azure OpenAI", model: "gpt-realtime-2", version: "2026-05-06", lifecycle: "GA", retirement: "2027-05-06", replacement: null, soldBy: "Azure" },
-  { provider: "Azure OpenAI", model: "gpt-realtime-mini", version: "2025-10-06", lifecycle: "GA", retirement: "2026-07-23", replacement: null, soldBy: "Azure" },
-  { provider: "Azure OpenAI", model: "gpt-realtime-mini", version: "2025-12-15", lifecycle: "GA", retirement: "2026-12-15", replacement: null, soldBy: "Azure" },
-  { provider: "Azure OpenAI", model: "o1", version: "2024-12-17", lifecycle: "Deprecated", retirement: "2026-07-15", replacement: null, soldBy: "Azure" },
-  { provider: "Azure OpenAI", model: "o1-pro", version: "2025-03-19", lifecycle: "GA", retirement: "2026-09-18", replacement: null, soldBy: "Azure" },
-  { provider: "Azure OpenAI", model: "o3", version: "2025-04-16", lifecycle: "GA", retirement: "2026-10-16", replacement: null, soldBy: "Azure" },
-  { provider: "Azure OpenAI", model: "o3-deep-research", version: "2025-06-26", lifecycle: "GA", retirement: "2026-12-26", replacement: null, soldBy: "Azure" },
-  { provider: "Azure OpenAI", model: "o3-mini", version: "2025-01-31", lifecycle: "Deprecated", retirement: "2026-08-02", replacement: "o4-mini", soldBy: "Azure" },
-  { provider: "Azure OpenAI", model: "o3-pro", version: "2025-06-10", lifecycle: "GA", retirement: "2026-12-10", replacement: null, soldBy: "Azure" },
-  { provider: "Azure OpenAI", model: "o4-mini", version: "2025-04-16", lifecycle: "GA", retirement: "2026-10-16", replacement: null, soldBy: "Azure" },
-  { provider: "Azure OpenAI", model: "sora-2", version: "2025-10-06", lifecycle: "Preview", retirement: "2026-07-15", replacement: "sora-2 (2025-12-08)", soldBy: "Azure" },
-  { provider: "Azure OpenAI", model: "sora-2", version: "2025-12-08", lifecycle: "Preview", retirement: "2026-09-15", replacement: null, soldBy: "Azure" },
-  { provider: "Azure OpenAI", model: "text-embedding-3-large", version: "1", lifecycle: "GA", retirement: "2027-04-15", replacement: null, soldBy: "Azure" },
-  { provider: "Azure OpenAI", model: "text-embedding-3-small", version: "1", lifecycle: "GA", retirement: "2027-04-15", replacement: null, soldBy: "Azure" },
-  { provider: "Azure OpenAI", model: "text-embedding-ada-002", version: "1", lifecycle: "GA", retirement: "2027-04-15", replacement: null, soldBy: "Azure" },
-  { provider: "Azure OpenAI", model: "text-embedding-ada-002", version: "2", lifecycle: "GA", retirement: "2027-04-15", replacement: null, soldBy: "Azure" },
-  { provider: "Azure OpenAI", model: "tts", version: "001", lifecycle: "Preview", retirement: "2026-12-15", replacement: null, soldBy: "Azure" },
-  { provider: "Azure OpenAI", model: "tts-hd", version: "001", lifecycle: "GA", retirement: "2026-12-15", replacement: null, soldBy: "Azure" },
-  { provider: "Azure OpenAI", model: "whisper", version: "001", lifecycle: "GA", retirement: "2026-12-15", replacement: null, soldBy: "Azure" },
-  // Black Forest Labs
-  { provider: "Black Forest Labs", model: "FLUX-1.1-pro", version: "1", lifecycle: "GA", retirement: null, replacement: null, soldBy: "Azure" },
-  { provider: "Black Forest Labs", model: "FLUX.1-Kontext-pro", version: "1", lifecycle: "GA", retirement: null, replacement: null, soldBy: "Azure" },
-  { provider: "Black Forest Labs", model: "FLUX.2-flex", version: "1", lifecycle: "GA", retirement: null, replacement: null, soldBy: "Azure" },
-  { provider: "Black Forest Labs", model: "FLUX.2-pro", version: "1", lifecycle: "GA", retirement: null, replacement: null, soldBy: "Azure" },
-  // Cohere (Azure)
-  { provider: "Cohere", model: "Cohere-rerank-v4.0-fast", version: "1", lifecycle: "GA", retirement: null, replacement: null, soldBy: "Azure" },
-  { provider: "Cohere", model: "Cohere-rerank-v4.0-pro", version: "1", lifecycle: "GA", retirement: null, replacement: null, soldBy: "Azure" },
-  { provider: "Cohere", model: "cohere-command-a", version: "1", lifecycle: "GA", retirement: null, replacement: null, soldBy: "Azure" },
-  { provider: "Cohere", model: "embed-v-4-0", version: "1", lifecycle: "GA", retirement: null, replacement: null, soldBy: "Azure" },
-  // DeepSeek (Azure)
-  { provider: "DeepSeek", model: "DeepSeek-R1", version: "1", lifecycle: "Legacy", retirement: "2026-08-13", replacement: null, soldBy: "Azure" },
-  { provider: "DeepSeek", model: "DeepSeek-R1-0528", version: "1", lifecycle: "Legacy", retirement: "2026-07-13", replacement: null, soldBy: "Azure" },
-  { provider: "DeepSeek", model: "DeepSeek-V3-0324", version: "1", lifecycle: "Legacy", retirement: "2026-07-13", replacement: "DeepSeek-V4-Flash, DeepSeek-V4-Pro", soldBy: "Azure" },
-  { provider: "DeepSeek", model: "DeepSeek-V3.1", version: "1", lifecycle: "Legacy", retirement: "2026-07-13", replacement: "DeepSeek-V4-Flash, DeepSeek-V4-Pro", soldBy: "Azure" },
-  { provider: "DeepSeek", model: "DeepSeek-V3.2", version: "1", lifecycle: "GA", retirement: null, replacement: null, soldBy: "Azure" },
-  { provider: "DeepSeek", model: "DeepSeek-V3.2-Speciale", version: "1", lifecycle: "GA", retirement: null, replacement: null, soldBy: "Azure" },
-  // Meta (Azure)
-  { provider: "Meta", model: "Llama-3.3-70B-Instruct", version: "—", lifecycle: "GA", retirement: null, replacement: null, soldBy: "Azure" },
-  { provider: "Meta", model: "Llama-4-Maverick-17B-128E-Instruct-FP8", version: "—", lifecycle: "GA", retirement: null, replacement: null, soldBy: "Azure" },
-  // Microsoft (Azure)
-  { provider: "Microsoft", model: "model-router", version: "2025-05-19", lifecycle: "Preview", retirement: "2026-07-31", replacement: null, soldBy: "Azure" },
-  { provider: "Microsoft", model: "model-router", version: "2025-08-07", lifecycle: "Preview", retirement: "2026-07-31", replacement: null, soldBy: "Azure" },
-  { provider: "Microsoft", model: "model-router", version: "2025-11-18", lifecycle: "GA", retirement: "2027-05-20", replacement: null, soldBy: "Azure" },
-  // Mistral (Azure)
-  { provider: "Mistral AI", model: "Mistral-Large-3", version: "1", lifecycle: "GA", retirement: null, replacement: null, soldBy: "Azure" },
-  { provider: "Mistral AI", model: "mistral-document-ai-2505", version: "1", lifecycle: "GA", retirement: "2026-05-31", replacement: "mistral-document-ai-2512", soldBy: "Azure" },
-  { provider: "Mistral AI", model: "mistral-document-ai-2512", version: "1", lifecycle: "GA", retirement: null, replacement: null, soldBy: "Azure" },
-  // MoonshotAI (Azure)
-  { provider: "MoonshotAI", model: "Kimi-K2.5", version: "1", lifecycle: "Preview", retirement: "2027-01-26", replacement: null, soldBy: "Azure" },
-  { provider: "MoonshotAI", model: "Kimi-K2.6", version: "2026-04-20", lifecycle: "Preview", retirement: "2027-04-16", replacement: null, soldBy: "Azure" },
-  // OpenAI-OSS (Azure)
-  { provider: "OpenAI-OSS", model: "gpt-oss-120b", version: "1", lifecycle: "GA", retirement: null, replacement: null, soldBy: "Azure" },
-  // xAI (Azure)
-  { provider: "xAI", model: "grok-3", version: "1", lifecycle: "Retired", retirement: "2026-05-01", replacement: "grok-4", soldBy: "Azure" },
-  { provider: "xAI", model: "grok-3-mini", version: "1", lifecycle: "Retired", retirement: "2026-05-01", replacement: "grok-4-1-fast-reasoning", soldBy: "Azure" },
-  { provider: "xAI", model: "grok-4", version: "1", lifecycle: "GA", retirement: null, replacement: null, soldBy: "Azure" },
-  { provider: "xAI", model: "grok-4-1-fast-non-reasoning", version: "1", lifecycle: "GA", retirement: null, replacement: null, soldBy: "Azure" },
-  { provider: "xAI", model: "grok-4-1-fast-reasoning", version: "1", lifecycle: "GA", retirement: null, replacement: null, soldBy: "Azure" },
-  { provider: "xAI", model: "grok-4-20-non-reasoning", version: "1", lifecycle: "Preview", retirement: "2027-04-06", replacement: null, soldBy: "Azure" },
-  { provider: "xAI", model: "grok-4-20-reasoning", version: "1", lifecycle: "Preview", retirement: "2027-04-06", replacement: null, soldBy: "Azure" },
-  { provider: "xAI", model: "grok-4-fast-non-reasoning", version: "1", lifecycle: "Retired", retirement: "2026-05-01", replacement: "grok-4-1-fast-non-reasoning", soldBy: "Azure" },
-  { provider: "xAI", model: "grok-4-fast-reasoning", version: "1", lifecycle: "Retired", retirement: "2026-05-01", replacement: "grok-4-1-fast-reasoning", soldBy: "Azure" },
-  { provider: "xAI", model: "grok-code-fast-1", version: "1", lifecycle: "GA", retirement: null, replacement: null, soldBy: "Azure" },
-  // === Partner / Marketplace ===
-  // Anthropic
-  { provider: "Anthropic", model: "claude-haiku-4-5", version: "—", lifecycle: "Preview", retirement: "2026-10-19", replacement: null, soldBy: "Partner" },
-  { provider: "Anthropic", model: "claude-mythos-preview", version: "—", lifecycle: "Preview", retirement: "2027-04-02", replacement: null, soldBy: "Partner" },
-  { provider: "Anthropic", model: "claude-opus-4-1", version: "—", lifecycle: "Preview", retirement: "2026-10-19", replacement: null, soldBy: "Partner" },
-  { provider: "Anthropic", model: "claude-opus-4-5", version: "—", lifecycle: "Preview", retirement: "2026-10-19", replacement: null, soldBy: "Partner" },
-  { provider: "Anthropic", model: "claude-opus-4-6", version: "—", lifecycle: "Preview", retirement: "2027-02-02", replacement: null, soldBy: "Partner" },
-  { provider: "Anthropic", model: "claude-opus-4-7", version: "—", lifecycle: "Preview", retirement: "2027-04-06", replacement: null, soldBy: "Partner" },
-  { provider: "Anthropic", model: "claude-sonnet-4-5", version: "—", lifecycle: "Preview", retirement: "2026-10-19", replacement: null, soldBy: "Partner" },
-  { provider: "Anthropic", model: "claude-sonnet-4-6", version: "—", lifecycle: "Preview", retirement: "2027-02-10", replacement: null, soldBy: "Partner" },
-  // Cohere (Partner)
-  { provider: "Cohere", model: "Cohere-command-r-08-2024", version: "1", lifecycle: "Retired", retirement: "2026-05-12", replacement: null, soldBy: "Partner" },
-  { provider: "Cohere", model: "Cohere-command-r-plus-08-2024", version: "1", lifecycle: "Retired", retirement: "2026-05-12", replacement: null, soldBy: "Partner" },
-  { provider: "Cohere", model: "Cohere-rerank-v3.5", version: "1", lifecycle: "Deprecated", retirement: "2026-05-14", replacement: "Cohere-rerank-v4.0-pro / v4.0-fast", soldBy: "Partner" },
-  { provider: "Cohere", model: "Cohere-embed-v3-english", version: "1", lifecycle: "GA", retirement: null, replacement: null, soldBy: "Partner" },
-  { provider: "Cohere", model: "Cohere-embed-v3-multilingual", version: "1", lifecycle: "GA", retirement: null, replacement: null, soldBy: "Partner" },
-  // DeepSeek (Partner)
-  { provider: "DeepSeek", model: "DeepSeek-V4-Flash", version: "1", lifecycle: "GA", retirement: null, replacement: null, soldBy: "Partner" },
-  // Fireworks
-  { provider: "Fireworks", model: "FW-DeepSeek-V3.1", version: "1", lifecycle: "Preview", retirement: "2026-07-01", replacement: null, soldBy: "Partner" },
-  { provider: "Fireworks", model: "FW-DeepSeek-V3.2", version: "1", lifecycle: "Preview", retirement: "2026-07-01", replacement: null, soldBy: "Partner" },
-  { provider: "Fireworks", model: "FW-GLM-4.7", version: "1", lifecycle: "Preview", retirement: "2026-07-01", replacement: null, soldBy: "Partner" },
-  { provider: "Fireworks", model: "FW-GLM-5", version: "1", lifecycle: "Preview", retirement: "2026-07-01", replacement: null, soldBy: "Partner" },
-  { provider: "Fireworks", model: "FW-GLM-5.1", version: "1", lifecycle: "Preview", retirement: "2026-08-01", replacement: null, soldBy: "Partner" },
-  { provider: "Fireworks", model: "FW-GPT-OSS-120B", version: "1", lifecycle: "Preview", retirement: "2026-07-01", replacement: null, soldBy: "Partner" },
-  { provider: "Fireworks", model: "FW-Kimi-K2-Instruct-0905", version: "1", lifecycle: "Preview", retirement: "2026-07-01", replacement: null, soldBy: "Partner" },
-  { provider: "Fireworks", model: "FW-Kimi-K2-Thinking", version: "1", lifecycle: "Preview", retirement: "2026-07-01", replacement: null, soldBy: "Partner" },
-  { provider: "Fireworks", model: "FW-Kimi-K2.5", version: "1", lifecycle: "Preview", retirement: "2026-07-01", replacement: null, soldBy: "Partner" },
-  { provider: "Fireworks", model: "FW-MiniMax-M2.5", version: "1", lifecycle: "Preview", retirement: "2026-07-01", replacement: null, soldBy: "Partner" },
-  { provider: "Fireworks", model: "FW-Qwen3-14B", version: "1", lifecycle: "Preview", retirement: "2026-07-01", replacement: null, soldBy: "Partner" },
-  { provider: "Fireworks", model: "FW-Qwen3.5-122B-A10B", version: "1", lifecycle: "Preview", retirement: "2026-08-01", replacement: null, soldBy: "Partner" },
-  { provider: "Fireworks", model: "FW-Qwen3.5-397B-A17B", version: "1", lifecycle: "Preview", retirement: "2026-08-01", replacement: null, soldBy: "Partner" },
-  // Meta (Partner)
-  { provider: "Meta", model: "Llama-3.2-11B-Vision-Instruct", version: "—", lifecycle: "Deprecated", retirement: "2026-06-13", replacement: null, soldBy: "Partner" },
-  { provider: "Meta", model: "Llama-3.2-90B-Vision-Instruct", version: "—", lifecycle: "Deprecated", retirement: "2026-06-13", replacement: null, soldBy: "Partner" },
-  { provider: "Meta", model: "Llama-4-Scout-17B-16E-Instruct", version: "—", lifecycle: "GA", retirement: null, replacement: null, soldBy: "Partner" },
-  { provider: "Meta", model: "Meta-Llama-3.1-405B-Instruct", version: "—", lifecycle: "Deprecated", retirement: "2026-06-13", replacement: null, soldBy: "Partner" },
-  { provider: "Meta", model: "Meta-Llama-3.1-8B", version: "—", lifecycle: "Deprecated", retirement: "2026-06-13", replacement: null, soldBy: "Partner" },
-  { provider: "Meta", model: "Meta-Llama-3.1-8B-Instruct", version: "—", lifecycle: "Deprecated", retirement: "2026-06-13", replacement: null, soldBy: "Partner" },
-  // Microsoft (Partner)
-  { provider: "Microsoft", model: "Phi-4", version: "—", lifecycle: "GA", retirement: null, replacement: null, soldBy: "Partner" },
-  { provider: "Microsoft", model: "Phi-4-mini-instruct", version: "—", lifecycle: "GA", retirement: null, replacement: null, soldBy: "Partner" },
-  { provider: "Microsoft", model: "Phi-4-mini-reasoning", version: "—", lifecycle: "GA", retirement: null, replacement: null, soldBy: "Partner" },
-  { provider: "Microsoft", model: "Phi-4-multimodal-instruct", version: "—", lifecycle: "GA", retirement: null, replacement: null, soldBy: "Partner" },
-  { provider: "Microsoft", model: "Phi-4-reasoning", version: "—", lifecycle: "GA", retirement: null, replacement: null, soldBy: "Partner" },
-  // Mistral (Partner)
-  { provider: "Mistral AI", model: "Codestral-2501", version: "2", lifecycle: "GA", retirement: null, replacement: null, soldBy: "Partner" },
-  { provider: "Mistral AI", model: "Ministral-3B", version: "1", lifecycle: "GA", retirement: null, replacement: null, soldBy: "Partner" },
-  { provider: "Mistral AI", model: "Mistral-large", version: "1", lifecycle: "GA", retirement: null, replacement: null, soldBy: "Partner" },
-  { provider: "Mistral AI", model: "mistral-medium-2505", version: "1", lifecycle: "GA", retirement: null, replacement: null, soldBy: "Partner" },
-  { provider: "Mistral AI", model: "mistral-small-2503", version: "1", lifecycle: "GA", retirement: null, replacement: null, soldBy: "Partner" },
-  // NTT Data
-  { provider: "NTT Data", model: "tsuzumi-7b", version: "2", lifecycle: "Legacy", retirement: "2026-08-31", replacement: "tsuzumi2", soldBy: "Partner" },
-  // StabilityAI
-  { provider: "StabilityAI", model: "Stable-Diffusion-3.5-Large", version: "1", lifecycle: "Deprecated", retirement: "2026-07-31", replacement: null, soldBy: "Partner" },
-  { provider: "StabilityAI", model: "Stable-Image-Core", version: "1", lifecycle: "Deprecated", retirement: "2026-07-31", replacement: null, soldBy: "Partner" },
-  { provider: "StabilityAI", model: "Stable-Image-Ultra", version: "1", lifecycle: "Deprecated", retirement: "2026-07-31", replacement: null, soldBy: "Partner" },
-];
+interface LifecycleResponse {
+  models: ModelEntry[];
+  count: number;
+  last_refreshed: string | null;
+  source_url: string;
+  stale: boolean;
+}
 
 const LEARN_URL = "https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/model-retirement-schedule";
-const PROVIDERS = [...new Set(MODELS.map((m) => m.provider))].sort();
 const SOON_DAYS = 90;
 
 function daysUntil(dateStr: string): number {
@@ -444,12 +288,43 @@ export default function ModelLifecyclePanel() {
   const [filter, setFilter] = useState<FilterTab>("soon");
   const [search, setSearch] = useState("");
   const [providerFilter, setProviderFilter] = useState<string | null>(null);
+  const [models, setModels] = useState<ModelEntry[]>([]);
+  const [lastRefreshed, setLastRefreshed] = useState<string | null>(null);
+  const [stale, setStale] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // The schedule is refreshed server-side at most once a day from Microsoft
+  // Learn, so every user sees the same current data without a client cache.
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const r = await apiFetch("/api/model-migration/lifecycle");
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const data: LifecycleResponse = await r.json();
+      setModels(data.models ?? []);
+      setLastRefreshed(data.last_refreshed ?? null);
+      setStale(Boolean(data.stale));
+    } catch {
+      setError("Could not load the retirement schedule. Try again in a moment.");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { void load(); }, [load]);
+
+  const providers = useMemo(
+    () => [...new Set(models.map((m) => m.provider))].sort(),
+    [models],
+  );
 
   const filtered = useMemo(() => {
     const now = Date.now();
     const q = search.toLowerCase();
 
-    return MODELS.filter((m) => {
+    return models.filter((m) => {
       const retMs = m.retirement ? new Date(m.retirement).getTime() : null;
       const days = retMs !== null ? Math.ceil((retMs - now) / (24 * 60 * 60 * 1000)) : null;
 
@@ -477,7 +352,7 @@ export default function ModelLifecyclePanel() {
       if (!b.retirement) return -1;
       return new Date(a.retirement).getTime() - new Date(b.retirement).getTime();
     });
-  }, [filter, search, providerFilter]);
+  }, [models, filter, search, providerFilter]);
 
   function retirementCell(retirement: string | null) {
     if (!retirement) return <span className={styles.retireNormal}>—</span>;
@@ -488,13 +363,13 @@ export default function ModelLifecyclePanel() {
     return <span className={styles.retireNormal}>{retirement}</span>;
   }
 
-  const soonCount = useMemo(() => MODELS.filter(m => {
+  const soonCount = useMemo(() => models.filter(m => {
     if (!m.retirement) return false;
     return daysUntil(m.retirement) <= SOON_DAYS;
-  }).length, []);
+  }).length, [models]);
 
-  const atRiskCount = MODELS.filter(m => m.lifecycle === "Deprecated" || m.lifecycle === "Legacy").length;
-  const retiredCount = MODELS.filter(m => m.lifecycle === "Retired").length;
+  const atRiskCount = models.filter(m => m.lifecycle === "Deprecated" || m.lifecycle === "Legacy").length;
+  const retiredCount = models.filter(m => m.lifecycle === "Retired").length;
 
   return (
     <div className={styles.root}>
@@ -503,10 +378,22 @@ export default function ModelLifecyclePanel() {
           <CalendarRegular className={styles.headerIcon} />
           <div>
             <Text className={styles.title}>AI Model Lifecycle</Text>
-            <Text className={styles.subtitle}>Azure Foundry model retirement schedule · {MODELS.length} models tracked</Text>
+            <Text className={styles.subtitle}>
+              Azure Foundry model retirement schedule · {models.length} models tracked
+              {lastRefreshed && ` · updated ${new Date(lastRefreshed).toLocaleDateString()}`}
+            </Text>
           </div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+          <Button
+            appearance="subtle"
+            size="small"
+            icon={<ArrowClockwiseRegular />}
+            disabled={loading}
+            onClick={() => void load()}
+          >
+            Refresh
+          </Button>
           <Button
             appearance="subtle"
             size="small"
@@ -539,7 +426,7 @@ export default function ModelLifecyclePanel() {
             <Tab value="soon">Retiring ≤90 days <Badge size="small" shape="rounded" color="warning" style={{ marginLeft: "4px" }}>{soonCount}</Badge></Tab>
             <Tab value="atrisk">Deprecated / Legacy <Badge size="small" shape="rounded" color="subtle" style={{ marginLeft: "4px" }}>{atRiskCount}</Badge></Tab>
             <Tab value="retired">Retired <Badge size="small" shape="rounded" color="danger" style={{ marginLeft: "4px" }}>{retiredCount}</Badge></Tab>
-            <Tab value="all">All ({MODELS.length})</Tab>
+            <Tab value="all">All ({models.length})</Tab>
           </TabList>
           <Input
             className={styles.searchBox}
@@ -563,7 +450,7 @@ export default function ModelLifecyclePanel() {
           >
             All
           </Badge>
-          {PROVIDERS.map((p) => (
+          {providers.map((p) => (
             <Badge
               key={p}
               size="small"
@@ -580,7 +467,19 @@ export default function ModelLifecyclePanel() {
       </div>
 
       <div className={styles.tableWrap}>
-        {filtered.length === 0 ? (
+        {error && (
+          <MessageBar intent="error" style={{ marginTop: "12px" }}>{error}</MessageBar>
+        )}
+        {!error && stale && models.length > 0 && (
+          <MessageBar intent="warning" style={{ marginTop: "12px" }}>
+            Showing the last known schedule — the live Microsoft Learn source could not be reached.
+          </MessageBar>
+        )}
+        {loading && models.length === 0 ? (
+          <div className={styles.noResults}>
+            <Spinner size="small" label="Loading retirement schedule…" />
+          </div>
+        ) : filtered.length === 0 ? (
           <div className={styles.noResults}>
             <Text>No models match the current filter.</Text>
           </div>
@@ -604,7 +503,7 @@ export default function ModelLifecyclePanel() {
                   <td className={styles.td}><span className={styles.modelName}>{m.model}</span></td>
                   <td className={styles.td}><span className={styles.version}>{m.version}</span></td>
                   <td className={styles.td}>
-                    <Badge size="small" shape="rounded" color={lifecycleBadgeColor[m.lifecycle]}>
+                    <Badge size="small" shape="rounded" color={lifecycleBadgeColor[m.lifecycle] ?? "subtle"}>
                       {m.lifecycle}
                     </Badge>
                   </td>
