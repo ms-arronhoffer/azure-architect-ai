@@ -296,21 +296,31 @@ export default function ModelLifecyclePanel() {
 
   // The schedule is refreshed server-side at most once a day from Microsoft
   // Learn, so every user sees the same current data without a client cache.
-  const load = useCallback(async () => {
+  // `force` asks the backend to pull from Learn now instead of serving cache.
+  const load = useCallback(async (force = false) => {
     setLoading(true);
     setError(null);
-    try {
-      const r = await apiFetch("/api/model-migration/lifecycle");
-      if (!r.ok) throw new Error(`HTTP ${r.status}`);
-      const data: LifecycleResponse = await r.json();
-      setModels(data.models ?? []);
-      setLastRefreshed(data.last_refreshed ?? null);
-      setStale(Boolean(data.stale));
-    } catch {
-      setError("Could not load the retirement schedule. Try again in a moment.");
-    } finally {
-      setLoading(false);
+    // A backend rollout can briefly 404 this route while the new revision
+    // activates, so retry once before surfacing an error.
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const r = await apiFetch(`/api/model-migration/lifecycle${force ? "?refresh=true" : ""}`);
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        const data: LifecycleResponse = await r.json();
+        setModels(data.models ?? []);
+        setLastRefreshed(data.last_refreshed ?? null);
+        setStale(Boolean(data.stale));
+        setLoading(false);
+        return;
+      } catch {
+        if (attempt === 0) {
+          await new Promise((resolve) => setTimeout(resolve, 1500));
+          continue;
+        }
+        setError("Could not load the retirement schedule. Try again in a moment.");
+      }
     }
+    setLoading(false);
   }, []);
 
   useEffect(() => { void load(); }, [load]);
@@ -390,7 +400,7 @@ export default function ModelLifecyclePanel() {
             size="small"
             icon={<ArrowClockwiseRegular />}
             disabled={loading}
-            onClick={() => void load()}
+            onClick={() => void load(true)}
           >
             Refresh
           </Button>

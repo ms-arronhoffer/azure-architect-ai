@@ -9,8 +9,11 @@ Confirms that:
 """
 from __future__ import annotations
 
+import datetime as dt
+
 import pytest
 import pytest_asyncio
+from apscheduler.triggers.date import DateTrigger
 
 from config import settings
 from services import scheduler as scheduler_module
@@ -100,6 +103,25 @@ async def test_start_scheduler_registers_model_lifecycle_daily(monkeypatch):
     fields = {f.name: str(f) for f in lifecycle.trigger.fields}
     assert fields["hour"] == "3"
     assert fields["minute"] == "41"
+
+
+@pytest.mark.asyncio
+async def test_start_scheduler_primes_model_lifecycle_once_at_startup(monkeypatch):
+    """The daily cron's first run is 03:41 UTC, so a one-shot job primes it."""
+    monkeypatch.setattr(settings, "ingest_enabled", True)
+    scheduler_module.start_scheduler()
+    assert scheduler_module._scheduler is not None
+
+    jobs = {j.id: j for j in scheduler_module._scheduler.get_jobs()}
+    assert {"model_lifecycle_refresh_startup"}.issubset(jobs.keys())
+
+    startup = jobs["model_lifecycle_refresh_startup"]
+    assert startup.func is scheduler_module.refresh_lifecycle
+    assert startup.max_instances == 1
+    # Runs shortly after start-up rather than on a recurring schedule.
+    assert isinstance(startup.trigger, DateTrigger)
+    delay = (startup.trigger.run_date.replace(tzinfo=None) - dt.datetime.now()).total_seconds()
+    assert 0 < delay <= 60
 
 
 @pytest.mark.asyncio

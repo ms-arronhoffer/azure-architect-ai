@@ -61,9 +61,13 @@ SCHEDULE_SOURCES = [
 _CACHE_KEY = "default"
 _MAX_AGE_SECONDS = 24 * 60 * 60  # refresh at most once a day
 _MEMORY_TTL_SECONDS = 15 * 60
+# Forced refreshes (Refresh button, scheduler start-up job) bypass the caches,
+# so keep a floor between live fetches to protect the docs source.
+_FORCE_REFRESH_INTERVAL_SECONDS = 60
 
 _memory: dict[str, Any] | None = None
 _memory_time: float = 0.0
+_last_live_fetch: float = 0.0
 
 _SOLD_BY_AZURE_HEADING = "foundry models sold by azure"
 _SOLD_BY_PARTNER_HEADING = "foundry models from partners and community"
@@ -282,8 +286,13 @@ def _is_fresh(fetched_at: dt.datetime | None) -> bool:
 
 async def fetch_lifecycle(force_refresh: bool = False) -> dict[str, Any]:
     """Return the model lifecycle envelope, refreshing at most once a day."""
-    global _memory, _memory_time
+    global _memory, _memory_time, _last_live_fetch
     now = time.monotonic()
+
+    if force_refresh and _memory is not None and (now - _last_live_fetch) < _FORCE_REFRESH_INTERVAL_SECONDS:
+        # A live fetch just happened (e.g. the start-up job) — serve it rather
+        # than re-hitting the docs source on every Refresh click.
+        return _memory
 
     if not force_refresh and _memory is not None and (now - _memory_time) < _MEMORY_TTL_SECONDS:
         return _memory
@@ -301,6 +310,7 @@ async def fetch_lifecycle(force_refresh: bool = False) -> dict[str, Any]:
         return result
 
     models = await _fetch_live()
+    _last_live_fetch = time.monotonic()
     if models:
         try:
             await _persist_to_db(models)
@@ -335,9 +345,10 @@ async def refresh_lifecycle() -> int:
 
 def reset_cache() -> None:
     """Drop the in-memory cache (tests + admin refresh)."""
-    global _memory, _memory_time
+    global _memory, _memory_time, _last_live_fetch
     _memory = None
     _memory_time = 0.0
+    _last_live_fetch = 0.0
 
 
 __all__ = [

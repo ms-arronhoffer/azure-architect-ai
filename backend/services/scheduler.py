@@ -7,8 +7,11 @@ local dev and tests don't accidentally hit the live Learn API.
 """
 from __future__ import annotations
 
+import datetime as dt
+
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
+from apscheduler.triggers.date import DateTrigger
 
 from config import settings
 from middleware.logging import get_logger
@@ -114,6 +117,19 @@ def start_scheduler() -> None:
         trigger=CronTrigger(hour=3, minute=41),
         id="model_lifecycle_refresh_daily",
         name="Daily Foundry model retirement schedule refresh",
+        replace_existing=True,
+        coalesce=True,
+        max_instances=1,
+        misfire_grace_time=3600,
+    )
+    # A cron job's first run is its next matching time, so a freshly deployed
+    # replica would serve the seed snapshot until 03:41 UTC. Prime the catalog
+    # once shortly after start-up, then let the daily cron take over.
+    sched.add_job(
+        refresh_lifecycle,
+        trigger=DateTrigger(run_date=dt.datetime.now() + dt.timedelta(seconds=30)),
+        id="model_lifecycle_refresh_startup",
+        name="One-time Foundry model retirement schedule refresh on start-up",
         replace_existing=True,
         coalesce=True,
         max_instances=1,
