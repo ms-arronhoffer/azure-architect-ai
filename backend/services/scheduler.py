@@ -16,6 +16,7 @@ from services.avm_ingest import run_ingest as avm_run_ingest
 from services.azure_updates_ingest import run_ingest as azure_updates_run_ingest
 from services.demo_ingest import run_ingest as demo_run_ingest
 from services.model_iq_bundle_service import purge_old_bundles
+from services.model_lifecycle_service import refresh_lifecycle
 from services.pricing_ingest import run_ingest as pricing_run_ingest
 from services.refarch_ingest import run_ingest
 from services.tenant_inventory_ingest import (
@@ -103,6 +104,16 @@ def start_scheduler() -> None:
         trigger=CronTrigger(hour=3, minute=53),
         id="model_iq_bundle_cleanup_daily",
         name="Daily Model IQ bundle cleanup (24h retention)",
+        replace_existing=True,
+        coalesce=True,
+        max_instances=1,
+        misfire_grace_time=3600,
+    )
+    sched.add_job(
+        refresh_lifecycle,
+        trigger=CronTrigger(hour=3, minute=41),
+        id="model_lifecycle_refresh_daily",
+        name="Daily Foundry model retirement schedule refresh",
         replace_existing=True,
         coalesce=True,
         max_instances=1,

@@ -41,6 +41,7 @@ from services.model_iq_service import (
     get_target_models,
     rank_replacements,
 )
+from services.model_lifecycle_service import fetch_lifecycle
 from services.report_document_service import (
     build_docx_report,
     build_pdf_report,
@@ -102,6 +103,12 @@ def list_benchmarks() -> list[dict]:
 @router.get("/retirements")
 def list_retirements() -> dict:
     return get_retirements()
+
+
+@router.get("/lifecycle")
+async def model_lifecycle() -> dict:
+    """Azure Foundry model retirement schedule, refreshed daily from Learn."""
+    return await fetch_lifecycle()
 
 
 @router.post("/score")

@@ -187,6 +187,9 @@ When `INGEST_ENABLED=true`, `backend/services/scheduler.py` registers two APSche
 | --- | --- | --- | --- | --- |
 | `refarch_ingest_weekly` | Sun 04:17 | `learn.microsoft.com/api/contentbrowser/search/architectures` (paginated, `$top=30`, cap 60 pages) | `services/refarch_ingest.py` | `RefArch` table |
 | `demo_ingest_weekly` | Sun 04:42 | `raw.githubusercontent.com/Azure/awesome-azd/main/website/static/templates.json` (msft-tagged only) | `services/demo_ingest.py` | `Demo` table |
+| `model_lifecycle_refresh_daily` | Daily 03:41 | Docs source for the Learn "Model retirement schedule" article | `services/model_lifecycle_service.py` | `ModelLifecycleCache` table |
+
+The model lifecycle refresh does not depend on `INGEST_ENABLED`: `GET /api/model-migration/lifecycle` treats the cached row as fresh for 24h and refreshes it on the next read once it ages out, so every user sees the current Azure Foundry retirement schedule even when the scheduler is off. A committed snapshot (`backend/data/model_iq/model_lifecycle_seed.json`) backs the panel when neither the DB nor the network is reachable.
 
 Both ingests apply the same source-aware upsert:
 

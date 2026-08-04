@@ -99,6 +99,14 @@ async def lifespan(app: FastAPI):
                 from middleware.logging import get_logger
                 get_logger("startup").warning("whats_new.seed_failed", error=str(exc))
 
+        async def _seed_model_lifecycle() -> None:
+            try:
+                from services.model_lifecycle_service import fetch_lifecycle
+                await fetch_lifecycle()
+            except Exception as exc:
+                from middleware.logging import get_logger
+                get_logger("startup").warning("model_lifecycle.seed_failed", error=str(exc))
+
         # Run network-bound warmups in the background so they never delay
         # readiness — the RAG reindex in particular used to be awaited inline.
         # References are retained on app.state so the tasks are not garbage
@@ -124,6 +132,7 @@ async def lifespan(app: FastAPI):
         if settings.rag_enabled:
             _spawn(_warmup_rag())
         _spawn(_seed_whats_new())
+        _spawn(_seed_model_lifecycle())
         yield
 
 
