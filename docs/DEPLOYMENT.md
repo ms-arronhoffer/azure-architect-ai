@@ -153,7 +153,7 @@ Jobs:
 Jobs:
 - **setenv**: picks env-specific outputs (deployment name, RG fallback, param file, GH env) from `github.ref`.
 - **detect**: paths-filter + reads ACR / RG / app names from the env's subscription deployment outputs, with fallback to direct lookup (and ultimately to the shared dev ACR for the test env).
-- **backend**: `az acr build` of `backend/Dockerfile.prod` then `az containerapp update --image ... --revision-suffix sha-<SHA>-r<run_number>`.
+- **backend**: `az acr build` of `backend/Dockerfile.prod` then `az containerapp update --image ... --revision-suffix sha-<SHA>-r<run_number>`, followed by a poll on the new revision until `runningState=Running` with traffic. If the revision never becomes ready, Container Apps keeps the previous one in service (new API routes would 404 while the app otherwise looks healthy), so the job fails instead of reporting a green deploy.
 - **frontend**: same, for frontend. Vite env vars (`VITE_ENTRA_*`, `VITE_UNIFIED_AGENTS`) are baked into the image via `--build-arg`.
 - **smoke**: HTTP 200 check on `frontendUrl` (5 retries, 10s apart). Custom domain wins over default FQDN when one is bound.
 

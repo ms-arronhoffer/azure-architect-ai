@@ -1,4 +1,4 @@
-from contextlib import AsyncExitStack, asynccontextmanager
+from contextlib import AsyncExitStack, asynccontextmanager, suppress
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -70,8 +70,6 @@ async def lifespan(app: FastAPI):
         # Wire OpenTelemetry + Azure Monitor after middleware is registered (see below).
         from observability import configure_telemetry
         configure_telemetry(app)
-        if settings.mcp_enabled:
-            await init_mcp(stack)
 
         async def _warmup_rag() -> None:
             try:
@@ -128,6 +126,47 @@ async def lifespan(app: FastAPI):
             task = asyncio.create_task(coro)
             background_tasks.add(task)
             task.add_done_callback(background_tasks.discard)
+
+        # MCP servers are stdio subprocesses (npx / python) that can take a
+        # minute or more to become usable, and uvicorn does not bind its
+        # listening socket until lifespan startup returns. Awaiting them here
+        # made a freshly rolled-out revision unreachable long enough to fail
+        # the platform's default health probes, leaving the previous revision
+        # in service — which surfaces as 404s on newly added API routes.
+        # Initialize in the background instead; `get_mcp_tools()` returns an
+        # empty list until the servers are ready and callers already degrade.
+        mcp_stop = asyncio.Event()
+
+        async def _init_mcp_bg() -> None:
+            try:
+                # The exit stack is owned by this task: MCP's stdio client
+                # uses anyio cancel scopes, which must be entered and exited
+                # from the same task.
+                async with AsyncExitStack() as mcp_stack:
+                    await init_mcp(mcp_stack)
+                    await mcp_stop.wait()
+            except Exception as exc:
+                from middleware.logging import get_logger
+                get_logger("startup").warning("mcp.init_failed", error=str(exc))
+
+        async def _shutdown_mcp(task: asyncio.Task) -> None:
+            # The task closes its own exit stack once the event is set. If it
+            # is still mid-initialization (npx can take a while), cancel rather
+            # than hold up shutdown — the stdio servers are child processes and
+            # die with us anyway.
+            mcp_stop.set()
+            for _ in range(2):
+                with suppress(Exception, asyncio.CancelledError):
+                    await asyncio.wait_for(asyncio.shield(task), timeout=1)
+                if task.done():
+                    return
+                task.cancel()
+
+        if settings.mcp_enabled:
+            mcp_task = asyncio.create_task(_init_mcp_bg())
+            background_tasks.add(mcp_task)
+            mcp_task.add_done_callback(background_tasks.discard)
+            stack.push_async_callback(_shutdown_mcp, mcp_task)
 
         if settings.rag_enabled:
             _spawn(_warmup_rag())
