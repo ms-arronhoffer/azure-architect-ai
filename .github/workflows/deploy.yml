@@ -174,6 +174,31 @@ jobs:
             -n ${{ needs.detect.outputs.backendApp }} \
             --image ${{ needs.detect.outputs.acr }}.azurecr.io/aa-backend:${{ env.IMAGE_TAG }} \
             --revision-suffix sha-${IMAGE_TAG:0:6}-r${{ github.run_number }}
+      - name: Verify the new revision is serving
+        # `az containerapp update` returns as soon as the revision is created.
+        # If the container never becomes ready, Container Apps keeps the previous
+        # revision in service and the deploy silently ships nothing — which shows
+        # up as 404s on newly added API routes. Fail loudly instead.
+        run: |
+          APP=${{ needs.detect.outputs.backendApp }}
+          REV="${APP}--sha-${IMAGE_TAG:0:6}-r${{ github.run_number }}"
+          for i in $(seq 1 30); do
+            STATE=$(az containerapp revision show -g ${{ needs.detect.outputs.rg }} -n "$APP" \
+              --revision "$REV" --query "properties.runningState" -o tsv 2>/dev/null | tr -d '\r\n')
+            TRAFFIC=$(az containerapp revision show -g ${{ needs.detect.outputs.rg }} -n "$APP" \
+              --revision "$REV" --query "properties.trafficWeight" -o tsv 2>/dev/null | tr -d '\r\n')
+            echo "Attempt $i: runningState=$STATE trafficWeight=$TRAFFIC"
+            if [ "$STATE" = "Running" ] && [ "${TRAFFIC:-0}" -gt 0 ]; then
+              exit 0
+            fi
+            if [ "$STATE" = "Failed" ]; then
+              break
+            fi
+            sleep 10
+          done
+          echo "::error::Revision $REV is not serving traffic — the previous revision is still active."
+          az containerapp revision show -g ${{ needs.detect.outputs.rg }} -n "$APP" --revision "$REV" -o json || true
+          exit 1
 
   frontend:
     needs: [setenv, detect, infra]
