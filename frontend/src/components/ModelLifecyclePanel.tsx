@@ -23,19 +23,16 @@ import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { apiFetch } from "../config/api";
-
-type Lifecycle = "GA" | "Preview" | "Deprecated" | "Retired" | "Legacy";
-type FilterTab = "soon" | "atrisk" | "retired" | "all";
-
-interface ModelEntry {
-  provider: string;
-  model: string;
-  version: string;
-  lifecycle: Lifecycle;
-  retirement: string | null;
-  replacement: string | null;
-  soldBy: "Azure" | "Partner";
-}
+import {
+  type FilterTab,
+  type Lifecycle,
+  type ModelEntry,
+  SOON_DAYS,
+  daysUntil,
+  filterAndSortModels,
+  isPastDue,
+  isRetiringSoon,
+} from "../utils/modelLifecycle";
 
 interface LifecycleResponse {
   models: ModelEntry[];
@@ -46,11 +43,6 @@ interface LifecycleResponse {
 }
 
 const LEARN_URL = "https://learn.microsoft.com/en-us/azure/foundry/openai/concepts/model-retirement-schedule";
-const SOON_DAYS = 90;
-
-function daysUntil(dateStr: string): number {
-  return Math.ceil((new Date(dateStr).getTime() - Date.now()) / (24 * 60 * 60 * 1000));
-}
 
 const lifecycleBadgeColor: Record<Lifecycle, "success" | "informative" | "warning" | "danger" | "subtle"> = {
   GA: "success",
@@ -221,8 +213,10 @@ const useStyles = makeStyles({
 
 const FILTER_LABEL: Record<FilterTab, string> = {
   soon: "Retiring Within 90 Days",
+  ga: "GA Models (Not Past Due)",
+  preview: "Preview Models (Not Past Due)",
   atrisk: "Deprecated or Legacy",
-  retired: "Retired",
+  retired: "Retired or Past Due",
   all: "All Models",
 };
 
@@ -330,56 +324,34 @@ export default function ModelLifecyclePanel() {
     [models],
   );
 
-  const filtered = useMemo(() => {
-    const now = Date.now();
-    const q = search.toLowerCase();
-
-    return models.filter((m) => {
-      const retMs = m.retirement ? new Date(m.retirement).getTime() : null;
-      const days = retMs !== null ? Math.ceil((retMs - now) / (24 * 60 * 60 * 1000)) : null;
-
-      const matchesSearch = !q ||
-        m.model.toLowerCase().includes(q) ||
-        m.provider.toLowerCase().includes(q) ||
-        (m.replacement ?? "").toLowerCase().includes(q);
-
-      if (!matchesSearch) return false;
-      if (providerFilter && m.provider !== providerFilter) return false;
-
-      switch (filter) {
-        case "soon":
-          return retMs !== null && days! <= SOON_DAYS;
-        case "atrisk":
-          return m.lifecycle === "Deprecated" || m.lifecycle === "Legacy";
-        case "retired":
-          return m.lifecycle === "Retired";
-        case "all":
-          return true;
-      }
-    }).sort((a, b) => {
-      if (!a.retirement && !b.retirement) return 0;
-      if (!a.retirement) return 1;
-      if (!b.retirement) return -1;
-      return new Date(a.retirement).getTime() - new Date(b.retirement).getTime();
-    });
-  }, [models, filter, search, providerFilter]);
+  const filtered = useMemo(
+    () => filterAndSortModels(models, { filter, search, provider: providerFilter }),
+    [models, filter, search, providerFilter],
+  );
 
   function retirementCell(retirement: string | null) {
     if (!retirement) return <span className={styles.retireNormal}>—</span>;
     const days = daysUntil(retirement);
-    if (days < 0) return <span className={styles.retirePast}>{retirement} (past)</span>;
+    if (days < 0) return <span className={styles.retirePast}>{retirement} (past due)</span>;
     if (days <= 30) return <span className={styles.retireVerySOon}>{retirement} ({days}d)</span>;
     if (days <= SOON_DAYS) return <span className={styles.retireSoon}>{retirement} ({days}d)</span>;
     return <span className={styles.retireNormal}>{retirement}</span>;
   }
 
-  const soonCount = useMemo(() => models.filter(m => {
-    if (!m.retirement) return false;
-    return daysUntil(m.retirement) <= SOON_DAYS;
-  }).length, [models]);
-
-  const atRiskCount = models.filter(m => m.lifecycle === "Deprecated" || m.lifecycle === "Legacy").length;
-  const retiredCount = models.filter(m => m.lifecycle === "Retired").length;
+  const soonCount = useMemo(() => models.filter((m) => isRetiringSoon(m)).length, [models]);
+  const gaCount = useMemo(
+    () => models.filter((m) => m.lifecycle === "GA" && !isPastDue(m)).length,
+    [models],
+  );
+  const previewCount = useMemo(
+    () => models.filter((m) => m.lifecycle === "Preview" && !isPastDue(m)).length,
+    [models],
+  );
+  const atRiskCount = useMemo(
+    () => models.filter((m) => (m.lifecycle === "Deprecated" || m.lifecycle === "Legacy") && !isPastDue(m)).length,
+    [models],
+  );
+  const retiredCount = useMemo(() => models.filter((m) => isPastDue(m)).length, [models]);
 
   return (
     <div className={styles.root}>
@@ -434,8 +406,10 @@ export default function ModelLifecyclePanel() {
             size="small"
           >
             <Tab value="soon">Retiring ≤90 days <Badge size="small" shape="rounded" color="warning" style={{ marginLeft: "4px" }}>{soonCount}</Badge></Tab>
+            <Tab value="ga">GA <Badge size="small" shape="rounded" color="success" style={{ marginLeft: "4px" }}>{gaCount}</Badge></Tab>
+            <Tab value="preview">Preview <Badge size="small" shape="rounded" color="informative" style={{ marginLeft: "4px" }}>{previewCount}</Badge></Tab>
             <Tab value="atrisk">Deprecated / Legacy <Badge size="small" shape="rounded" color="subtle" style={{ marginLeft: "4px" }}>{atRiskCount}</Badge></Tab>
-            <Tab value="retired">Retired <Badge size="small" shape="rounded" color="danger" style={{ marginLeft: "4px" }}>{retiredCount}</Badge></Tab>
+            <Tab value="retired">Retired / past due <Badge size="small" shape="rounded" color="danger" style={{ marginLeft: "4px" }}>{retiredCount}</Badge></Tab>
             <Tab value="all">All ({models.length})</Tab>
           </TabList>
           <Input
