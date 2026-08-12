@@ -192,6 +192,15 @@ Auth uses two app regs in tenant `16b3c013-d300-468d-ac64-7eda0820b6d3`:
 
 Critical: **`VITE_ENTRA_API_SCOPE` must be `api://5e5c9491…/access_as_user`** (the API app), not the SPA's own URI. Pointing it at the SPA's URI mints tokens with the wrong `aud` and the backend will 401 with `Invalid audience`.
 
+Production Container Apps replicas co-locate
+`mcr.microsoft.com/entra-sdk/auth-sidecar:1.1.1-azurelinux3.0-distroless`.
+The backend delegates inbound token validation to its loopback `/Validate` endpoint,
+so Microsoft.Identity.Web performs key discovery and emits the supported authentication
+telemetry. `AzureAd__ClientId` is derived from `ENTRA_AUDIENCE` when it is a bare client
+ID or `api://<client-id>`; set `ENTRA_CLIENT_ID` explicitly when using a custom app ID URI.
+After deployment, confirm every active backend revision contains the `entra-auth`
+container before supplying telemetry evidence for the API app registration.
+
 Per-env redirect URIs on the SPA app:
 - `https://blueprint.techtools.host/` (prod)
 - `https://dev.blueprint.techtools.host/` (test)

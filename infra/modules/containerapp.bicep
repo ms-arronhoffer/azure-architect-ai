@@ -19,6 +19,8 @@ param minReplicas int = 1
 param maxReplicas int = 3
 
 param envVars array = []
+@description('Additional containers that share the app replica network namespace with the primary container.')
+param sidecars array = []
 param volumeMounts array = []
 param volumes array = []
 
@@ -58,7 +60,7 @@ resource app 'Microsoft.App/containerApps@2025-01-01' = {
       secrets: secrets
     }
     template: {
-      containers: [
+      containers: concat([
         {
           name: name
           image: image
@@ -74,7 +76,7 @@ resource app 'Microsoft.App/containerApps@2025-01-01' = {
           ])
           volumeMounts: volumeMounts
         }
-      ]
+      ], sidecars)
       scale: {
         minReplicas: minReplicas
         maxReplicas: maxReplicas

@@ -38,6 +38,7 @@ param oncallEmail = readEnvironmentVariable('ONCALL_EMAIL', 'arronhoffer@microso
 
 param entraTenantId = readEnvironmentVariable('ENTRA_TENANT_ID')
 param entraAudience = readEnvironmentVariable('ENTRA_AUDIENCE')
+param entraClientId = readEnvironmentVariable('ENTRA_CLIENT_ID', '')
 
 // Disambiguate from dev VNet (10.50.0.0/20).
 param vnetAddressPrefix = '10.60.0.0/20'
