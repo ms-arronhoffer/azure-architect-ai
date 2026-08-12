@@ -109,8 +109,8 @@ az acr build -r $ACR -t aa-frontend:latest -f frontend/Dockerfile.prod ./fronten
 Then redeploy with the real `backendImage` / `frontendImage` parameters, or update the container apps directly:
 
 ```bash
-az containerapp update -g <RG> -n <BACKEND_APP>  --image $ACR.azurecr.io/aa-backend:latest
-az containerapp update -g <RG> -n <FRONTEND_APP> --image $ACR.azurecr.io/aa-frontend:latest
+az containerapp update -g <RG> -n <BACKEND_APP>  --container-name <BACKEND_APP>  --image $ACR.azurecr.io/aa-backend:latest
+az containerapp update -g <RG> -n <FRONTEND_APP> --container-name <FRONTEND_APP> --image $ACR.azurecr.io/aa-frontend:latest
 ```
 
 ## GitHub Actions workflows
@@ -153,7 +153,7 @@ Jobs:
 Jobs:
 - **setenv**: picks env-specific outputs (deployment name, RG fallback, param file, GH env) from `github.ref`.
 - **detect**: paths-filter + reads ACR / RG / app names from the env's subscription deployment outputs, with fallback to direct lookup (and ultimately to the shared dev ACR for the test env).
-- **backend**: `az acr build` of `backend/Dockerfile.prod` then `az containerapp update --image ... --revision-suffix sha-<SHA>-r<run_number>`, followed by a poll on the new revision until `runningState=Running` with traffic. If the revision never becomes ready, Container Apps keeps the previous one in service (new API routes would 404 while the app otherwise looks healthy), so the job fails instead of reporting a green deploy.
+- **backend**: `az acr build` of `backend/Dockerfile.prod` then `az containerapp update --container-name ... --image ... --revision-suffix sha-<SHA>-r<run_number>`, followed by a poll on the new revision until `runningState=Running` with traffic. The explicit container name targets the primary app container instead of the Entra auth sidecar. If the revision never becomes ready, Container Apps keeps the previous one in service (new API routes would 404 while the app otherwise looks healthy), so the job fails instead of reporting a green deploy.
 - **frontend**: same, for frontend. Vite env vars (`VITE_ENTRA_*`, `VITE_UNIFIED_AGENTS`) are baked into the image via `--build-arg`.
 - **smoke**: HTTP 200 check on `frontendUrl` (5 retries, 10s apart). Custom domain wins over default FQDN when one is bound.
 
