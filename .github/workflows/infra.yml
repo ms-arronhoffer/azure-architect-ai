@@ -9,6 +9,7 @@ on:
     branches: [main, dev]
     paths:
       - "infra/**"
+      - ".github/workflows/infra.yml"
   workflow_dispatch:
 
 permissions:
@@ -66,7 +67,7 @@ jobs:
           PG_ADMIN_PASSWORD: ${{ secrets.PG_ADMIN_PASSWORD }}
           SECRET_ENCRYPTION_KEY: ${{ secrets.SECRET_ENCRYPTION_KEY }}
           ENTRA_TENANT_ID: ${{ vars.VITE_ENTRA_TENANT_ID }}
-          ENTRA_AUDIENCE: api://${{ vars.VITE_ENTRA_CLIENT_ID }}
+          ENTRA_AUDIENCE: ${{ vars.ENTRA_AUDIENCE }}
           ONCALL_EMAIL: ${{ vars.ONCALL_EMAIL }}
         run: |
           az deployment sub what-if \
@@ -93,7 +94,7 @@ jobs:
           PG_ADMIN_PASSWORD: ${{ secrets.PG_ADMIN_PASSWORD }}
           SECRET_ENCRYPTION_KEY: ${{ secrets.SECRET_ENCRYPTION_KEY }}
           ENTRA_TENANT_ID: ${{ vars.VITE_ENTRA_TENANT_ID }}
-          ENTRA_AUDIENCE: api://${{ vars.VITE_ENTRA_CLIENT_ID }}
+          ENTRA_AUDIENCE: ${{ vars.ENTRA_AUDIENCE }}
           ONCALL_EMAIL: ${{ vars.ONCALL_EMAIL }}
         run: |
           az deployment sub create \
