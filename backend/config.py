@@ -49,6 +49,9 @@ class Settings(BaseSettings):
     auth_enabled: bool = False
     entra_tenant_id: str | None = None
     entra_audience: str | None = None  # API app registration client ID or app ID URI
+    # When set, inbound tokens are validated by the Microsoft Entra auth sidecar.
+    # Production sets this to the loopback endpoint of the co-located sidecar.
+    entra_auth_sidecar_url: str | None = None
     session_cookie_name: str = "aa_session"
     session_cookie_secure: bool = False  # set true behind HTTPS
 

@@ -71,6 +71,9 @@ def _jwks_client(jwks_uri: str) -> PyJWKClient:
 
 async def validate_token(token: str) -> dict[str, Any]:
     tenant, audience = _require_config()
+    if settings.entra_auth_sidecar_url:
+        return await _validate_token_with_sidecar(token)
+
     oidc = await _get_oidc_config(tenant)
     jwks = _jwks_client(oidc["jwks_uri"])
     # Accept both "api://GUID" and bare "GUID" forms — Entra issues either
@@ -100,6 +103,44 @@ async def validate_token(token: str) -> dict[str, Any]:
     except jwt.PyJWTError as e:
         _log.warning("jwt.validation_error", error=str(e))
         raise AuthError(f"Invalid token: {e}") from e
+    return claims
+
+
+async def _validate_token_with_sidecar(token: str) -> dict[str, Any]:
+    """Validate an inbound token through the co-located Microsoft Entra auth SDK."""
+    url = f"{settings.entra_auth_sidecar_url.rstrip('/')}/Validate"
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            authorization = " ".join(("Bearer", token))
+            response = await client.get(url, headers={"Authorization": authorization})
+    except httpx.HTTPError as e:
+        _log.error("entra.sidecar_unavailable", error=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Entra ID token validation is temporarily unavailable.",
+        ) from e
+
+    if response.status_code in (
+        status.HTTP_400_BAD_REQUEST,
+        status.HTTP_401_UNAUTHORIZED,
+        status.HTTP_403_FORBIDDEN,
+    ):
+        _log.warning("entra.sidecar_rejected", status_code=response.status_code)
+        raise AuthError("Invalid token")
+    try:
+        response.raise_for_status()
+        claims = response.json()["claims"]
+    except (httpx.HTTPError, ValueError, KeyError, TypeError) as e:
+        _log.error("entra.sidecar_invalid_response", status_code=response.status_code)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Entra ID token validation is temporarily unavailable.",
+        ) from e
+    if not isinstance(claims, dict):
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Entra ID token validation returned an invalid response.",
+        )
     return claims
 
 

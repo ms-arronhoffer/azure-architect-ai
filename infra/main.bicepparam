@@ -51,8 +51,10 @@ param oncallEmail = readEnvironmentVariable('ONCALL_EMAIL', 'arronhoffer@microso
 // Entra ID single-tenant config. Set via env or replace inline.
 //   ENTRA_TENANT_ID: directory (tenant) GUID
 //   ENTRA_AUDIENCE: 'api://<api-app-client-id>' (or the bare client id GUID)
+//   ENTRA_CLIENT_ID: API app registration ClientId (required for custom app ID URIs)
 param entraTenantId = readEnvironmentVariable('ENTRA_TENANT_ID')
 param entraAudience = readEnvironmentVariable('ENTRA_AUDIENCE')
+param entraClientId = readEnvironmentVariable('ENTRA_CLIENT_ID', '')
 
 // Custom domain for prod frontend. Cert is a managed cert provisioned out-of-band
 // in the dev ACA env (one-time `az containerapp env certificate create --hostname ...`).

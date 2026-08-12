@@ -69,6 +69,9 @@ param entraTenantId string
 @description('API app registration audience (client ID or api://<id> URI). Tokens issued for this audience authorise /api/* calls.')
 param entraAudience string
 
+@description('API app registration ClientId. Set explicitly when entraAudience is a custom app ID URI.')
+param entraClientId string = ''
+
 @description('Custom domain bindings for the frontend container app. Each entry: { name, certificateId, bindingType }. Leave empty for envs that only use the default ACA FQDN.')
 param frontendCustomDomains array = []
 
@@ -101,6 +104,9 @@ param existingAcrName string = ''
 param existingAcrLoginServer string = ''
 
 var rgName = '${prefix}-${env}-rg'
+var resolvedEntraClientId = !empty(entraClientId)
+  ? entraClientId
+  : (startsWith(entraAudience, 'api://') ? substring(entraAudience, 6) : entraAudience)
 
 resource rg 'Microsoft.Resources/resourceGroups@2024-07-01' = {
   name: rgName
@@ -290,9 +296,27 @@ module backendApp 'modules/containerapp.bicep' = {
       { name: 'UNIFIED_AGENTS', value: 'false' }
       { name: 'ENTRA_TENANT_ID', value: entraTenantId }
       { name: 'ENTRA_AUDIENCE', value: entraAudience }
+      { name: 'ENTRA_AUTH_SIDECAR_URL', value: 'http://127.0.0.1:5000' }
       { name: 'SESSION_COOKIE_SECURE', value: 'true' }
       { name: 'DATABASE_URL', secretRef: 'database-url' }
       { name: 'SECRET_ENCRYPTION_KEY', secretRef: 'secret-encryption-key' }
+    ]
+    sidecars: [
+      {
+        name: 'entra-auth'
+        image: 'mcr.microsoft.com/entra-sdk/auth-sidecar:1.1.1-azurelinux3.0-distroless'
+        resources: {
+          cpu: json('0.25')
+          memory: '0.5Gi'
+        }
+        env: [
+          { name: 'AzureAd__Instance', value: environment().authentication.loginEndpoint }
+          { name: 'AzureAd__TenantId', value: entraTenantId }
+          { name: 'AzureAd__ClientId', value: resolvedEntraClientId }
+          { name: 'AzureAd__Audience', value: entraAudience }
+          { name: 'Kestrel__Endpoints__Http__Url', value: 'http://127.0.0.1:5000' }
+        ]
+      }
     ]
     secrets: [
       {
