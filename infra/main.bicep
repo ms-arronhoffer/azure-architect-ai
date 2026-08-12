@@ -310,9 +310,10 @@ module backendApp 'modules/containerapp.bicep' = {
           memory: '0.5Gi'
         }
         env: [
-          { name: 'AzureAd__Instance', value: 'https://login.microsoftonline.com/' }
+          { name: 'AzureAd__Instance', value: environment().authentication.loginEndpoint }
           { name: 'AzureAd__TenantId', value: entraTenantId }
           { name: 'AzureAd__ClientId', value: resolvedEntraClientId }
+          { name: 'AzureAd__Audience', value: entraAudience }
           { name: 'Kestrel__Endpoints__Http__Url', value: 'http://127.0.0.1:5000' }
         ]
       }

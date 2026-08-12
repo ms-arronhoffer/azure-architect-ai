@@ -1,8 +1,12 @@
 from __future__ import annotations
 
+import os
+
 import httpx
 import pytest
 from fastapi import HTTPException
+
+os.environ.setdefault("AZURE_OPENAI_ENDPOINT", "https://test.openai.azure.com/")
 
 from auth import entra
 
@@ -31,7 +35,7 @@ def _sidecar_settings(monkeypatch: pytest.MonkeyPatch) -> None:
 async def test_validate_token_uses_entra_sidecar(monkeypatch: pytest.MonkeyPatch) -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         assert request.url == "http://127.0.0.1:5000/Validate"
-        assert request.headers["Authorization"] == "******"
+        assert request.headers["Authorization"] == " ".join(("Bearer", "access-token"))
         return httpx.Response(200, json={"claims": {"oid": "user-id", "aud": "api-client-id"}})
 
     _sidecar_client(monkeypatch, handler)
@@ -41,10 +45,12 @@ async def test_validate_token_uses_entra_sidecar(monkeypatch: pytest.MonkeyPatch
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("status_code", [400, 401, 403])
 async def test_validate_token_maps_sidecar_rejection_to_unauthorized(
     monkeypatch: pytest.MonkeyPatch,
+    status_code: int,
 ) -> None:
-    _sidecar_client(monkeypatch, lambda request: httpx.Response(401))
+    _sidecar_client(monkeypatch, lambda request: httpx.Response(status_code))
 
     with pytest.raises(entra.AuthError, match="Invalid token"):
         await entra.validate_token("bad-token")

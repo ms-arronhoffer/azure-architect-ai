@@ -111,7 +111,8 @@ async def _validate_token_with_sidecar(token: str) -> dict[str, Any]:
     url = f"{settings.entra_auth_sidecar_url.rstrip('/')}/Validate"
     try:
         async with httpx.AsyncClient(timeout=10) as client:
-            response = await client.get(url, headers={"Authorization": f"******"})
+            authorization = " ".join(("Bearer", token))
+            response = await client.get(url, headers={"Authorization": authorization})
     except httpx.HTTPError as e:
         _log.error("entra.sidecar_unavailable", error=str(e))
         raise HTTPException(
@@ -119,7 +120,11 @@ async def _validate_token_with_sidecar(token: str) -> dict[str, Any]:
             detail="Entra ID token validation is temporarily unavailable.",
         ) from e
 
-    if response.status_code in (status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN):
+    if response.status_code in (
+        status.HTTP_400_BAD_REQUEST,
+        status.HTTP_401_UNAUTHORIZED,
+        status.HTTP_403_FORBIDDEN,
+    ):
         _log.warning("entra.sidecar_rejected", status_code=response.status_code)
         raise AuthError("Invalid token")
     try:
