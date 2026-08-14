@@ -196,9 +196,10 @@ Production Container Apps replicas co-locate
 `mcr.microsoft.com/entra-sdk/auth-sidecar:1.1.1-azurelinux3.0-distroless`.
 The backend delegates inbound token validation to its loopback `/Validate` endpoint,
 so Microsoft.Identity.Web performs key discovery and emits the supported authentication
-telemetry. `AzureAd__Audience` is set to `ENTRA_AUDIENCE`; `AzureAd__ClientId` is derived
-from it when it is a bare client ID or `api://<client-id>`. Set `ENTRA_CLIENT_ID`
-explicitly when using a custom app ID URI.
+telemetry. Both `AzureAd__Audience` and `AzureAd__ClientId` use the API app's bare
+client ID because v2 access tokens emit that value in `aud`. The client ID is derived
+from `ENTRA_AUDIENCE` when it is a bare ID or `api://<client-id>`; set
+`ENTRA_CLIENT_ID` explicitly when using a custom app ID URI.
 After deployment, confirm every active backend revision contains the `entra-auth`
 container before supplying telemetry evidence for the API app registration.
 

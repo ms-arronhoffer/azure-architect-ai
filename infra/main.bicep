@@ -313,7 +313,7 @@ module backendApp 'modules/containerapp.bicep' = {
           { name: 'AzureAd__Instance', value: environment().authentication.loginEndpoint }
           { name: 'AzureAd__TenantId', value: entraTenantId }
           { name: 'AzureAd__ClientId', value: resolvedEntraClientId }
-          { name: 'AzureAd__Audience', value: entraAudience }
+          { name: 'AzureAd__Audience', value: resolvedEntraClientId }
           { name: 'Kestrel__Endpoints__Http__Url', value: 'http://127.0.0.1:5000' }
         ]
       }
