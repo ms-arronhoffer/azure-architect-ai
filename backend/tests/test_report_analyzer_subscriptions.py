@@ -45,10 +45,10 @@ def test_parse_acr_subscriptions_forward_fills_account_and_splits_by_subscriptio
 
 def test_parse_acr_subscriptions_returns_empty_without_grouping_column():
     csv = (
-        "FiscalMonth,FY26-May,FY26-Jun,Total\n"
-        "TPAccountName,$ ACR,$ ACR,$ ACR\n"
-        'City of Hope,"$5,000","$6,000","$11,000"\n'
-    ).encode()
+        b"FiscalMonth,FY26-May,FY26-Jun,Total\n"
+        b"TPAccountName,$ ACR,$ ACR,$ ACR\n"
+        b'City of Hope,"$5,000","$6,000","$11,000"\n'
+    )
     assert parse_acr_subscriptions(csv, "acr.csv", ["FY26-Jun"]) == {}
 
 

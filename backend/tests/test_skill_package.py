@@ -55,7 +55,7 @@ def test_parse_minimal_valid_package():
 
 def test_missing_manifest_rejected():
     data = _zip({"instructions.md": "hi"})
-    with pytest.raises(SkillPackageError, match="skill.yaml"):
+    with pytest.raises(SkillPackageError, match=r"skill.yaml"):
         parse_package(data)
 
 
