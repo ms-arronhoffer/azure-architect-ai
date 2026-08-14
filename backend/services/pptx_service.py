@@ -6,6 +6,7 @@ renderer pulls colors from the active :class:`Theme` rather than module globals,
 so adding a new preset is a one-line change.
 """
 
+from contextlib import suppress
 from dataclasses import dataclass, replace
 from io import BytesIO
 
@@ -77,10 +78,8 @@ def resolve_theme(name: str = "dark", accent: str | None = None) -> Theme:
     """
     theme = _PRESETS.get((name or "dark").lower(), DARK_THEME)
     if accent:
-        try:
+        with suppress(ValueError, IndexError):
             theme = replace(theme, accent=_hex(accent))
-        except (ValueError, IndexError):
-            pass
     return theme
 
 

@@ -143,11 +143,11 @@ def test_parse_acr_without_grouping_column():
     # Export variant with no ServiceCompGrouping column (one row per account).
     # The "Total"-row filter must not drop every account → all $0.
     csv = (
-        "FiscalMonth,FY26-May,FY26-Jun,Total\n"
-        "TPAccountName,$ ACR,$ ACR,$ ACR\n"
-        'City of Hope,"$5,000","$6,000","$11,000"\n'
-        'Abbott Laboratories,"$1,000","$2,000","$3,000"\n'
-    ).encode()
+        b"FiscalMonth,FY26-May,FY26-Jun,Total\n"
+        b"TPAccountName,$ ACR,$ ACR,$ ACR\n"
+        b'City of Hope,"$5,000","$6,000","$11,000"\n'
+        b'Abbott Laboratories,"$1,000","$2,000","$3,000"\n'
+    )
     res, used = parse_acr_data(csv, "acr.csv", ["FY26-Jun", "FY26-May"])
     assert used == "FY26-Jun"
     assert res == {"CITY OF HOPE": 6000.0, "ABBOTT LABORATORIES": 2000.0}
@@ -156,8 +156,8 @@ def test_parse_acr_without_grouping_column():
 def test_parse_acr_without_grouping_or_label_row():
     # No label row at all: header row immediately followed by data.
     csv = (
-        "FiscalMonth,FY26-May,FY26-Jun,Total\n"
-        'City of Hope,"$5,000","$6,000","$11,000"\n'
-    ).encode()
-    res, used = parse_acr_data(csv, "acr.csv", ["FY26-Jun"])
+        b"FiscalMonth,FY26-May,FY26-Jun,Total\n"
+        b'City of Hope,"$5,000","$6,000","$11,000"\n'
+    )
+    res, _used = parse_acr_data(csv, "acr.csv", ["FY26-Jun"])
     assert res == {"CITY OF HOPE": 6000.0}

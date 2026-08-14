@@ -45,7 +45,7 @@ async def test_diagnose_issue_maps_to_frontend_contract():
 
 @pytest.mark.asyncio
 async def test_diagnose_issue_handles_missing_optional_fields():
-    result, event = await _dispatch_tool(
+    _result, event = await _dispatch_tool(
         "diagnose_issue", {"symptom": "slow", "severity": "low", "hypotheses": []}
     )
     diag = event["diagnosis"]

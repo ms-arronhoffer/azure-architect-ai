@@ -258,6 +258,5 @@ __all__ = [
     "load_active",
     "preamble_for_active",
     "recent_artifacts",
-    "recent_artifacts",
     "to_dict",
 ]
