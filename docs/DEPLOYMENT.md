@@ -241,7 +241,9 @@ az account get-access-token --resource api://5e5c9491-d850-4f1b-9d67-939824a4c81
   --query expiresOn -o tsv
 ```
 
-Needs Application Administrator (or Cloud Application Administrator). Pass
+Needs Application Administrator (or Cloud Application Administrator), and the
+Azure CLI is the only prerequisite — responses are read with `az --query` and
+request bodies are built in bash, so `jq` does not have to be installed. Pass
 `--dry-run` first to see the Graph PATCH/POST bodies without applying them.
 
 ### Rotating to a new API app registration
