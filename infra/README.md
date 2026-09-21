@@ -25,6 +25,7 @@ which live in `aarch-dev-rg`. The test stack sets `deployOpenAi=false` and
 | `main.bicep` | Entrypoint (subscription scope). Creates RG and invokes modules. |
 | `main.bicepparam` | Prod parameter values. |
 | `main.test.bicepparam` | Test parameter values (shares AOAI/ACR with prod). |
+| `scripts/ensure-entra-apps.sh` | Idempotent repair of the SPA + API app registrations (fixes `AADSTS500011`). |
 | `modules/identity.bicep` | User-assigned managed identity used by both apps. |
 | `modules/network.bicep` | VNet (3 subnets) + private DNS zones for KV/PG/AOAI. |
 | `modules/containerregistry.bicep` | Premium ACR. Grants `AcrPull` to the MI. |
@@ -34,9 +35,10 @@ which live in `aarch-dev-rg`. The test stack sets `deployOpenAi=false` and
 | `modules/openai.bicep` | Azure OpenAI account + model deployments. Grants `Cognitive Services OpenAI User` to the MI. |
 | `modules/openai-grant.bicep` | Cross-RG OpenAI role assignment for the test MI on the shared AOAI. |
 | `modules/postgres.bicep` | Flexible Server (VNet-injected) + private DNS. |
-| `modules/monitoring.bicep` | Log Analytics + Application Insights + alerts. |
+| `modules/monitoring.bicep` | Log Analytics + Application Insights + on-call action group. Deployed before the apps so both can emit into it. |
+| `modules/alerts.bicep` | Baseline 5xx / CPU / memory metric alerts for the backend app. |
 | `modules/search.bicep` | Optional Azure AI Search (`deploySearch=true`). |
-| `modules/containerapps-env.bicep` | ACA managed environment + env-scoped Azure Files definition. |
+| `modules/containerapps-env.bicep` | ACA managed environment. Streams console + system logs to the workspace from `monitoring.bicep`. |
 | `modules/containerapp.bicep` | Reusable Container App (backend + frontend). Binds custom domains from `frontendCustomDomains`. |
 | `modules/frontdoor.bicep` | Optional Azure Front Door (`deployFrontDoor=true`). |
 

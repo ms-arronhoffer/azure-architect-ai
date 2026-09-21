@@ -1,13 +1,16 @@
-// Log Analytics + workspace-based Application Insights + on-call action group
-// and three baseline metric alerts for a target Container App.
+// Log Analytics + workspace-based Application Insights + on-call action group.
+//
+// This is the single telemetry sink for the workload: the Container Apps
+// environment streams console/system logs into the workspace and the backend
+// exports OpenTelemetry traces, logs, and metrics into the Application Insights
+// component via APPLICATIONINSIGHTS_CONNECTION_STRING. Metric alerts live in
+// modules/alerts.bicep because they need the container app resource ID, which
+// only exists after the apps are deployed.
 
 param prefix string
 param env string
 param location string
 param tags object
-
-@description('Resource ID of the Container App to monitor with the metric alerts.')
-param targetContainerAppId string
 
 @description('Email address that receives critical alerts.')
 param oncallEmail string
@@ -59,115 +62,6 @@ resource actionGroup 'Microsoft.Insights/actionGroups@2024-10-01-preview' = {
         name: 'oncall-email'
         emailAddress: oncallEmail
         useCommonAlertSchema: true
-      }
-    ]
-  }
-}
-
-resource alert5xx 'Microsoft.Insights/metricAlerts@2018-03-01' = {
-  name: '${prefix}-${env}-alert-http5xx'
-  location: 'global'
-  tags: tags
-  properties: {
-    description: 'HTTP 5xx responses > 5 in 5 minutes.'
-    severity: 2
-    enabled: true
-    scopes: [ targetContainerAppId ]
-    evaluationFrequency: 'PT1M'
-    windowSize: 'PT5M'
-    targetResourceType: 'Microsoft.App/containerApps'
-    criteria: {
-      'odata.type': 'Microsoft.Azure.Monitor.SingleResourceMultipleMetricCriteria'
-      allOf: [
-        {
-          name: 'Http5xx'
-          metricNamespace: 'Microsoft.App/containerApps'
-          metricName: 'Requests'
-          operator: 'GreaterThan'
-          threshold: 5
-          timeAggregation: 'Total'
-          criterionType: 'StaticThresholdCriterion'
-          dimensions: [
-            {
-              name: 'statusCodeCategory'
-              operator: 'Include'
-              values: [ '5xx' ]
-            }
-          ]
-        }
-      ]
-    }
-    actions: [
-      {
-        actionGroupId: actionGroup.id
-      }
-    ]
-  }
-}
-
-resource alertCpu 'Microsoft.Insights/metricAlerts@2018-03-01' = {
-  name: '${prefix}-${env}-alert-cpu'
-  location: 'global'
-  tags: tags
-  properties: {
-    description: 'CPU usage > 80% for 10 minutes.'
-    severity: 3
-    enabled: true
-    scopes: [ targetContainerAppId ]
-    evaluationFrequency: 'PT1M'
-    windowSize: 'PT10M'
-    targetResourceType: 'Microsoft.App/containerApps'
-    criteria: {
-      'odata.type': 'Microsoft.Azure.Monitor.SingleResourceMultipleMetricCriteria'
-      allOf: [
-        {
-          name: 'CpuPercent'
-          metricNamespace: 'Microsoft.App/containerApps'
-          metricName: 'UsageNanoCores'
-          operator: 'GreaterThan'
-          threshold: 80
-          timeAggregation: 'Average'
-          criterionType: 'StaticThresholdCriterion'
-        }
-      ]
-    }
-    actions: [
-      {
-        actionGroupId: actionGroup.id
-      }
-    ]
-  }
-}
-
-resource alertMem 'Microsoft.Insights/metricAlerts@2018-03-01' = {
-  name: '${prefix}-${env}-alert-mem'
-  location: 'global'
-  tags: tags
-  properties: {
-    description: 'MemoryWorkingSet > 80% for 10 minutes.'
-    severity: 3
-    enabled: true
-    scopes: [ targetContainerAppId ]
-    evaluationFrequency: 'PT1M'
-    windowSize: 'PT10M'
-    targetResourceType: 'Microsoft.App/containerApps'
-    criteria: {
-      'odata.type': 'Microsoft.Azure.Monitor.SingleResourceMultipleMetricCriteria'
-      allOf: [
-        {
-          name: 'MemoryWorkingSet'
-          metricNamespace: 'Microsoft.App/containerApps'
-          metricName: 'WorkingSetBytes'
-          operator: 'GreaterThan'
-          threshold: 80
-          timeAggregation: 'Average'
-          criterionType: 'StaticThresholdCriterion'
-        }
-      ]
-    }
-    actions: [
-      {
-        actionGroupId: actionGroup.id
       }
     ]
   }
