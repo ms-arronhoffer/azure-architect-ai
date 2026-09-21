@@ -6,13 +6,14 @@ class Settings(BaseSettings):
 
     azure_openai_endpoint: str
     azure_openai_key: str | None = None
-    azure_openai_deployment_chat: str = "gpt-4o-mini"
-    azure_openai_deployment_arch: str = "gpt-4.1"
-    # Architecture Review ("evaluation") runs on a stronger reasoning model by
-    # default. gpt-5.x deployments stream via the Responses API automatically.
-    azure_openai_deployment_eval: str = "gpt-5.4"
-    azure_openai_deployment_demo_build: str = "gpt-5.3-codex"
-    azure_openai_deployment_pricing: str = "gpt-5.4-mini"
+    # Every query path (chat, architecture, review, demo-build, pricing) runs on
+    # gpt-5.6-sol by default. gpt-5.x deployments stream via the Responses API
+    # automatically (see openai_service.needs_responses_api).
+    azure_openai_deployment_chat: str = "gpt-5.6-sol"
+    azure_openai_deployment_arch: str = "gpt-5.6-sol"
+    azure_openai_deployment_eval: str = "gpt-5.6-sol"
+    azure_openai_deployment_demo_build: str = "gpt-5.6-sol"
+    azure_openai_deployment_pricing: str = "gpt-5.6-sol"
     azure_openai_deployment_embedding: str = "text-embedding-3-small"
     azure_openai_api_version: str = "2024-12-01-preview"
 

@@ -249,7 +249,7 @@ async def test_mermaid_extracted(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_phase_routes_to_distinct_models(monkeypatch):
-    """recommendations → mini, architecture_design → pro, build lanes → gpt-5.4."""
+    """Every demo-build phase resolves to gpt-5.6-sol."""
     from services import demo_pipeline as dp_mod
 
     captured: list[tuple[str, str]] = []
@@ -277,11 +277,11 @@ async def test_phase_routes_to_distinct_models(monkeypatch):
 
     # Drive _llm_json directly with each phase and inspect the resolved model.
     for phase, expected in [
-        ("recommendations", "gpt-5.4-mini"),
-        ("architecture_design", "gpt-5.4-pro"),
-        ("code", "gpt-5.4"),
-        ("infra", "gpt-5.4"),
-        ("docs", "gpt-5.4"),
+        ("recommendations", "gpt-5.6-sol"),
+        ("architecture_design", "gpt-5.6-sol"),
+        ("code", "gpt-5.6-sol"),
+        ("infra", "gpt-5.6-sol"),
+        ("docs", "gpt-5.6-sol"),
     ]:
         captured.clear()
         with contextlib.suppress(Exception):

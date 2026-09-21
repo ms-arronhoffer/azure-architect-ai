@@ -10,7 +10,7 @@ import json
 from datetime import date
 from io import BytesIO
 
-from services.openai_service import get_client, get_deployment
+from services.openai_service import chat_completion, get_client, get_deployment
 from services.pptx_service import build_presentation
 
 # ── LLM narrative ─────────────────────────────────────────────────────────────
@@ -119,7 +119,8 @@ def generate_report_narrative(report_data: dict) -> dict:
 
     client = get_client()
     deployment = get_deployment("architecture")
-    resp = client.chat.completions.create(
+    resp = chat_completion(
+        client,
         model=deployment,
         messages=[{"role": "system", "content": system}, {"role": "user", "content": user}],
         tools=[_NARRATIVE_TOOL],

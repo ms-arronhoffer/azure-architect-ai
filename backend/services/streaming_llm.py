@@ -28,7 +28,7 @@ from services import openai_service
 _MAX_ATTEMPTS = 4
 
 
-def _tools_to_responses(tools: list[dict] | None) -> list[dict]:
+def tools_to_responses(tools: list[dict] | None) -> list[dict]:
     """Flatten Chat Completions tool schemas into the Responses API shape."""
     out: list[dict] = []
     for tool in tools or []:
@@ -44,6 +44,10 @@ def _tools_to_responses(tools: list[dict] | None) -> list[dict]:
             }
         )
     return out
+
+
+# Back-compat alias for existing importers.
+_tools_to_responses = tools_to_responses
 
 
 def _content_to_responses(content: Any, *, assistant: bool) -> list[dict]:
@@ -209,7 +213,7 @@ async def _stream_responses(
     if instructions:
         kwargs["instructions"] = instructions
     if tools:
-        kwargs["tools"] = _tools_to_responses(tools)
+        kwargs["tools"] = tools_to_responses(tools)
         kwargs["tool_choice"] = tool_choice
 
     async for kind, payload in _open_stream(lambda: client.responses.create(**kwargs)):

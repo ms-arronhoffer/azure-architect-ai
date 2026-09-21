@@ -1,7 +1,7 @@
 from fastapi import APIRouter
 from pydantic import BaseModel
 
-from services.openai_service import get_client, get_deployment
+from services.openai_service import chat_completion, get_client, get_deployment
 
 router = APIRouter()
 
@@ -18,7 +18,8 @@ async def improve_text(req: ImproveRequest):
     client = get_client()
     deployment = get_deployment("chat")
 
-    response = client.chat.completions.create(
+    response = chat_completion(
+        client,
         model=deployment,
         messages=[
             {

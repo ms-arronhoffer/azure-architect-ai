@@ -17,14 +17,14 @@ import type { Mode, ModelConfig, UserSettings } from "../types";
 import { useAuth } from "../auth/AuthProvider";
 
 const AZURE_MODELS_BY_MODE: Partial<Record<Mode, string[]>> = {
-  codegen: ["gpt-5.3-codex", "gpt-5.4", "gpt-5.4-pro"],
-  architecture: ["gpt-5.3-codex", "gpt-5.4", "gpt-5.4-pro"],
-  review: ["gpt-5.4", "gpt-5.3-codex", "gpt-5.4-pro"],
-  "demo-build": ["gpt-5.3-codex", "gpt-5.4", "gpt-5.4-pro"],
+  codegen: ["gpt-5.6-sol"],
+  architecture: ["gpt-5.6-sol"],
+  review: ["gpt-5.6-sol"],
+  "demo-build": ["gpt-5.6-sol"],
 };
 
 const MODELS_BY_PROVIDER: Record<string, string[]> = {
-  azure: ["", "gpt-4o-mini", "gpt-4.1"],
+  azure: ["", "gpt-5.6-sol"],
   "github-models": [
     "gpt-4o",
     "gpt-4o-mini",

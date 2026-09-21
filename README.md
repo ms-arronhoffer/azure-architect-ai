@@ -170,8 +170,8 @@ Defined in `backend/config.py`.
 | --- | --- | --- |
 | `AZURE_OPENAI_ENDPOINT` | (required) | `https://<account>.openai.azure.com/` |
 | `AZURE_OPENAI_KEY` | unset | Optional. If unset, uses `DefaultAzureCredential` token provider |
-| `AZURE_OPENAI_DEPLOYMENT_CHAT` | `gpt-4o-mini` | Fast chat / QA model |
-| `AZURE_OPENAI_DEPLOYMENT_ARCH` | `gpt-4.1` | Architecture-quality model |
+| `AZURE_OPENAI_DEPLOYMENT_CHAT` | `gpt-5.6-sol` | Chat / QA model |
+| `AZURE_OPENAI_DEPLOYMENT_ARCH` | `gpt-5.6-sol` | Architecture-quality model |
 | `AZURE_OPENAI_DEPLOYMENT_EMBEDDING` | `text-embedding-3-small` | RAG embeddings |
 | `AZURE_OPENAI_API_VERSION` | `2024-12-01-preview` | API version |
 | `RAG_ENABLED` | `true` | Pre-warm RAG corpus on startup |

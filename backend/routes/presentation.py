@@ -8,7 +8,7 @@ from fastapi import APIRouter, File, Form, UploadFile
 from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel
 
-from services.openai_service import get_client, get_deployment
+from services.openai_service import chat_completion, get_client, get_deployment
 from services.pptx_service import build_presentation
 from tools.tool_definitions import get_tools
 
@@ -126,7 +126,8 @@ async def _generate(req: OutlineRequest, file_context: str = ""):
         )
 
     # ── Call 1: generate outline ────────────────────────────────────────────
-    resp1 = client.chat.completions.create(
+    resp1 = chat_completion(
+        client,
         model=deployment,
         messages=[{"role": "system", "content": system}, {"role": "user", "content": user}],
         tools=[outline_tool],
@@ -138,12 +139,23 @@ async def _generate(req: OutlineRequest, file_context: str = ""):
     yield _sse({"type": "outline", "outline": outline})
 
     # ── Call 2: review + improve ────────────────────────────────────────────
-    resp2 = client.chat.completions.create(
+    resp2 = chat_completion(
+        client,
         model=deployment,
         messages=[
             {"role": "system", "content": system},
             {"role": "user", "content": user},
-            resp1.choices[0].message,
+            {
+                "role": "assistant",
+                "content": resp1.choices[0].message.content or None,
+                "tool_calls": [
+                    {
+                        "id": tc1.id,
+                        "type": "function",
+                        "function": {"name": tc1.function.name, "arguments": tc1.function.arguments},
+                    }
+                ],
+            },
             {"role": "tool", "tool_call_id": tc1.id, "content": json.dumps(outline)},
             {
                 "role": "user",

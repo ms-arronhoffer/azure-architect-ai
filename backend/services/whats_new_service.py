@@ -10,6 +10,7 @@ from urllib.parse import urlsplit, urlunsplit
 import httpx
 
 from middleware.logging import get_logger
+from services import openai_service
 
 log = get_logger("whats_new_service")
 
@@ -332,7 +333,8 @@ def _draft_sync(
         "<html email fragment>"
     )
 
-    response = client.chat.completions.create(
+    response = openai_service.chat_completion(
+        client,
         model=deployment,
         messages=[{"role": "user", "content": prompt}],
         temperature=0.7,

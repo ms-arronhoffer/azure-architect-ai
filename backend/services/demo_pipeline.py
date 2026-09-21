@@ -129,17 +129,15 @@ def manifest(files: dict[str, str]) -> list[dict]:
 
 _SYSTEM_TEXT = "You output strict JSON only. No prose, no markdown fences."
 
-# Per-phase model split for the demo-build pipeline. All gpt-5.4 family by
-# product requirement. Reasoning model (-pro) only on the one phase that
-# genuinely benefits — architecture_design — to avoid the high-latency tax on
-# output-heavy build lanes. Each entry is overridable via
+# Per-phase model split for the demo-build pipeline. Every phase runs on
+# gpt-5.6-sol by product requirement. Each entry is overridable via
 # `app_settings.mode_models["demo-build.<phase>"]`.
 _PHASE_DEFAULTS: dict[str, str] = {
-    "recommendations": "gpt-5.4-mini",
-    "architecture_design": "gpt-5.4-pro",
-    "code": "gpt-5.4",
-    "infra": "gpt-5.4",
-    "docs": "gpt-5.4",
+    "recommendations": "gpt-5.6-sol",
+    "architecture_design": "gpt-5.6-sol",
+    "code": "gpt-5.6-sol",
+    "infra": "gpt-5.6-sol",
+    "docs": "gpt-5.6-sol",
 }
 
 
@@ -183,10 +181,7 @@ async def _llm_json(
     reject `chat.completions` outright); falls back to Chat Completions for
     gpt-4-family deployments.
 
-    Per-phase model selection (gpt-5.4 family only by design):
-      - `recommendations`           → gpt-5.4-mini (fast/cheap, light reasoning)
-      - `architecture_design`       → gpt-5.4-pro  (deep reasoning, one-shot)
-      - `code` / `infra` / `docs`   → gpt-5.4      (chat, high-output codegen)
+    Per-phase model selection: every phase runs on gpt-5.6-sol by design.
 
     Override order: `mode_models["demo-build.<phase>"]` → `mode_models["demo-build"]`
     → hardcoded `_PHASE_DEFAULTS[phase]`.
@@ -216,7 +211,8 @@ async def _llm_json(
         # producing visible text. Stream the response (no max_output_tokens
         # cap) so reasoning + JSON can complete without truncation, and ask
         # for json_object format so the visible output is well-formed.
-        # gpt-5.4-pro rejects effort=low; medium is the lowest accepted.
+        # Reasoning effort stays at medium — the lowest level every gpt-5.x
+        # reasoning deployment accepts (gpt-5.x-pro rejects effort=low).
         is_reasoning = _needs_responses_api(deployment)
         kwargs: dict[str, Any] = {
             "model": deployment,

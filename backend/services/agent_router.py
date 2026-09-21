@@ -254,7 +254,8 @@ def route(
         )
 
         def _call():
-            return client.chat.completions.create(
+            return openai_service.chat_completion(
+                client,
                 model=deployment,
                 messages=[
                     {"role": "system", "content": _CLASSIFIER_SYSTEM},

@@ -80,8 +80,7 @@ interface AdvisorPanelProps {
 }
 
 const MODEL_OPTIONS = [
-  { value: "gpt-5.4-mini", label: "GPT-5.4 Mini" },
-  { value: "gpt-5.4", label: "GPT-5.4" },
+  { value: "gpt-5.6-sol", label: "GPT-5.6 Sol (default)" },
 ];
 
 export default function AdvisorPanel({
@@ -98,7 +97,7 @@ export default function AdvisorPanel({
   onContinueIn,
 }: AdvisorPanelProps) {
   const styles = useStyles();
-  const [selectedModel, setSelectedModel] = useState<string>("gpt-5.4-mini");
+  const [selectedModel, setSelectedModel] = useState<string>("gpt-5.6-sol");
 
   const effectiveModelConfig: ModelConfig = {
     provider: modelConfig?.provider ?? "azure",

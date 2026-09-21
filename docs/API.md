@@ -23,7 +23,7 @@ Request body:
   "messages": [{"role": "user", "content": "..."}],
   "llm_config": {
     "provider": "azure" | "github-copilot" | "github-models",
-    "model": "gpt-4.1",
+    "model": "gpt-5.6-sol",
     "github_token": "<optional>"
   }
 }
