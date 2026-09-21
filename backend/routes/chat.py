@@ -11,7 +11,6 @@ from collections.abc import AsyncGenerator
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
-from openai import APIError, AuthenticationError, BadRequestError
 from pydantic import BaseModel
 
 from auth import require_user, user_id_from_claims
@@ -23,17 +22,16 @@ from prompts.agents import DEFAULT_AGENT, get_agent_prompt
 from prompts.domain_fragments import get_fragments
 from prompts.system_prompt import get_system_prompt
 from services import agent_router, engagement_context
-from services.error_sanitizer import sanitize_openai_error
 from services.feature_flags import unified_agents_enabled
 from services.mcp_service import call_mcp_tool, is_mcp_tool
 from services.openai_service import (
     TOOL_INCOMPATIBLE_MODELS,
-    resolve_async_client_and_model,
-    transient_retry_delay,
+    resolve_streaming_client,
 )
 from services.pricing_service import estimate_architecture, validate_sku
 from services.rag_service import cached_learn_search, cached_learn_search_full
 from services.settings_service import load_settings
+from services.streaming_llm import stream_tool_completion
 from services.token_service import schedule_record_usage
 from tools.tool_definitions import get_tools_for_mode
 
@@ -46,11 +44,6 @@ _unified_agents_enabled = unified_agents_enabled
 
 # Modes that use the architecture route instead (handled by architecture.py)
 ARCH_ROUTE_MODES = {"architecture", "waf", "review", "drbc"}
-
-# Streaming Chat Completions bypass openai_service.call_with_retry, so a single
-# momentary 429/5xx would otherwise surface immediately as a hard error. Retry
-# transient failures with backoff before giving up.
-_MAX_STREAM_ATTEMPTS = 4
 
 # Desk modes whose design_architecture tool call should produce a draw.io diagram
 # (mirrors the diagram pane behavior in ArchitecturePanel for the desk experience).
@@ -197,7 +190,7 @@ async def _stream_chat(mode: str, messages: list[dict], provider: str = "azure",
 
 async def _stream_chat_impl(mode: str, messages: list[dict], provider: str = "azure", model: str = "", github_token: str = "", attachments: list[str] | None = None, user_id: str = "default", skill_id: str | None = None) -> AsyncGenerator[str, None]:
     try:
-        client, deployment = resolve_async_client_and_model(mode, provider, model, github_token)
+        client, deployment, use_responses = resolve_streaming_client(mode, provider, model, github_token)
     except ValueError as e:
         yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
         return
@@ -324,65 +317,36 @@ async def _stream_chat_impl(mode: str, messages: list[dict], provider: str = "az
                 yield f"data: {json.dumps({'type': 'rag_unknown', 'top_confidence': prefetch_bundle.get('top_confidence', 0.0)})}\n\n"
 
     while True:
-        kwargs: dict = {
-            "model": deployment,
-            "messages": full_messages,
-            "stream": True,
-            "stream_options": {"include_usage": True},
-            "max_completion_tokens": 8000,
-        }
-        if tools:
-            kwargs["tools"] = tools
-            kwargs["tool_choice"] = "auto"
-
         collected_content = ""
         tool_calls_raw: dict[int, dict] = {}
         finish_reason = None
+        stream_errored = False
 
-        attempt = 0
-        while True:
-            attempt += 1
-            try:
-                stream = await client.chat.completions.create(**kwargs)
+        async for ev in stream_tool_completion(
+            client, deployment, full_messages, tools,
+            tool_choice="auto", max_tokens=8000, use_responses=use_responses,
+        ):
+            etype = ev["type"]
+            if etype == "status":
+                yield f"data: {json.dumps({'type': 'status', 'message': ev['message']})}\n\n"
+            elif etype == "error":
+                yield f"data: {json.dumps({'type': 'error', 'message': ev['message']})}\n\n"
+                stream_errored = True
                 break
-            except (BadRequestError, AuthenticationError, APIError) as e:
-                delay = transient_retry_delay(e, attempt) if attempt < _MAX_STREAM_ATTEMPTS else None
-                if delay is None:
-                    msg = sanitize_openai_error(e)
-                    yield f"data: {json.dumps({'type': 'error', 'message': msg})}\n\n"
-                    return
-                yield f"data: {json.dumps({'type': 'status', 'message': 'Service busy, retrying...'})}\n\n"
-                await asyncio.sleep(delay)
+            elif etype == "usage":
+                prompt_tokens += ev["prompt"]
+                completion_tokens += ev["completion"]
+            elif etype == "content":
+                collected_content += ev["text"]
+                yield f"data: {json.dumps({'type': 'token', 'content': ev['text']})}\n\n"
+            elif etype == "tool_call":
+                tool_calls_raw[len(tool_calls_raw)] = {
+                    "id": ev["id"], "name": ev["name"], "arguments": ev["arguments"],
+                }
+            elif etype == "finish":
+                finish_reason = ev["reason"]
 
-        try:
-            async for chunk in stream:
-                if chunk.usage is not None:
-                    prompt_tokens += chunk.usage.prompt_tokens or 0
-                    completion_tokens += chunk.usage.completion_tokens or 0
-                if not chunk.choices:
-                    continue
-                delta = chunk.choices[0].delta
-                finish_reason = chunk.choices[0].finish_reason
-
-                if delta.content:
-                    collected_content += delta.content
-                    yield f"data: {json.dumps({'type': 'token', 'content': delta.content})}\n\n"
-
-                if delta.tool_calls:
-                    for tc in delta.tool_calls:
-                        idx = tc.index
-                        if idx not in tool_calls_raw:
-                            tool_calls_raw[idx] = {"id": tc.id or "", "name": "", "arguments": ""}
-                        if tc.id:
-                            tool_calls_raw[idx]["id"] = tc.id
-                        if tc.function:
-                            if tc.function.name:
-                                tool_calls_raw[idx]["name"] = tc.function.name
-                            if tc.function.arguments:
-                                tool_calls_raw[idx]["arguments"] += tc.function.arguments
-        except (BadRequestError, AuthenticationError, APIError) as e:
-            msg = sanitize_openai_error(e)
-            yield f"data: {json.dumps({'type': 'error', 'message': msg})}\n\n"
+        if stream_errored:
             return
 
         if finish_reason == "tool_calls" and tool_calls_raw:

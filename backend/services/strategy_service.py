@@ -4,6 +4,8 @@ import re
 from collections.abc import AsyncGenerator
 from typing import Any
 
+from services import openai_service
+
 _BASE_FRAMEWORK = """
 ## Foundational IT Strategy Framework
 A robust IT strategy is a bridge between business goals and the technology needed to achieve them — not just a list of hardware or software requirements. It must be dynamic, repeatable, and aligned with organizational culture. This strategy must be grounded in all five of the following foundational pillars:
@@ -164,21 +166,14 @@ Follow the structure of this example exactly (replace all example values with re
 
 def _draft_sync(inputs: dict, client: Any, deployment: str) -> dict:
     prompt = _build_prompt(inputs)
-    response = client.chat.completions.create(
+    response = openai_service.chat_completion(
+        client,
         model=deployment,
         messages=[{"role": "user", "content": prompt}],
         temperature=0.3,
-        stream=True,
     )
 
-    accumulated = ""
-    for chunk in response:
-        if not chunk.choices:
-            continue
-        delta = chunk.choices[0].delta.content or ""
-        accumulated += delta
-
-    raw = accumulated.strip()
+    raw = (response.choices[0].message.content or "").strip()
     raw = re.sub(r"^```(?:json)?\s*", "", raw, flags=re.MULTILINE)
     raw = re.sub(r"\s*```\s*$", "", raw, flags=re.MULTILINE)
     raw = raw.strip()

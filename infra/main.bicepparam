@@ -20,15 +20,9 @@ param frontendImage = 'aarchdevacr.azurecr.io/aa-frontend:latest'
 
 param openAiDeployments = [
   {
-    name: 'gpt-5.4'
-    model: 'gpt-5.4'
-    version: '2026-03-05'
-    capacity: 50
-  }
-  {
-    name: 'gpt-5.4-mini'
-    model: 'gpt-5.4-mini'
-    version: '2026-03-17'
+    name: 'gpt-5.6-sol'
+    model: 'gpt-5.6-sol'
+    version: '2026-07-09'
     capacity: 50
   }
   {

@@ -1,14 +1,14 @@
 """Lightweight classifier that picks the right agent + domain fragments
 + likely tools for an incoming user message.
 
-Calls gpt-4o-mini (or whatever the chat deployment is) with a strict
+Calls the chat deployment (gpt-5.6-sol by default) with a strict
 JSON schema. Cached by SHA-256 of the prompt for 24 h — same question
 typed twice doesn't burn classifier tokens twice.
 
 Cost target: a single classification ≈ 200 prompt + 80 completion
-tokens of gpt-4o-mini ≈ $0.0001. Negligible compared to the chat that
-follows, but worth caching anyway because the same architect types the
-same questions across the day.
+tokens. Negligible compared to the chat that follows, but worth caching
+anyway because the same architect types the same questions across the
+day.
 """
 from __future__ import annotations
 
@@ -254,7 +254,8 @@ def route(
         )
 
         def _call():
-            return client.chat.completions.create(
+            return openai_service.chat_completion(
+                client,
                 model=deployment,
                 messages=[
                     {"role": "system", "content": _CLASSIFIER_SYSTEM},

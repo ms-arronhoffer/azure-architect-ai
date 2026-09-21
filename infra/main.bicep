@@ -28,15 +28,9 @@ param tags object = {
 @description('Azure OpenAI model deployments to create. Each entry: { name, model, version, capacity }.')
 param openAiDeployments array = [
   {
-    name: 'gpt-5.4'
-    model: 'gpt-5.4'
-    version: '2026-03-05'
-    capacity: 50
-  }
-  {
-    name: 'gpt-5.4-mini'
-    model: 'gpt-5.4-mini'
-    version: '2026-03-17'
+    name: 'gpt-5.6-sol'
+    model: 'gpt-5.6-sol'
+    version: '2026-07-09'
     capacity: 50
   }
 ]
@@ -303,8 +297,11 @@ module backendApp 'modules/containerapp.bicep' = {
     envVars: [
       { name: 'AZURE_OPENAI_ENDPOINT', value: aoaiEndpoint }
       { name: 'AZURE_CLIENT_ID', value: identity.outputs.clientId }
-      { name: 'AZURE_OPENAI_DEPLOYMENT_ARCH', value: 'gpt-5.4' }
-      { name: 'AZURE_OPENAI_DEPLOYMENT_CHAT', value: 'gpt-5.4' }
+      { name: 'AZURE_OPENAI_DEPLOYMENT_ARCH', value: 'gpt-5.6-sol' }
+      { name: 'AZURE_OPENAI_DEPLOYMENT_CHAT', value: 'gpt-5.6-sol' }
+      { name: 'AZURE_OPENAI_DEPLOYMENT_EVAL', value: 'gpt-5.6-sol' }
+      { name: 'AZURE_OPENAI_DEPLOYMENT_DEMO_BUILD', value: 'gpt-5.6-sol' }
+      { name: 'AZURE_OPENAI_DEPLOYMENT_PRICING', value: 'gpt-5.6-sol' }
       { name: 'AZURE_OPENAI_DEPLOYMENT_EMBEDDING', value: 'text-embedding-ada-002' }
       { name: 'ENABLE_MCP', value: 'true' }
       { name: 'AUTH_ENABLED', value: 'true' }

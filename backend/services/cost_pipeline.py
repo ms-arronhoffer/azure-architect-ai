@@ -300,7 +300,8 @@ async def _phase_narration(
         client, deployment = openai_service.resolve_client_and_model(mode="chat", provider="azure")
         resp = await asyncio.to_thread(
             openai_service.call_with_retry,
-            lambda: client.chat.completions.create(
+            lambda: openai_service.chat_completion(
+                client,
                 model=deployment,
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0.2,

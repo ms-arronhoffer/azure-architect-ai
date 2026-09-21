@@ -1,4 +1,4 @@
-"""The Architecture Review evaluation runs on gpt-5.4, a reasoning deployment that
+"""The Architecture Review evaluation runs on gpt-5.6-sol, a reasoning deployment that
 only speaks the Responses API. ``streaming_llm.stream_tool_completion`` normalizes
 Chat Completions *and* Responses API streams into one tool-loop event schema so the
 architecture / WAF routes work on both surfaces.
@@ -190,22 +190,32 @@ def test_chat_messages_to_responses_converts_image_parts():
 
 # --- Deployment routing ----------------------------------------------------
 
-def test_review_defaults_to_gpt54_via_responses_api():
+def test_review_defaults_to_gpt56_sol_via_responses_api():
     from services import openai_service
 
     # Evaluation (Architecture Review) resolves to the reasoning eval model.
-    assert openai_service.get_deployment("review") == "gpt-5.4"
-    assert openai_service.needs_responses_api("gpt-5.4") is True
+    assert openai_service.get_deployment("review") == "gpt-5.6-sol"
+    assert openai_service.needs_responses_api("gpt-5.6-sol") is True
 
     _, deployment, use_responses = openai_service.resolve_streaming_client("review")
-    assert deployment == "gpt-5.4"
+    assert deployment == "gpt-5.6-sol"
+    assert use_responses is True
+
+
+def test_architecture_also_defaults_to_gpt56_sol():
+    from services import openai_service
+
+    _, deployment, use_responses = openai_service.resolve_streaming_client("architecture")
+    assert deployment == "gpt-5.6-sol"
     assert use_responses is True
 
 
 def test_gpt4_family_stays_on_chat_completions():
     from services import openai_service
 
-    _, deployment, use_responses = openai_service.resolve_streaming_client("architecture")
+    _, deployment, use_responses = openai_service.resolve_streaming_client(
+        "architecture", model="gpt-4.1"
+    )
     assert deployment == "gpt-4.1"
     assert use_responses is False
 

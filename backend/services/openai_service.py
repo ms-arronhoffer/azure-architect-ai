@@ -262,6 +262,134 @@ def needs_responses_api(deployment: str | None) -> bool:
     )
 
 
+class _ShimFunction:
+    def __init__(self, name: str, arguments: str) -> None:
+        self.name = name
+        self.arguments = arguments
+
+
+class _ShimToolCall:
+    def __init__(self, call_id: str, name: str, arguments: str) -> None:
+        self.id = call_id
+        self.type = "function"
+        self.function = _ShimFunction(name, arguments)
+
+
+class _ShimMessage:
+    def __init__(self, content: str, tool_calls: list[_ShimToolCall] | None) -> None:
+        self.role = "assistant"
+        self.content = content
+        self.tool_calls = tool_calls or None
+
+
+class _ShimChoice:
+    def __init__(self, message: _ShimMessage, finish_reason: str) -> None:
+        self.index = 0
+        self.message = message
+        self.finish_reason = finish_reason
+
+
+class _ShimCompletion:
+    """Chat-Completions-shaped view over a Responses API result."""
+
+    def __init__(self, model: str, choices: list[_ShimChoice], usage) -> None:
+        self.model = model
+        self.choices = choices
+        self.usage = usage
+
+
+def _tool_choice_to_responses(tool_choice):
+    """Translate a Chat Completions ``tool_choice`` into the Responses shape."""
+    if isinstance(tool_choice, dict):
+        fn = tool_choice.get("function") or {}
+        name = fn.get("name") or tool_choice.get("name")
+        if name:
+            return {"type": "function", "name": name}
+        return "auto"
+    return tool_choice or "auto"
+
+
+def _responses_to_completion(resp, model: str) -> _ShimCompletion:
+    text = (getattr(resp, "output_text", None) or "").strip()
+    tool_calls: list[_ShimToolCall] = []
+    for item in getattr(resp, "output", None) or []:
+        if getattr(item, "type", "") != "function_call":
+            continue
+        tool_calls.append(
+            _ShimToolCall(
+                getattr(item, "call_id", "") or getattr(item, "id", "") or "",
+                getattr(item, "name", "") or "",
+                getattr(item, "arguments", "") or "",
+            )
+        )
+    if not text:
+        chunks: list[str] = []
+        for item in getattr(resp, "output", None) or []:
+            for part in getattr(item, "content", None) or []:
+                piece = getattr(part, "text", None)
+                if piece:
+                    chunks.append(piece)
+        text = "".join(chunks).strip()
+    message = _ShimMessage(text, tool_calls)
+    finish = "tool_calls" if tool_calls else "stop"
+    return _ShimCompletion(model, [_ShimChoice(message, finish)], getattr(resp, "usage", None))
+
+
+def chat_completion(
+    client,
+    *,
+    model: str,
+    messages: list[dict],
+    tools: list[dict] | None = None,
+    tool_choice=None,
+    response_format: dict | None = None,
+    temperature: float | None = None,
+    max_completion_tokens: int | None = None,
+    reasoning_effort: str = "medium",
+    provider: str = "azure",
+):
+    """Non-streaming completion that works on both Azure API surfaces.
+
+    Azure reasoning deployments (gpt-5 / codex / o-series) reject Chat
+    Completions, so they are transparently routed through the Responses API and
+    the result is wrapped in a Chat-Completions-shaped object — callers keep
+    reading ``resp.choices[0].message.content`` / ``.tool_calls`` regardless of
+    surface. ``temperature`` is dropped for reasoning deployments, which reject
+    it. Non-Azure providers always stay on Chat Completions.
+    """
+    if provider not in ("azure", "") or not needs_responses_api(model):
+        kwargs: dict = {"model": model, "messages": messages}
+        if tools:
+            kwargs["tools"] = tools
+            if tool_choice is not None:
+                kwargs["tool_choice"] = tool_choice
+        if response_format is not None:
+            kwargs["response_format"] = response_format
+        if temperature is not None:
+            kwargs["temperature"] = temperature
+        if max_completion_tokens is not None:
+            kwargs["max_completion_tokens"] = max_completion_tokens
+        return client.chat.completions.create(**kwargs)
+
+    from services.streaming_llm import chat_messages_to_responses, tools_to_responses
+
+    rclient = get_responses_client(model)
+    instructions, inp = chat_messages_to_responses(messages)
+    kwargs = {"model": model, "input": inp, "reasoning": {"effort": reasoning_effort}}
+    if instructions:
+        kwargs["instructions"] = instructions
+    if tools:
+        kwargs["tools"] = tools_to_responses(tools)
+        kwargs["tool_choice"] = _tool_choice_to_responses(tool_choice)
+    if response_format is not None:
+        kwargs["text"] = {"format": response_format}
+    if max_completion_tokens is not None:
+        # Reasoning tokens are billed against the output budget before any
+        # visible text is produced, so give the model headroom to finish.
+        kwargs["max_output_tokens"] = max(max_completion_tokens * 4, 16_000)
+    return _responses_to_completion(rclient.responses.create(**kwargs), model)
+
+
 def get_deployment(mode: str) -> str:
     if mode == "review":
         return settings.azure_openai_deployment_eval

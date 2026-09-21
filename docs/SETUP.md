@@ -10,7 +10,7 @@ Full developer setup for Azure Architect AI.
 | Node.js | 22+ | Frontend build, MCP subprocess (`npx @azure/mcp`) |
 | Docker Desktop | latest | Optional, for Compose workflows |
 | Azure CLI | latest | `az login` powers `DefaultAzureCredential` |
-| An Azure OpenAI resource | with `gpt-4.1`, `gpt-4o-mini`, `text-embedding-3-small` deployments | Or use API key |
+| An Azure OpenAI resource | with `gpt-5.6-sol`, `text-embedding-3-small` deployments | Or use API key |
 
 ## 1. Clone and check out
 
@@ -40,8 +40,8 @@ Minimum viable `.env`:
 
 ```
 AZURE_OPENAI_ENDPOINT=https://my-aoai.openai.azure.com/
-AZURE_OPENAI_DEPLOYMENT_CHAT=gpt-4o-mini
-AZURE_OPENAI_DEPLOYMENT_ARCH=gpt-4.1
+AZURE_OPENAI_DEPLOYMENT_CHAT=gpt-5.6-sol
+AZURE_OPENAI_DEPLOYMENT_ARCH=gpt-5.6-sol
 AZURE_OPENAI_DEPLOYMENT_EMBEDDING=text-embedding-3-small
 ```
 

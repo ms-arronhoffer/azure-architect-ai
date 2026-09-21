@@ -1586,6 +1586,7 @@ def generate_recommendations(
     today: date,
 ) -> str:
     """Generate AI-powered recommendations from the org scorecard (mirrors model-iq advisor)."""
+    from services import openai_service  # type: ignore[import]
     from services.openai_service import get_client, get_deployment  # type: ignore[import]
 
     totals = org_scorecard.get("totals", {})
@@ -1705,7 +1706,8 @@ Use exact account names, model names, and director aliases from the data. Be spe
     client = get_client()
     deployment = get_deployment("architecture")
 
-    resp = client.chat.completions.create(
+    resp = openai_service.chat_completion(
+        client,
         model=deployment,
         messages=[
             {"role": "system", "content": system},

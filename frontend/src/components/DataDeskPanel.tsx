@@ -98,13 +98,7 @@ const useStyles = makeStyles({
 });
 
 const MODEL_OPTIONS = [
-  { value: "gpt-5.4-mini", label: "GPT-5.4 Mini (default)" },
-  { value: "gpt-5.4", label: "GPT-5.4" },
-  { value: "gpt-5-pro", label: "GPT-5 Pro" },
-  { value: "gpt-5", label: "GPT-5" },
-  { value: "gpt-4.1", label: "GPT-4.1" },
-  { value: "gpt-4o", label: "GPT-4o" },
-  { value: "gpt-4o-mini", label: "GPT-4o Mini" },
+  { value: "gpt-5.6-sol", label: "GPT-5.6 Sol (default)" },
 ];
 
 interface DataDeskPanelProps {
@@ -135,7 +129,7 @@ export default function DataDeskPanel({
   onContinueIn,
 }: DataDeskPanelProps) {
   const styles = useStyles();
-  const [selectedModel, setSelectedModel] = useState<string>("gpt-5.4-mini");
+  const [selectedModel, setSelectedModel] = useState<string>("gpt-5.6-sol");
   const [pendingSend, setPendingSend] = useState<{ content: string; nonce: number } | undefined>();
   const diagram = useDiagramState();
 

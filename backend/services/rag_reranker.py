@@ -16,7 +16,7 @@ import time
 
 from config import settings
 from middleware.logging import get_logger
-from services.openai_service import call_with_retry, get_client
+from services.openai_service import call_with_retry, chat_completion, get_client
 
 log = get_logger("rag_reranker")
 
@@ -122,7 +122,8 @@ async def rerank(query: str, hits: list[dict], top_k: int = 5) -> list[dict]:
         client = get_client()
         deployment = settings.azure_openai_deployment_chat
         resp = call_with_retry(
-            lambda: client.chat.completions.create(
+            lambda: chat_completion(
+                client,
                 model=deployment,
                 messages=[
                     {"role": "system", "content": prompt},
