@@ -244,6 +244,80 @@ az account get-access-token --resource api://5e5c9491-d850-4f1b-9d67-939824a4c81
 Needs Application Administrator (or Cloud Application Administrator). Pass
 `--dry-run` first to see the Graph PATCH/POST bodies without applying them.
 
+### Rotating to a new API app registration
+
+Only when the API app registration is gone for good — `az ad app show --id <id>`
+404s and it is past the 30-day soft-delete window, so
+`az rest --method POST --url "https://graph.microsoft.com/v1.0/directory/deletedItems/<id>/restore"`
+cannot bring it back. The replacement gets a **new client ID**, which changes
+`ENTRA_AUDIENCE` and `VITE_ENTRA_API_SCOPE` everywhere.
+
+1. Mint the replacement. `--create-missing` looks the app up by display name
+   (`--api-display-name`, default `azure-architect-ai-api`) and only creates one
+   when no match exists, so it is safe to re-run. Omit `--api-app-id` so the new
+   ID is allocated; keep `--spa-app-id` so the existing SPA is reused.
+
+   ```bash
+   az login --tenant 16b3c013-d300-468d-ac64-7eda0820b6d3 --allow-no-subscriptions
+   ./infra/scripts/ensure-entra-apps.sh \
+     --tenant-id 16b3c013-d300-468d-ac64-7eda0820b6d3 \
+     --create-missing \
+     --spa-app-id e9616e6b-3c8b-4153-b814-b01817c9ade2 \
+     --redirect-uri https://blueprint.techtools.host/ \
+     --redirect-uri https://dev.blueprint.techtools.host/
+   ```
+
+   The script creates the app, sets `api://<new-id>`, re-exposes
+   `access_as_user` + `Metrics.Read`, creates the service principal (the part
+   that actually fixes `AADSTS500011`), repoints the SPA's
+   `requiredResourceAccess`, pre-authorises the SPA, and prints the new ID plus
+   the `gh variable set` commands below.
+
+2. Update the GitHub Actions variables for **each** environment (`dev` from
+   `main`, `test` from `dev` — see the `setenv` job in
+   `.github/workflows/deploy.yml`). `VITE_ENTRA_CLIENT_ID` and
+   `VITE_ENTRA_TENANT_ID` only change if the SPA app or tenant changed too.
+
+   | Variable | New value | Consumed by |
+   |---|---|---|
+   | `ENTRA_AUDIENCE` | `api://<new-api-id>` | `infra/main.bicepparam` → `entraAudience` → backend `ENTRA_AUDIENCE` and the sidecar's `AzureAd__ClientId`/`AzureAd__Audience` |
+   | `VITE_ENTRA_API_SCOPE` | `api://<new-api-id>/access_as_user` | frontend build arg (`ACR build` step) |
+   | `VITE_ENTRA_CLIENT_ID` | SPA client ID (unchanged) | frontend build arg |
+   | `VITE_ENTRA_TENANT_ID` | tenant ID (unchanged) | both jobs |
+
+   ```bash
+   for env in dev test; do
+     gh variable set ENTRA_AUDIENCE       --env "$env" --body "api://<new-api-id>"
+     gh variable set VITE_ENTRA_API_SCOPE --env "$env" --body "api://<new-api-id>/access_as_user"
+   done
+   ```
+
+   `ENTRA_CLIENT_ID` is read by `infra/main.bicepparam` but not set by the
+   workflow; it stays unset because `entraClientId` is derived from the
+   `api://` audience (`infra/main.bicep`). Set it only if you move to a
+   non-`api://<client-id>` Application ID URI.
+
+3. Redeploy both tiers. `deploy_infra=true` is required — `ENTRA_AUDIENCE`
+   reaches the backend only through a Bicep deployment, and the `VITE_*` values
+   are baked into the frontend image at build time, so restarting the existing
+   revisions changes nothing.
+
+   ```bash
+   gh workflow run deploy --ref main -f deploy_infra=true -f services=backend,frontend
+   ```
+
+4. Verify, then hard-reload the SPA and clear `sessionStorage`/`localStorage`
+   for the origin so MSAL drops the cached failure.
+
+   ```bash
+   az account get-access-token --tenant 16b3c013-d300-468d-ac64-7eda0820b6d3 \
+     --resource api://<new-api-id> --query expiresOn -o tsv
+   ```
+
+5. Update the app ID in the table above, `.azure/plan.md`, and any Key Vault or
+   external consumer that pinned the old `api://` URI. Existing tokens for the
+   old resource are dead immediately; users just sign in again.
+
 The `frontend` deploy job runs a `Validate Entra SPA build configuration` step
 that fails the build when `VITE_ENTRA_*` variables are empty, when
 `VITE_ENTRA_API_SCOPE` is not `<resource>/<scope>`, or when it points at the SPA

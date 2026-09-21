@@ -25,7 +25,7 @@ which live in `aarch-dev-rg`. The test stack sets `deployOpenAi=false` and
 | `main.bicep` | Entrypoint (subscription scope). Creates RG and invokes modules. |
 | `main.bicepparam` | Prod parameter values. |
 | `main.test.bicepparam` | Test parameter values (shares AOAI/ACR with prod). |
-| `scripts/ensure-entra-apps.sh` | Idempotent repair of the SPA + API app registrations (fixes `AADSTS500011`). |
+| `scripts/ensure-entra-apps.sh` | Idempotent repair of the SPA + API app registrations (fixes `AADSTS500011`). `--create-missing` mints a replacement when an app registration is unrecoverable. |
 | `modules/identity.bicep` | User-assigned managed identity used by both apps. |
 | `modules/network.bicep` | VNet (3 subnets) + private DNS zones for KV/PG/AOAI. |
 | `modules/containerregistry.bicep` | Premium ACR. Grants `AcrPull` to the MI. |
