@@ -82,6 +82,9 @@ jobs:
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     environment: ${{ needs.setenv.outputs.gh_env_apply }}  # gate with required reviewers in repo settings
+    concurrency:
+      group: infra-${{ needs.setenv.outputs.deployment_name }}
+      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v6
       - uses: azure/login@v2

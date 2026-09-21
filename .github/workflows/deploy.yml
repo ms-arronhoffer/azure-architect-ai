@@ -60,6 +60,9 @@ jobs:
     if: github.event_name == 'workflow_dispatch' && inputs.deploy_infra == 'true'
     runs-on: ubuntu-latest
     environment: ${{ needs.setenv.outputs.gh_env }}
+    concurrency:
+      group: infra-${{ needs.setenv.outputs.deployment_name }}
+      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v6
       - uses: azure/login@v2
