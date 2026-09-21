@@ -208,6 +208,52 @@ Per-env redirect URIs on the SPA app:
 - `https://dev.blueprint.techtools.host/` (test)
 - ACA default FQDNs for direct access
 
+### Repairing the app registrations (AADSTS500011)
+
+Sign-in fails with
+
+```
+ServerError: invalid_resource: AADSTS500011: The resource principal named
+api://5e5c9491-d850-4f1b-9d67-939824a4c819 was not found in the tenant named
+16b3c013-d300-468d-ac64-7eda0820b6d3.
+```
+
+when Entra cannot resolve the *resource* the SPA asks a token for. An app
+registration alone is not enough — the resource needs a **service principal
+(enterprise application) in the tenant** and the `api://<client-id>` Application
+ID URI. The usual causes are a recreated/soft-deleted API app, a deleted
+enterprise application, or a cleared Application ID URI.
+
+`infra/scripts/ensure-entra-apps.sh` repairs all of it idempotently (Application
+ID URI, `access_as_user` scope, `Metrics.Read` role, both service principals,
+SPA redirect URIs, `requiredResourceAccess`, and pre-authorisation):
+
+```bash
+az login --tenant 16b3c013-d300-468d-ac64-7eda0820b6d3 --allow-no-subscriptions
+./infra/scripts/ensure-entra-apps.sh \
+  --tenant-id  16b3c013-d300-468d-ac64-7eda0820b6d3 \
+  --api-app-id 5e5c9491-d850-4f1b-9d67-939824a4c819 \
+  --spa-app-id e9616e6b-3c8b-4153-b814-b01817c9ade2 \
+  --redirect-uri https://blueprint.techtools.host/ \
+  --redirect-uri https://dev.blueprint.techtools.host/
+# verify — prints a token expiry, not AADSTS500011
+az account get-access-token --resource api://5e5c9491-d850-4f1b-9d67-939824a4c819 \
+  --query expiresOn -o tsv
+```
+
+Needs Application Administrator (or Cloud Application Administrator). Pass
+`--dry-run` first to see the Graph PATCH/POST bodies without applying them.
+
+The `frontend` deploy job runs a `Validate Entra SPA build configuration` step
+that fails the build when `VITE_ENTRA_*` variables are empty, when
+`VITE_ENTRA_API_SCOPE` is not `<resource>/<scope>`, or when it points at the SPA
+app instead of the API app, and warns when the resource principal cannot be
+resolved in the tenant.
+
+The SPA itself no longer swallows these errors: `frontend/src/auth/authErrors.ts`
+maps the Entra error code to a remediation hint that `AuthGate` renders next to
+the sign-in button instead of leaving an uncaught promise rejection in the console.
+
 ## Auth at runtime
 
 - Both container apps run with the same user-assigned managed identity (`infra/modules/identity.bicep`).
@@ -216,9 +262,28 @@ Per-env redirect URIs on the SPA app:
 
 ## Observability
 
-- `applicationinsights_connection_string` is wired from the `monitoring` module and consumed by `backend/observability.py` (`configure_telemetry`).
-- Custom counters: `aa_tool_calls_total`, `aa_openai_tokens_used`, `aa_rag_cache_hit_latency_ms`.
-- Alerts in `infra/modules/monitoring.bicep` page `oncallEmail`.
+One Log Analytics workspace (`<prefix>-<env>-law`) and one workspace-based
+Application Insights component (`<prefix>-<env>-appi`) per environment, both
+created by `infra/modules/monitoring.bicep` before the container apps:
+
+- **Container console + system logs** — `modules/containerapps-env.bicep` references that workspace (`logAnalyticsWorkspaceName`) for `appLogsConfiguration`. It no longer declares a second workspace of its own.
+- **App traces, logs, and metrics** — the backend container app receives `APPLICATIONINSIGHTS_CONNECTION_STRING` (as a container app secret) plus `OTEL_SERVICE_NAME`, which is what makes `backend/observability.py:configure_telemetry` export instead of no-op'ing. Without it the app logs `observability.disabled reason=no_connection_string` at startup and nothing reaches App Insights.
+- **Custom instruments** — `aa_tool_calls_total`, `aa_openai_tokens_used`, `aa_rag_cache_hit_latency_ms`.
+- **Alerts** — `infra/modules/alerts.bicep` (split out of `monitoring.bicep` so the workspace can be created before the apps that emit into it) pages `oncallEmail` on 5xx, CPU, and memory.
+- **Sign-in telemetry** — emitted by the `entra-auth` sidecar on the backend app; confirm every active backend revision still contains that container after a deploy.
+
+Verify after a deploy:
+
+```bash
+az containerapp show -g <RG> -n <BACKEND_APP> \
+  --query "properties.template.containers[].env[?name=='APPLICATIONINSIGHTS_CONNECTION_STRING']" -o json
+az monitor app-insights query --app <prefix>-<env>-appi \
+  --analytics-query "union traces, requests, customMetrics | where timestamp > ago(30m) | summarize count() by itemType"
+```
+
+Infra changes only reach the running apps through `infra.yml` (push to `main`/`dev`
+touching `infra/**`) or `deploy.yml` with `deploy_infra=true`; an app-only deploy
+reuses the existing revision template.
 
 ## Weekly content ingests (prod)
 

@@ -227,6 +227,9 @@ module kvSecrets 'modules/keyvault-secrets.bicep' = {
   }
 }
 
+// Deployed before the container apps so both the ACA environment (console/system
+// logs) and the backend (OpenTelemetry via APPLICATIONINSIGHTS_CONNECTION_STRING)
+// can point at the same workspace + Application Insights component.
 module monitoring 'modules/monitoring.bicep' = {
   name: 'monitoring'
   scope: rg
@@ -235,8 +238,19 @@ module monitoring 'modules/monitoring.bicep' = {
     env: env
     location: location
     tags: tags
-    targetContainerAppId: backendApp.outputs.id
     oncallEmail: oncallEmail
+  }
+}
+
+module alerts 'modules/alerts.bicep' = {
+  name: 'alerts'
+  scope: rg
+  params: {
+    prefix: prefix
+    env: env
+    tags: tags
+    targetContainerAppId: backendApp.outputs.id
+    actionGroupId: monitoring.outputs.actionGroupId
   }
 }
 
@@ -263,6 +277,7 @@ module acaEnv 'modules/containerapps-env.bicep' = {
     location: location
     tags: tags
     acaSubnetId: network.outputs.acaSubnetId
+    logAnalyticsWorkspaceName: monitoring.outputs.name
   }
 }
 
@@ -300,6 +315,10 @@ module backendApp 'modules/containerapp.bicep' = {
       { name: 'SESSION_COOKIE_SECURE', value: 'true' }
       { name: 'DATABASE_URL', secretRef: 'database-url' }
       { name: 'SECRET_ENCRYPTION_KEY', secretRef: 'secret-encryption-key' }
+      // Enables backend/observability.py -> azure-monitor-opentelemetry. Without
+      // it configure_telemetry() no-ops and no traces/logs/metrics are exported.
+      { name: 'APPLICATIONINSIGHTS_CONNECTION_STRING', secretRef: 'appinsights-connection-string' }
+      { name: 'OTEL_SERVICE_NAME', value: 'azure-architect-ai-backend' }
     ]
     sidecars: [
       {
@@ -328,6 +347,10 @@ module backendApp 'modules/containerapp.bicep' = {
         name: 'secret-encryption-key'
         keyVaultUrl: '${kv.outputs.uri}secrets/secret-encryption-key'
         identity: identity.outputs.id
+      }
+      {
+        name: 'appinsights-connection-string'
+        value: monitoring.outputs.appInsightsConnectionString
       }
     ]
   }

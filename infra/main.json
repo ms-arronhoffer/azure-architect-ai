@@ -4,8 +4,8 @@
   "metadata": {
     "_generator": {
       "name": "bicep",
-      "version": "0.43.8.12551",
-      "templateHash": "983053931409073869"
+      "version": "0.46.1.21595",
+      "templateHash": "16897811546752194336"
     }
   },
   "parameters": {
@@ -127,6 +127,13 @@
         "description": "API app registration audience (client ID or api://<id> URI). Tokens issued for this audience authorise /api/* calls."
       }
     },
+    "entraClientId": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "API app registration ClientId. Set explicitly when entraAudience is a custom app ID URI."
+      }
+    },
     "frontendCustomDomains": {
       "type": "array",
       "defaultValue": [],
@@ -198,7 +205,8 @@
     }
   },
   "variables": {
-    "rgName": "[format('{0}-{1}-rg', parameters('prefix'), parameters('env'))]"
+    "rgName": "[format('{0}-{1}-rg', parameters('prefix'), parameters('env'))]",
+    "resolvedEntraClientId": "[if(not(empty(parameters('entraClientId'))), parameters('entraClientId'), if(startsWith(parameters('entraAudience'), 'api://'), substring(parameters('entraAudience'), 6), parameters('entraAudience')))]"
   },
   "resources": [
     {
@@ -238,8 +246,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.43.8.12551",
-              "templateHash": "12301630029232627256"
+              "version": "0.46.1.21595",
+              "templateHash": "11105897844277271073"
             }
           },
           "parameters": {
@@ -328,8 +336,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.43.8.12551",
-              "templateHash": "8872382894244706077"
+              "version": "0.46.1.21595",
+              "templateHash": "9463196976243836620"
             }
           },
           "parameters": {
@@ -545,8 +553,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.43.8.12551",
-              "templateHash": "8574982011980173253"
+              "version": "0.46.1.21595",
+              "templateHash": "6714223447296088397"
             }
           },
           "parameters": {
@@ -647,8 +655,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.43.8.12551",
-              "templateHash": "11268198533837593452"
+              "version": "0.46.1.21595",
+              "templateHash": "14825483527664258784"
             }
           },
           "parameters": {
@@ -720,8 +728,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.43.8.12551",
-              "templateHash": "4679923583142744810"
+              "version": "0.46.1.21595",
+              "templateHash": "10090105902997390550"
             }
           },
           "parameters": {
@@ -906,8 +914,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.43.8.12551",
-              "templateHash": "6548165655332267842"
+              "version": "0.46.1.21595",
+              "templateHash": "3182308659936040436"
             }
           },
           "parameters": {
@@ -1102,8 +1110,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.43.8.12551",
-              "templateHash": "6896461405637705714"
+              "version": "0.46.1.21595",
+              "templateHash": "14480711605971135573"
             }
           },
           "parameters": {
@@ -1175,8 +1183,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.43.8.12551",
-              "templateHash": "232784683412577740"
+              "version": "0.46.1.21595",
+              "templateHash": "11757143401331894828"
             }
           },
           "parameters": {
@@ -1355,8 +1363,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.43.8.12551",
-              "templateHash": "164007833427040835"
+              "version": "0.46.1.21595",
+              "templateHash": "17916681350363095265"
             }
           },
           "parameters": {
@@ -1431,9 +1439,6 @@
           "tags": {
             "value": "[parameters('tags')]"
           },
-          "targetContainerAppId": {
-            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('rgName')), 'Microsoft.Resources/deployments', 'app-backend'), '2025-04-01').outputs.id.value]"
-          },
           "oncallEmail": {
             "value": "[parameters('oncallEmail')]"
           }
@@ -1444,8 +1449,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.43.8.12551",
-              "templateHash": "17056465988845531433"
+              "version": "0.46.1.21595",
+              "templateHash": "4177595454623899479"
             }
           },
           "parameters": {
@@ -1460,12 +1465,6 @@
             },
             "tags": {
               "type": "object"
-            },
-            "targetContainerAppId": {
-              "type": "string",
-              "metadata": {
-                "description": "Resource ID of the Container App to monitor with the metric alerts."
-              }
             },
             "oncallEmail": {
               "type": "string",
@@ -1535,7 +1534,97 @@
                   }
                 ]
               }
+            }
+          ],
+          "outputs": {
+            "id": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.OperationalInsights/workspaces', variables('workspaceName'))]"
             },
+            "name": {
+              "type": "string",
+              "value": "[variables('workspaceName')]"
+            },
+            "workspaceId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.OperationalInsights/workspaces', variables('workspaceName'))]"
+            },
+            "appInsightsConnectionString": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.Insights/components', variables('appiName')), '2020-02-02').ConnectionString]"
+            },
+            "actionGroupId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.Insights/actionGroups', variables('actionGroupName'))]"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "[subscriptionResourceId('Microsoft.Resources/resourceGroups', variables('rgName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "alerts",
+      "resourceGroup": "[variables('rgName')]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "prefix": {
+            "value": "[parameters('prefix')]"
+          },
+          "env": {
+            "value": "[parameters('env')]"
+          },
+          "tags": {
+            "value": "[parameters('tags')]"
+          },
+          "targetContainerAppId": {
+            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('rgName')), 'Microsoft.Resources/deployments', 'app-backend'), '2025-04-01').outputs.id.value]"
+          },
+          "actionGroupId": {
+            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('rgName')), 'Microsoft.Resources/deployments', 'monitoring'), '2025-04-01').outputs.actionGroupId.value]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.46.1.21595",
+              "templateHash": "18428803099462683672"
+            }
+          },
+          "parameters": {
+            "prefix": {
+              "type": "string"
+            },
+            "env": {
+              "type": "string"
+            },
+            "tags": {
+              "type": "object"
+            },
+            "targetContainerAppId": {
+              "type": "string",
+              "metadata": {
+                "description": "Resource ID of the Container App to monitor with the metric alerts."
+              }
+            },
+            "actionGroupId": {
+              "type": "string",
+              "metadata": {
+                "description": "Resource ID of the action group that receives alert notifications."
+              }
+            }
+          },
+          "resources": [
             {
               "type": "Microsoft.Insights/metricAlerts",
               "apiVersion": "2018-03-01",
@@ -1577,13 +1666,10 @@
                 },
                 "actions": [
                   {
-                    "actionGroupId": "[resourceId('Microsoft.Insights/actionGroups', variables('actionGroupName'))]"
+                    "actionGroupId": "[parameters('actionGroupId')]"
                   }
                 ]
-              },
-              "dependsOn": [
-                "[resourceId('Microsoft.Insights/actionGroups', variables('actionGroupName'))]"
-              ]
+              }
             },
             {
               "type": "Microsoft.Insights/metricAlerts",
@@ -1617,13 +1703,10 @@
                 },
                 "actions": [
                   {
-                    "actionGroupId": "[resourceId('Microsoft.Insights/actionGroups', variables('actionGroupName'))]"
+                    "actionGroupId": "[parameters('actionGroupId')]"
                   }
                 ]
-              },
-              "dependsOn": [
-                "[resourceId('Microsoft.Insights/actionGroups', variables('actionGroupName'))]"
-              ]
+              }
             },
             {
               "type": "Microsoft.Insights/metricAlerts",
@@ -1657,41 +1740,17 @@
                 },
                 "actions": [
                   {
-                    "actionGroupId": "[resourceId('Microsoft.Insights/actionGroups', variables('actionGroupName'))]"
+                    "actionGroupId": "[parameters('actionGroupId')]"
                   }
                 ]
-              },
-              "dependsOn": [
-                "[resourceId('Microsoft.Insights/actionGroups', variables('actionGroupName'))]"
-              ]
+              }
             }
-          ],
-          "outputs": {
-            "id": {
-              "type": "string",
-              "value": "[resourceId('Microsoft.OperationalInsights/workspaces', variables('workspaceName'))]"
-            },
-            "name": {
-              "type": "string",
-              "value": "[variables('workspaceName')]"
-            },
-            "workspaceId": {
-              "type": "string",
-              "value": "[resourceId('Microsoft.OperationalInsights/workspaces', variables('workspaceName'))]"
-            },
-            "appInsightsConnectionString": {
-              "type": "string",
-              "value": "[reference(resourceId('Microsoft.Insights/components', variables('appiName')), '2020-02-02').ConnectionString]"
-            },
-            "actionGroupId": {
-              "type": "string",
-              "value": "[resourceId('Microsoft.Insights/actionGroups', variables('actionGroupName'))]"
-            }
-          }
+          ]
         }
       },
       "dependsOn": [
         "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('rgName')), 'Microsoft.Resources/deployments', 'app-backend')]",
+        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('rgName')), 'Microsoft.Resources/deployments', 'monitoring')]",
         "[subscriptionResourceId('Microsoft.Resources/resourceGroups', variables('rgName'))]"
       ]
     },
@@ -1735,8 +1794,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.43.8.12551",
-              "templateHash": "10523267402595575620"
+              "version": "0.46.1.21595",
+              "templateHash": "6004958492681037272"
             }
           },
           "parameters": {
@@ -1909,6 +1968,9 @@
           },
           "acaSubnetId": {
             "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('rgName')), 'Microsoft.Resources/deployments', 'network'), '2025-04-01').outputs.acaSubnetId.value]"
+          },
+          "logAnalyticsWorkspaceName": {
+            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('rgName')), 'Microsoft.Resources/deployments', 'monitoring'), '2025-04-01').outputs.name.value]"
           }
         },
         "template": {
@@ -1917,8 +1979,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.43.8.12551",
-              "templateHash": "13419203252914830143"
+              "version": "0.46.1.21595",
+              "templateHash": "3734260727752572038"
             }
           },
           "parameters": {
@@ -1936,42 +1998,18 @@
             },
             "acaSubnetId": {
               "type": "string"
+            },
+            "logAnalyticsWorkspaceName": {
+              "type": "string",
+              "metadata": {
+                "description": "Name of the Log Analytics workspace (in this resource group) that receives container console + system logs."
+              }
             }
           },
           "variables": {
-            "lawName": "[format('{0}-{1}-law', parameters('prefix'), parameters('env'))]",
-            "aiName": "[format('{0}-{1}-ai', parameters('prefix'), parameters('env'))]",
             "envName": "[format('{0}-{1}-cae', parameters('prefix'), parameters('env'))]"
           },
           "resources": [
-            {
-              "type": "Microsoft.OperationalInsights/workspaces",
-              "apiVersion": "2023-09-01",
-              "name": "[variables('lawName')]",
-              "location": "[parameters('location')]",
-              "tags": "[parameters('tags')]",
-              "properties": {
-                "sku": {
-                  "name": "PerGB2018"
-                },
-                "retentionInDays": 30
-              }
-            },
-            {
-              "type": "Microsoft.Insights/components",
-              "apiVersion": "2020-02-02",
-              "name": "[variables('aiName')]",
-              "location": "[parameters('location')]",
-              "tags": "[parameters('tags')]",
-              "kind": "web",
-              "properties": {
-                "Application_Type": "web",
-                "WorkspaceResourceId": "[resourceId('Microsoft.OperationalInsights/workspaces', variables('lawName'))]"
-              },
-              "dependsOn": [
-                "[resourceId('Microsoft.OperationalInsights/workspaces', variables('lawName'))]"
-              ]
-            },
             {
               "type": "Microsoft.App/managedEnvironments",
               "apiVersion": "2025-01-01",
@@ -1991,15 +2029,12 @@
                 "appLogsConfiguration": {
                   "destination": "log-analytics",
                   "logAnalyticsConfiguration": {
-                    "customerId": "[reference(resourceId('Microsoft.OperationalInsights/workspaces', variables('lawName')), '2023-09-01').customerId]",
-                    "sharedKey": "[listKeys(resourceId('Microsoft.OperationalInsights/workspaces', variables('lawName')), '2023-09-01').primarySharedKey]"
+                    "customerId": "[reference(resourceId('Microsoft.OperationalInsights/workspaces', parameters('logAnalyticsWorkspaceName')), '2023-09-01').customerId]",
+                    "sharedKey": "[listKeys(resourceId('Microsoft.OperationalInsights/workspaces', parameters('logAnalyticsWorkspaceName')), '2023-09-01').primarySharedKey]"
                   }
                 },
                 "zoneRedundant": false
-              },
-              "dependsOn": [
-                "[resourceId('Microsoft.OperationalInsights/workspaces', variables('lawName'))]"
-              ]
+              }
             }
           ],
           "outputs": {
@@ -2010,15 +2045,12 @@
             "environmentName": {
               "type": "string",
               "value": "[variables('envName')]"
-            },
-            "appInsightsConnectionString": {
-              "type": "string",
-              "value": "[reference(resourceId('Microsoft.Insights/components', variables('aiName')), '2020-02-02').ConnectionString]"
             }
           }
         }
       },
       "dependsOn": [
+        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('rgName')), 'Microsoft.Resources/deployments', 'monitoring')]",
         "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('rgName')), 'Microsoft.Resources/deployments', 'network')]",
         "[subscriptionResourceId('Microsoft.Resources/resourceGroups', variables('rgName'))]"
       ]
@@ -2117,6 +2149,10 @@
                 "value": "[parameters('entraAudience')]"
               },
               {
+                "name": "ENTRA_AUTH_SIDECAR_URL",
+                "value": "http://127.0.0.1:5000"
+              },
+              {
                 "name": "SESSION_COOKIE_SECURE",
                 "value": "true"
               },
@@ -2127,6 +2163,48 @@
               {
                 "name": "SECRET_ENCRYPTION_KEY",
                 "secretRef": "secret-encryption-key"
+              },
+              {
+                "name": "APPLICATIONINSIGHTS_CONNECTION_STRING",
+                "secretRef": "appinsights-connection-string"
+              },
+              {
+                "name": "OTEL_SERVICE_NAME",
+                "value": "azure-architect-ai-backend"
+              }
+            ]
+          },
+          "sidecars": {
+            "value": [
+              {
+                "name": "entra-auth",
+                "image": "mcr.microsoft.com/entra-sdk/auth-sidecar:1.1.1-azurelinux3.0-distroless",
+                "resources": {
+                  "cpu": "[json('0.25')]",
+                  "memory": "0.5Gi"
+                },
+                "env": [
+                  {
+                    "name": "AzureAd__Instance",
+                    "value": "[environment().authentication.loginEndpoint]"
+                  },
+                  {
+                    "name": "AzureAd__TenantId",
+                    "value": "[parameters('entraTenantId')]"
+                  },
+                  {
+                    "name": "AzureAd__ClientId",
+                    "value": "[variables('resolvedEntraClientId')]"
+                  },
+                  {
+                    "name": "AzureAd__Audience",
+                    "value": "[variables('resolvedEntraClientId')]"
+                  },
+                  {
+                    "name": "Kestrel__Endpoints__Http__Url",
+                    "value": "http://127.0.0.1:5000"
+                  }
+                ]
               }
             ]
           },
@@ -2141,6 +2219,10 @@
                 "name": "secret-encryption-key",
                 "keyVaultUrl": "[format('{0}secrets/secret-encryption-key', reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('rgName')), 'Microsoft.Resources/deployments', 'kv'), '2025-04-01').outputs.uri.value)]",
                 "identity": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('rgName')), 'Microsoft.Resources/deployments', 'identity'), '2025-04-01').outputs.id.value]"
+              },
+              {
+                "name": "appinsights-connection-string",
+                "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('rgName')), 'Microsoft.Resources/deployments', 'monitoring'), '2025-04-01').outputs.appInsightsConnectionString.value]"
               }
             ]
           }
@@ -2151,8 +2233,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.43.8.12551",
-              "templateHash": "1571086672298272416"
+              "version": "0.46.1.21595",
+              "templateHash": "15932088693616548093"
             }
           },
           "parameters": {
@@ -2210,6 +2292,13 @@
               "type": "array",
               "defaultValue": []
             },
+            "sidecars": {
+              "type": "array",
+              "defaultValue": [],
+              "metadata": {
+                "description": "Additional containers that share the app replica network namespace with the primary container."
+              }
+            },
             "volumeMounts": {
               "type": "array",
               "defaultValue": []
@@ -2266,18 +2355,7 @@
                   "secrets": "[parameters('secrets')]"
                 },
                 "template": {
-                  "containers": [
-                    {
-                      "name": "[parameters('name')]",
-                      "image": "[parameters('image')]",
-                      "resources": {
-                        "cpu": "[json(parameters('cpu'))]",
-                        "memory": "[parameters('memory')]"
-                      },
-                      "env": "[concat(parameters('envVars'), createArray(createObject('name', 'AZURE_CLIENT_ID_FALLBACK', 'value', parameters('miClientId'))))]",
-                      "volumeMounts": "[parameters('volumeMounts')]"
-                    }
-                  ],
+                  "containers": "[concat(createArray(createObject('name', parameters('name'), 'image', parameters('image'), 'resources', createObject('cpu', json(parameters('cpu')), 'memory', parameters('memory')), 'env', concat(parameters('envVars'), createArray(createObject('name', 'AZURE_CLIENT_ID_FALLBACK', 'value', parameters('miClientId')))), 'volumeMounts', parameters('volumeMounts'))), parameters('sidecars'))]",
                   "scale": {
                     "minReplicas": "[parameters('minReplicas')]",
                     "maxReplicas": "[parameters('maxReplicas')]"
@@ -2313,6 +2391,7 @@
         "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('rgName')), 'Microsoft.Resources/deployments', 'identity')]",
         "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('rgName')), 'Microsoft.Resources/deployments', 'kv')]",
         "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('rgName')), 'Microsoft.Resources/deployments', 'kv-secrets')]",
+        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('rgName')), 'Microsoft.Resources/deployments', 'monitoring')]",
         "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('rgName')), 'Microsoft.Resources/deployments', 'openai')]",
         "[subscriptionResourceId('Microsoft.Resources/resourceGroups', variables('rgName'))]"
       ]
@@ -2390,8 +2469,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.43.8.12551",
-              "templateHash": "1571086672298272416"
+              "version": "0.46.1.21595",
+              "templateHash": "15932088693616548093"
             }
           },
           "parameters": {
@@ -2449,6 +2528,13 @@
               "type": "array",
               "defaultValue": []
             },
+            "sidecars": {
+              "type": "array",
+              "defaultValue": [],
+              "metadata": {
+                "description": "Additional containers that share the app replica network namespace with the primary container."
+              }
+            },
             "volumeMounts": {
               "type": "array",
               "defaultValue": []
@@ -2505,18 +2591,7 @@
                   "secrets": "[parameters('secrets')]"
                 },
                 "template": {
-                  "containers": [
-                    {
-                      "name": "[parameters('name')]",
-                      "image": "[parameters('image')]",
-                      "resources": {
-                        "cpu": "[json(parameters('cpu'))]",
-                        "memory": "[parameters('memory')]"
-                      },
-                      "env": "[concat(parameters('envVars'), createArray(createObject('name', 'AZURE_CLIENT_ID_FALLBACK', 'value', parameters('miClientId'))))]",
-                      "volumeMounts": "[parameters('volumeMounts')]"
-                    }
-                  ],
+                  "containers": "[concat(createArray(createObject('name', parameters('name'), 'image', parameters('image'), 'resources', createObject('cpu', json(parameters('cpu')), 'memory', parameters('memory')), 'env', concat(parameters('envVars'), createArray(createObject('name', 'AZURE_CLIENT_ID_FALLBACK', 'value', parameters('miClientId')))), 'volumeMounts', parameters('volumeMounts'))), parameters('sidecars'))]",
                   "scale": {
                     "minReplicas": "[parameters('minReplicas')]",
                     "maxReplicas": "[parameters('maxReplicas')]"
@@ -2585,8 +2660,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.43.8.12551",
-              "templateHash": "9177103681331621509"
+              "version": "0.46.1.21595",
+              "templateHash": "1238145030590735881"
             }
           },
           "parameters": {

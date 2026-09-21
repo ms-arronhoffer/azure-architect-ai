@@ -5,7 +5,7 @@ import { useAuth } from "./AuthProvider";
 // Wires MSAL's getAccessToken into the apiFetch wrapper, and (when auth is enabled)
 // blocks rendering of authenticated UI until the user signs in.
 export function AuthGate({ children }: { children: ReactNode }) {
-  const { enabled, isAuthenticated, account, login, getAccessToken } = useAuth();
+  const { enabled, isAuthenticated, account, login, getAccessToken, authError } = useAuth();
 
   // Set synchronously during render so child useEffect hooks have the provider
   // available on first mount (useEffect in parents runs after children's useEffect).
@@ -23,6 +23,29 @@ export function AuthGate({ children }: { children: ReactNode }) {
         <button onClick={() => void login()} style={{ padding: "8px 16px", fontSize: 16 }}>
           Sign in
         </button>
+        {authError && (
+          <div
+            role="alert"
+            style={{
+              margin: "24px auto 0",
+              maxWidth: 640,
+              padding: 16,
+              textAlign: "left",
+              border: "1px solid #d13438",
+              borderRadius: 4,
+              background: "#fdf3f4",
+            }}
+          >
+            <strong>Sign-in failed ({authError.code})</strong>
+            <p style={{ margin: "8px 0" }}>{authError.hint}</p>
+            <details>
+              <summary style={{ cursor: "pointer" }}>Entra error detail</summary>
+              <pre style={{ whiteSpace: "pre-wrap", margin: "8px 0 0", fontSize: 12 }}>
+                {authError.message}
+              </pre>
+            </details>
+          </div>
+        )}
       </div>
     );
   }

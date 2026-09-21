@@ -5,9 +5,11 @@ import type { Configuration, PopupRequest } from "@azure/msal-browser";
 
 export const AUTH_ENABLED = (import.meta.env.VITE_AUTH_ENABLED ?? "").toLowerCase() === "true";
 
-const tenantId = (import.meta.env.VITE_ENTRA_TENANT_ID ?? "").trim();
-const clientId = (import.meta.env.VITE_ENTRA_CLIENT_ID ?? "").trim();
-const apiScope = (import.meta.env.VITE_ENTRA_API_SCOPE ?? "").trim();
+export const tenantId = (import.meta.env.VITE_ENTRA_TENANT_ID ?? "").trim();
+export const clientId = (import.meta.env.VITE_ENTRA_CLIENT_ID ?? "").trim();
+// Trailing slashes break the resource lookup Entra performs on the scope
+// (api://<api-client-id>/access_as_user), so normalise them away.
+export const apiScope = (import.meta.env.VITE_ENTRA_API_SCOPE ?? "").trim().replace(/\/+$/, "");
 
 export const msalConfig: Configuration = {
   auth: {

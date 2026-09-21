@@ -235,18 +235,59 @@ jobs:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-      - name: ACR build
+      # The MSAL config is baked into the bundle at build time, so a wrong or
+      # empty value here only shows up as a failed sign-in in the browser
+      # (AADSTS500011 / "Authentication misconfigured"). Catch it before the build.
+      - name: Validate Entra SPA build configuration
+        env:
+          TENANT_ID: ${{ vars.VITE_ENTRA_TENANT_ID }}
+          CLIENT_ID: ${{ vars.VITE_ENTRA_CLIENT_ID }}
+          API_SCOPE: ${{ vars.VITE_ENTRA_API_SCOPE }}
         run: |
-          az acr build -r ${{ needs.detect.outputs.acr }} \
+          fail=0
+          [ -n "$TENANT_ID" ] || { echo "::error::repository variable VITE_ENTRA_TENANT_ID is empty"; fail=1; }
+          [ -n "$CLIENT_ID" ] || { echo "::error::repository variable VITE_ENTRA_CLIENT_ID is empty"; fail=1; }
+          [ -n "$API_SCOPE" ] || { echo "::error::repository variable VITE_ENTRA_API_SCOPE is empty"; fail=1; }
+          [ "$fail" -eq 0 ] || exit 1
+
+          RESOURCE="${API_SCOPE%/*}"
+          SCOPE_NAME="${API_SCOPE##*/}"
+          if [ "$RESOURCE" = "$API_SCOPE" ] || [ -z "$SCOPE_NAME" ]; then
+            echo "::error::VITE_ENTRA_API_SCOPE must be <resource>/<scope>, e.g. api://<api-app-client-id>/access_as_user (got '$API_SCOPE')"
+            exit 1
+          fi
+          if [ "${RESOURCE#api://}" = "$CLIENT_ID" ]; then
+            echo "::error::VITE_ENTRA_API_SCOPE points at the SPA app ($CLIENT_ID). It must point at the API app registration."
+            exit 1
+          fi
+
+          # Best-effort: the resource principal must exist in the tenant or the
+          # sign-in fails with AADSTS500011. Requires directory read permission,
+          # so a lookup failure is a warning rather than a hard error.
+          SP=$(az ad sp list --filter "servicePrincipalNames/any(n:n eq '$RESOURCE')" --query "[0].appId" -o tsv 2>/dev/null || true)
+          if [ -z "$SP" ]; then
+            echo "::warning::Could not confirm a service principal for $RESOURCE in tenant $TENANT_ID. If sign-in fails with AADSTS500011, run infra/scripts/ensure-entra-apps.sh."
+          else
+            echo "Resource principal for $RESOURCE resolved to appId $SP"
+          fi
+      - name: ACR build
+        env:
+          TENANT_ID: ${{ vars.VITE_ENTRA_TENANT_ID }}
+          CLIENT_ID: ${{ vars.VITE_ENTRA_CLIENT_ID }}
+          API_SCOPE: ${{ vars.VITE_ENTRA_API_SCOPE }}
+          UNIFIED_AGENTS: ${{ vars.VITE_UNIFIED_AGENTS }}
+          ACR: ${{ needs.detect.outputs.acr }}
+        run: |
+          az acr build -r "$ACR" \
             -t aa-frontend:${{ env.IMAGE_TAG }} \
             -t aa-frontend:latest \
             -f frontend/Dockerfile.prod \
             --build-arg VITE_API_BASE_URL="" \
             --build-arg VITE_AUTH_ENABLED=true \
-            --build-arg VITE_ENTRA_TENANT_ID=${{ vars.VITE_ENTRA_TENANT_ID }} \
-            --build-arg VITE_ENTRA_CLIENT_ID=${{ vars.VITE_ENTRA_CLIENT_ID }} \
-            --build-arg VITE_ENTRA_API_SCOPE=${{ vars.VITE_ENTRA_API_SCOPE }} \
-            --build-arg VITE_UNIFIED_AGENTS=${{ vars.VITE_UNIFIED_AGENTS }} \
+            --build-arg "VITE_ENTRA_TENANT_ID=$TENANT_ID" \
+            --build-arg "VITE_ENTRA_CLIENT_ID=$CLIENT_ID" \
+            --build-arg "VITE_ENTRA_API_SCOPE=$API_SCOPE" \
+            --build-arg "VITE_UNIFIED_AGENTS=$UNIFIED_AGENTS" \
             ./frontend
       - name: Update container app revision
         run: |
