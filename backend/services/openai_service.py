@@ -346,16 +346,18 @@ def chat_completion(
     temperature: float | None = None,
     max_completion_tokens: int | None = None,
     reasoning_effort: str = "medium",
+    provider: str = "azure",
 ):
     """Non-streaming completion that works on both Azure API surfaces.
 
-    Reasoning deployments (gpt-5 / codex / o-series) reject Chat Completions, so
-    they are transparently routed through the Responses API and the result is
-    wrapped in a Chat-Completions-shaped object — callers keep reading
-    ``resp.choices[0].message.content`` / ``.tool_calls`` regardless of surface.
-    ``temperature`` is dropped for reasoning deployments, which reject it.
+    Azure reasoning deployments (gpt-5 / codex / o-series) reject Chat
+    Completions, so they are transparently routed through the Responses API and
+    the result is wrapped in a Chat-Completions-shaped object — callers keep
+    reading ``resp.choices[0].message.content`` / ``.tool_calls`` regardless of
+    surface. ``temperature`` is dropped for reasoning deployments, which reject
+    it. Non-Azure providers always stay on Chat Completions.
     """
-    if not needs_responses_api(model):
+    if provider not in ("azure", "") or not needs_responses_api(model):
         kwargs: dict = {"model": model, "messages": messages}
         if tools:
             kwargs["tools"] = tools

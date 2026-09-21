@@ -11,7 +11,11 @@ from pydantic import BaseModel
 from auth import require_user, user_id_from_claims
 from models import ModelConfig
 from services.github_service import create_repo, get_authenticated_user, push_file
-from services.openai_service import TOOL_INCOMPATIBLE_MODELS, resolve_client_and_model
+from services.openai_service import (
+    TOOL_INCOMPATIBLE_MODELS,
+    chat_completion,
+    resolve_client_and_model,
+)
 from services.settings_service import load_settings
 from tools.tool_definitions import get_tools
 
@@ -58,7 +62,9 @@ async def _stream_codegen(req: GenerateRequest, provider: str, model: str, githu
     )
 
     try:
-        resp = client.chat.completions.create(
+        resp = chat_completion(
+            client,
+            provider=provider,
             model=deployment,
             messages=[
                 {"role": "system", "content": CODEGEN_SYSTEM},
