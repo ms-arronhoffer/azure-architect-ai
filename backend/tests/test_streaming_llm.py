@@ -258,6 +258,201 @@ async def test_transient_error_retries_then_surfaces(monkeypatch):
     assert events[-1]["type"] == "error"
 
 
+@pytest.mark.asyncio
+async def test_responses_stream_read_rate_limit_retries_before_output(monkeypatch):
+    from openai import RateLimitError
+
+    import services.streaming_llm as sl
+
+    monkeypatch.setattr(sl.asyncio, "sleep", lambda *_: _noop())
+
+    attempts = {"n": 0}
+
+    def _err():
+        from unittest.mock import MagicMock
+
+        resp = MagicMock()
+        resp.headers = {}
+        resp.status_code = 429
+        return RateLimitError("rate limited", response=resp, body=None)
+
+    class _RateLimitedStream:
+        def __aiter__(self):
+            async def gen():
+                raise _err()
+                yield  # pragma: no cover
+
+            return gen()
+
+    class _Client:
+        class responses:
+            @staticmethod
+            async def create(**_):
+                attempts["n"] += 1
+                if attempts["n"] == 1:
+                    return _RateLimitedStream()
+                return _AsyncStream(
+                    [
+                        SimpleNamespace(type="response.output_text.delta", delta="Recovered"),
+                        SimpleNamespace(type="response.completed", response=SimpleNamespace(usage=None)),
+                    ]
+                )
+
+    events = await _collect(
+        stream_tool_completion(
+            _Client(),
+            "gpt-5.6-sol",
+            [{"role": "user", "content": "hi"}],
+            _TOOLS,
+            use_responses=True,
+        )
+    )
+
+    assert attempts["n"] == 2
+    assert {"type": "status", "message": "Service busy, retrying..."} in events
+    assert {"type": "content", "text": "Recovered"} in events
+    assert events[-1] == {"type": "finish", "reason": "stop"}
+
+
+@pytest.mark.asyncio
+async def test_chat_stream_read_rate_limit_retries_before_output(monkeypatch):
+    from unittest.mock import MagicMock
+
+    from openai import RateLimitError
+
+    import services.streaming_llm as sl
+
+    monkeypatch.setattr(sl.asyncio, "sleep", lambda *_: _noop())
+
+    attempts = {"n": 0}
+    resp = MagicMock()
+    resp.headers = {}
+    resp.status_code = 429
+
+    class _RateLimitedStream:
+        def __aiter__(self):
+            async def gen():
+                raise RateLimitError("rate limited", response=resp, body=None)
+                yield  # pragma: no cover
+
+            return gen()
+
+    class _Client:
+        class chat:
+            class completions:
+                @staticmethod
+                async def create(**_):
+                    attempts["n"] += 1
+                    if attempts["n"] == 1:
+                        return _RateLimitedStream()
+                    return _AsyncStream([_chat_chunk(content="Recovered", finish="stop")])
+
+    events = await _collect(
+        stream_tool_completion(
+            _Client(),
+            "gpt-4.1",
+            [{"role": "user", "content": "hi"}],
+            _TOOLS,
+            use_responses=False,
+        )
+    )
+
+    assert attempts["n"] == 2
+    assert {"type": "status", "message": "Service busy, retrying..."} in events
+    assert {"type": "content", "text": "Recovered"} in events
+    assert events[-1] == {"type": "finish", "reason": "stop"}
+
+
+@pytest.mark.asyncio
+async def test_responses_stream_read_rate_limit_exhausts_retry_bound(monkeypatch):
+    from unittest.mock import MagicMock
+
+    from openai import RateLimitError
+
+    import services.streaming_llm as sl
+
+    monkeypatch.setattr(sl.asyncio, "sleep", lambda *_: _noop())
+
+    attempts = {"n": 0}
+    resp = MagicMock()
+    resp.headers = {}
+    resp.status_code = 429
+
+    class _RateLimitedStream:
+        def __aiter__(self):
+            async def gen():
+                raise RateLimitError("rate limited", response=resp, body=None)
+                yield  # pragma: no cover
+
+            return gen()
+
+    class _Client:
+        class responses:
+            @staticmethod
+            async def create(**_):
+                attempts["n"] += 1
+                return _RateLimitedStream()
+
+    events = await _collect(
+        stream_tool_completion(
+            _Client(),
+            "gpt-5.6-sol",
+            [{"role": "user", "content": "hi"}],
+            _TOOLS,
+            use_responses=True,
+        )
+    )
+
+    assert attempts["n"] == sl._MAX_ATTEMPTS
+    assert sum(event["type"] == "status" for event in events) == sl._MAX_ATTEMPTS - 1
+    assert events[-1] == {
+        "type": "error",
+        "message": "Rate limit reached. Please wait a moment and try again.",
+    }
+
+
+@pytest.mark.asyncio
+async def test_responses_stream_read_error_after_output_is_not_replayed(monkeypatch):
+    from unittest.mock import MagicMock
+
+    from openai import RateLimitError
+
+    attempts = {"n": 0}
+    resp = MagicMock()
+    resp.headers = {}
+    resp.status_code = 429
+
+    class _PartiallyCompletedStream:
+        def __aiter__(self):
+            async def gen():
+                yield SimpleNamespace(type="response.output_text.delta", delta="Partial")
+                raise RateLimitError("rate limited", response=resp, body=None)
+
+            return gen()
+
+    class _Client:
+        class responses:
+            @staticmethod
+            async def create(**_):
+                attempts["n"] += 1
+                return _PartiallyCompletedStream()
+
+    events = await _collect(
+        stream_tool_completion(
+            _Client(),
+            "gpt-5.6-sol",
+            [{"role": "user", "content": "hi"}],
+            _TOOLS,
+            use_responses=True,
+        )
+    )
+
+    assert attempts["n"] == 1
+    assert events == [
+        {"type": "content", "text": "Partial"},
+        {"type": "error", "message": "Rate limit reached. Please wait a moment and try again."},
+    ]
+
+
 async def _noop():
     return None
-

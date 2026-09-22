@@ -33,12 +33,20 @@ _SAFE_OPENAI_ERRORS = {
 def sanitize_openai_error(exc: Exception) -> str:
     """Return a safe, human-readable message for an OpenAI/Azure SDK exception."""
     code = getattr(exc, "code", None) or ""
+    raw = getattr(exc, "message", None) or str(exc)
+    status_code = getattr(exc, "status_code", None)
+    if status_code is None:
+        status_code = getattr(getattr(exc, "response", None), "status_code", None)
+    details = f"{code} {raw}".lower()
+
     # Map well-known codes to friendly messages
     for key, msg in _SAFE_OPENAI_ERRORS.items():
-        if key in str(code).lower():
+        if key in details:
             return msg
 
-    raw = getattr(exc, "message", None) or str(exc)
+    if status_code == 429 or "rate limit" in details or "too many requests" in details:
+        return _SAFE_OPENAI_ERRORS["rate_limit_exceeded"]
+
     # Strip any internal identifiers
     sanitized = raw
     for pattern in _STRIP_PATTERNS:
