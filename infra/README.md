@@ -26,6 +26,7 @@ which live in `aarch-dev-rg`. The test stack sets `deployOpenAi=false` and
 | `main.bicepparam` | Prod parameter values. |
 | `main.test.bicepparam` | Test parameter values (shares AOAI/ACR with prod). |
 | `scripts/ensure-entra-apps.sh` | Idempotent repair of the SPA + API app registrations (fixes `AADSTS500011`). `--create-missing` mints a replacement when an app registration is unrecoverable. Needs only `az` — no `jq`. |
+| `scripts/deploy-infra.sh` | Wrapper around `az deployment sub create` used by both workflows. Retries the deployment when the shared AOAI account is still in the non-terminal `Accepted` state (`AccountProvisioningStateInvalid`), polling the account until it settles instead of re-`PUT`ting it. |
 | `modules/identity.bicep` | User-assigned managed identity used by both apps. |
 | `modules/network.bicep` | VNet (3 subnets) + private DNS zones for KV/PG/AOAI. |
 | `modules/containerregistry.bicep` | Premium ACR. Grants `AcrPull` to the MI. |
@@ -57,6 +58,20 @@ az deployment sub create --location eastus2 \
 az deployment sub create --location centralus \
   --template-file infra/main.bicep \
   --parameters infra/main.test.bicepparam
+```
+
+Azure OpenAI occasionally reports the account as still `Accepted` when the
+template's model deployments are written, failing the `openai` module with
+`AccountProvisioningStateInvalid`. `scripts/deploy-infra.sh` handles that
+retry loop (it waits for the account's `provisioningState` to go terminal
+before redeploying, because another `PUT` just resets it):
+
+```bash
+./infra/scripts/deploy-infra.sh \
+  --name aarch-dev \
+  --location centralus \
+  --template-file infra/main.bicep \
+  --parameters infra/main.bicepparam
 ```
 
 ## Auth model

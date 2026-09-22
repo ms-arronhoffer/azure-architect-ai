@@ -144,7 +144,16 @@ Jobs:
 `.github/workflows/infra.yml`. Triggers on `infra/**` changes on `main` or `dev`.
 
 - PR: `az deployment sub what-if` with `FullResourcePayloads` (against the **base branch's** param file).
-- Push: `az deployment sub create` (gated by `<env>-apply` environment).
+- Push: `infra/scripts/deploy-infra.sh` (`az deployment sub create`, gated by the `<env>-apply` environment).
+
+Both apply paths (`infra.yml` and `deploy.yml`'s `infra` job) share
+`infra/scripts/deploy-infra.sh`. It retries the deployment when the `openai`
+module fails with `AccountProvisioningStateInvalid` ("Account … in state
+`Accepted`") — a race where ARM finishes the `Microsoft.CognitiveServices/accounts`
+write before the resource provider has settled the account, so the child model
+deployments are rejected. The script polls the account's `provisioningState`
+until it is terminal before redeploying; a plain retry would issue another
+account `PUT` and keep it in `Accepted` indefinitely.
 
 ### `deploy.yml` — image build + revision update
 
