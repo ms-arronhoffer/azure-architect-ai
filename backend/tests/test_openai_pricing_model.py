@@ -25,6 +25,8 @@ def test_needs_responses_api_for_gpt5_family():
     from services import openai_service
 
     assert openai_service.needs_responses_api("gpt-5.6-sol") is True
+    assert openai_service.needs_responses_api("gpt-5.6-luna") is True
+    assert openai_service.needs_responses_api("gpt-6-astra") is True
     assert openai_service.needs_responses_api("gpt-5.4-mini") is True
     assert openai_service.needs_responses_api("gpt-5.3-codex") is True
     assert openai_service.needs_responses_api("o3-mini") is True

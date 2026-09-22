@@ -56,11 +56,9 @@ from routes.whats_new import router as whats_new_router  # noqa: E402
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     async with AsyncExitStack() as stack:
-        try:
-            await init_db()
-        except Exception as exc:
-            from middleware.logging import get_logger
-            get_logger("startup").warning("db.init_skipped", error=str(exc))
+        # The conversation, engagement, and secret APIs all require the database.
+        # Do not advertise a ready application when schema initialization failed.
+        await init_db()
         try:
             from services.secret_key_init import ensure_secret_encryption_key
             await ensure_secret_encryption_key()
