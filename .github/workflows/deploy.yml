@@ -107,6 +107,11 @@ jobs:
     needs: [setenv, infra]
     if: always() && (needs.infra.result == 'success' || needs.infra.result == 'skipped')
     runs-on: ubuntu-latest
+    # Required for azure/login: the federated identity credential is registered
+    # against the environment subject (repo:<owner>/<repo>:environment:<env>).
+    # Without it the OIDC assertion falls back to a ref subject, which only
+    # matches refs/heads/main and fails AADSTS700213 on every other branch.
+    environment: ${{ needs.setenv.outputs.gh_env }}
     outputs:
       backend: ${{ steps.changes.outputs.backend }}
       frontend: ${{ steps.changes.outputs.frontend }}
@@ -167,6 +172,16 @@ jobs:
           echo "backendApp=$BACKEND_APP" >> $GITHUB_OUTPUT
           echo "frontendApp=$FRONTEND_APP" >> $GITHUB_OUTPUT
           echo "frontendUrl=$FRONTEND_URL" >> $GITHUB_OUTPUT
+          # Empty outputs otherwise surface downstream as an opaque `az acr build`
+          # argument-validation error instead of naming the missing resource.
+          missing=""
+          [ -n "$ACR_LOGIN" ] || missing="$missing acr"
+          [ -n "$BACKEND_APP" ] || missing="$missing backendApp"
+          [ -n "$FRONTEND_APP" ] || missing="$missing frontendApp"
+          if [ -n "$missing" ]; then
+            echo "::error::could not resolve deployment target(s) in RG=$RG:$missing"
+            exit 1
+          fi
 
   backend:
     needs: [setenv, detect, infra]
@@ -302,9 +317,12 @@ jobs:
             --revision-suffix sha-${IMAGE_TAG:0:6}-r${{ github.run_number }}
 
   smoke:
-    needs: [detect, backend, frontend]
+    needs: [setenv, detect, backend, frontend]
     if: always() && (needs.backend.result == 'success' || needs.frontend.result == 'success')
     runs-on: ubuntu-latest
+    # See the detect job: azure/login needs the environment-scoped federated
+    # identity subject, otherwise it fails AADSTS700213 off main.
+    environment: ${{ needs.setenv.outputs.gh_env }}
     steps:
       - uses: azure/login@v2
         with:

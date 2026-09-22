@@ -106,6 +106,32 @@ async def validate_token(token: str) -> dict[str, Any]:
     return claims
 
 
+def _sidecar_rejection_reason(response: httpx.Response) -> str:
+    """Best-effort reason for a sidecar rejection, for logs only.
+
+    The sidecar answers 400/401 with RFC 7807 ``application/problem+json`` and
+    lets ASP.NET Core's JWT bearer challenge carry the real cause (for example
+    ``IDX10214: Audience validation failed``) in ``WWW-Authenticate``. Its
+    loopback guard returns a bodyless 403/400 instead. Dropping all of that left
+    every misconfiguration looking like an expired user token.
+    """
+    parts: list[str] = []
+    challenge = response.headers.get("WWW-Authenticate")
+    if challenge:
+        parts.append(challenge)
+    try:
+        body = response.json()
+    except ValueError:
+        body = None
+    if isinstance(body, dict):
+        detail = body.get("detail") or body.get("title")
+        if detail:
+            parts.append(str(detail))
+    elif response.text.strip():
+        parts.append(response.text.strip())
+    return " | ".join(parts) if parts else "no reason reported"
+
+
 async def _validate_token_with_sidecar(token: str) -> dict[str, Any]:
     """Validate an inbound token through the co-located Microsoft Entra auth SDK."""
     url = f"{settings.entra_auth_sidecar_url.rstrip('/')}/Validate"
@@ -125,7 +151,11 @@ async def _validate_token_with_sidecar(token: str) -> dict[str, Any]:
         status.HTTP_401_UNAUTHORIZED,
         status.HTTP_403_FORBIDDEN,
     ):
-        _log.warning("entra.sidecar_rejected", status_code=response.status_code)
+        _log.warning(
+            "entra.sidecar_rejected",
+            status_code=response.status_code,
+            reason=_sidecar_rejection_reason(response),
+        )
         raise AuthError("Invalid token")
     try:
         response.raise_for_status()
