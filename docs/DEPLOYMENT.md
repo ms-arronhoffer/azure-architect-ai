@@ -196,10 +196,23 @@ Production Container Apps replicas co-locate
 `mcr.microsoft.com/entra-sdk/auth-sidecar:1.1.1-azurelinux3.0-distroless`.
 The backend delegates inbound token validation to its loopback `/Validate` endpoint,
 so Microsoft.Identity.Web performs key discovery and emits the supported authentication
-telemetry. Both `AzureAd__Audience` and `AzureAd__ClientId` use the API app's bare
-client ID because v2 access tokens emit that value in `aud`. The client ID is derived
-from `ENTRA_AUDIENCE` when it is a bare ID or `api://<client-id>`; set
-`ENTRA_CLIENT_ID` explicitly when using a custom app ID URI.
+telemetry. `AzureAd__ClientId` is the API app's bare client ID, derived from
+`ENTRA_AUDIENCE` when it is a bare ID or `api://<client-id>`; set `ENTRA_CLIENT_ID`
+explicitly when using a custom app ID URI.
+
+**`AzureAd__Audience` must stay unset.** Microsoft.Identity.Web only installs its
+token-version aware audience validator when no explicit audience is configured; that
+validator accepts `<client-id>` when the token carries `ver=2.0` and
+`api://<client-id>` when it carries `ver=1.0`. Pinning either form rejects every token
+of the other version, and the API app registration only emits v2 tokens when its
+`api.requestedAccessTokenVersion` is `2` (Graph leaves it null — i.e. v1 — on newly
+created apps). A pinned audience surfaces as a 401 `Invalid token` on every `/api/*`
+call; the `entra.sidecar_rejected` backend log line carries the sidecar's reason
+(e.g. `IDX10214: Audience validation failed`). Removing the pin only reaches the
+running revision through a template deploy — run the workflow with
+`deploy_infra=true`, since the image-only path (`az containerapp update
+--container-name backend`) never touches the sidecar's environment.
+
 After deployment, confirm every active backend revision contains the `entra-auth`
 container before supplying telemetry evidence for the API app registration.
 
@@ -282,7 +295,7 @@ cannot bring it back. The replacement gets a **new client ID**, which changes
 
    | Variable | New value | Consumed by |
    |---|---|---|
-   | `ENTRA_AUDIENCE` | `api://<new-api-id>` | `infra/main.bicepparam` → `entraAudience` → backend `ENTRA_AUDIENCE` and the sidecar's `AzureAd__ClientId`/`AzureAd__Audience` |
+   | `ENTRA_AUDIENCE` | `api://<new-api-id>` | `infra/main.bicepparam` → `entraAudience` → backend `ENTRA_AUDIENCE` and the sidecar's `AzureAd__ClientId` |
    | `VITE_ENTRA_API_SCOPE` | `api://<new-api-id>/access_as_user` | frontend build arg (`ACR build` step) |
    | `VITE_ENTRA_CLIENT_ID` | SPA client ID (unchanged) | frontend build arg |
    | `VITE_ENTRA_TENANT_ID` | tenant ID (unchanged) | both jobs |

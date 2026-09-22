@@ -329,7 +329,11 @@ module backendApp 'modules/containerapp.bicep' = {
           { name: 'AzureAd__Instance', value: environment().authentication.loginEndpoint }
           { name: 'AzureAd__TenantId', value: entraTenantId }
           { name: 'AzureAd__ClientId', value: resolvedEntraClientId }
-          { name: 'AzureAd__Audience', value: resolvedEntraClientId }
+          // AzureAd__Audience is deliberately unset. Microsoft.Identity.Web only
+          // installs its token-version aware audience validator when no explicit
+          // audience is configured, and that validator accepts `<clientId>` for
+          // v2 access tokens and `api://<clientId>` for v1 ones. Pinning a single
+          // form 401s every token of the other version.
           { name: 'Kestrel__Endpoints__Http__Url', value: 'http://127.0.0.1:5000' }
         ]
       }

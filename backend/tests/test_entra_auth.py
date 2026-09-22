@@ -56,6 +56,29 @@ async def test_validate_token_maps_sidecar_rejection_to_unauthorized(
         await entra.validate_token("bad-token")
 
 
+def test_sidecar_rejection_reason_prefers_challenge_and_problem_detail() -> None:
+    response = httpx.Response(
+        401,
+        headers={"WWW-Authenticate": '******"invalid_token", error_description="IDX10214"'},
+        json={"detail": "Audience validation failed", "title": "Unauthorized"},
+    )
+
+    reason = entra._sidecar_rejection_reason(response)
+
+    assert "IDX10214" in reason
+    assert "Audience validation failed" in reason
+
+
+def test_sidecar_rejection_reason_handles_bodyless_loopback_guard() -> None:
+    assert entra._sidecar_rejection_reason(httpx.Response(403)) == "no reason reported"
+
+
+def test_sidecar_rejection_reason_falls_back_to_plain_text_body() -> None:
+    response = httpx.Response(403, text="The 'scope' claim does not contain 'access_as_user'")
+
+    assert "access_as_user" in entra._sidecar_rejection_reason(response)
+
+
 @pytest.mark.asyncio
 async def test_validate_token_fails_closed_on_invalid_sidecar_response(
     monkeypatch: pytest.MonkeyPatch,
