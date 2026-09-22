@@ -81,6 +81,8 @@ interface AdvisorPanelProps {
 
 const MODEL_OPTIONS = [
   { value: "gpt-5.6-sol", label: "GPT-5.6 Sol (default)" },
+  { value: "gpt-5.6-luna", label: "GPT-5.6 Luna" },
+  { value: "gpt-6-astra", label: "GPT-6 Astra" },
 ];
 
 export default function AdvisorPanel({

@@ -250,11 +250,12 @@ def get_async_responses_client(deployment: str | None = None) -> AsyncAzureOpenA
 
 
 def needs_responses_api(deployment: str | None) -> bool:
-    """Detect codex / gpt-5 / o-series deployments. These reject Chat Completions
+    """Detect codex / gpt-5+ / o-series deployments. These reject Chat Completions
     entirely and must be called via the Responses API instead."""
     d = (deployment or "").lower()
     return (
         d.startswith("gpt-5")
+        or d.startswith("gpt-6")
         or "codex" in d
         or d.startswith("o1")
         or d.startswith("o3")
@@ -458,7 +459,7 @@ def resolve_streaming_client(
 ) -> tuple[AsyncAzureOpenAI | AsyncOpenAI, str, bool]:
     """Return ``(client, deployment, use_responses)`` for a streaming tool loop.
 
-    Reasoning deployments (gpt-5 / codex / o-series) on Azure reject Chat
+    Reasoning deployments (gpt-5+ / codex / o-series) on Azure reject Chat
     Completions and must stream via the Responses API, so this hands back a
     Responses-capable async client and ``use_responses=True`` for those. GitHub
     providers and gpt-4-family Azure deployments get the Chat Completions client.
@@ -471,4 +472,3 @@ def resolve_streaming_client(
 
     client, deployment = resolve_async_client_and_model(mode, provider, model, github_token)
     return client, deployment, False
-

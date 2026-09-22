@@ -13,6 +13,20 @@ import pytest
 
 
 @pytest.mark.asyncio
+async def test_startup_fails_when_database_initialization_fails(monkeypatch):
+    import main
+
+    async def _failed_init():
+        raise RuntimeError("database unavailable")
+
+    monkeypatch.setattr(main, "init_db", _failed_init)
+
+    with pytest.raises(RuntimeError, match="database unavailable"):
+        async with main.app.router.lifespan_context(main.app):
+            pass
+
+
+@pytest.mark.asyncio
 async def test_health_serves_while_mcp_is_still_initializing(monkeypatch):
     import httpx
 
