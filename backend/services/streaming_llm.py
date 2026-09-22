@@ -12,8 +12,8 @@ which yields a single normalized event schema:
     {"type": "usage", "prompt": int, "completion": int}
     {"type": "finish", "reason": "tool_calls" | "stop"}
 
-Transient 429 / 5xx failures on the initial request are retried with backoff so a
-momentary rate-limit doesn't surface as a hard error mid-review.
+Transient 429 / 5xx failures while opening or reading a stream are retried with
+backoff before output starts so a momentary rate-limit doesn't become a hard error.
 """
 from __future__ import annotations
 
@@ -157,47 +157,69 @@ async def _stream_chat(
         kwargs["tools"] = tools
         kwargs["tool_choice"] = tool_choice
 
-    async for kind, payload in _open_stream(lambda: client.chat.completions.create(**kwargs)):
-        if kind == "status":
-            yield {"type": "status", "message": payload}
-            continue
-        if kind == "error":
-            yield {"type": "error", "message": payload}
+    attempt = 0
+    while True:
+        attempt += 1
+        async for kind, payload in _open_stream(lambda: client.chat.completions.create(**kwargs)):
+            if kind == "status":
+                yield {"type": "status", "message": payload}
+                continue
+            if kind == "error":
+                yield {"type": "error", "message": payload}
+                return
+            stream = payload
+            break
+        else:  # pragma: no cover - _open_stream always yields terminal event
             return
-        stream = payload
-        break
-    else:  # pragma: no cover - _open_stream always yields terminal event
-        return
 
-    tool_calls_raw: dict[int, dict] = {}
-    finish_reason: str | None = None
-    async for chunk in stream:
-        if getattr(chunk, "usage", None) is not None:
-            yield {
-                "type": "usage",
-                "prompt": chunk.usage.prompt_tokens or 0,
-                "completion": chunk.usage.completion_tokens or 0,
-            }
-        if not chunk.choices:
+        tool_calls_raw: dict[int, dict] = {}
+        finish_reason: str | None = None
+        output_started = False
+        try:
+            async for chunk in stream:
+                if getattr(chunk, "usage", None) is not None:
+                    output_started = True
+                    yield {
+                        "type": "usage",
+                        "prompt": chunk.usage.prompt_tokens or 0,
+                        "completion": chunk.usage.completion_tokens or 0,
+                    }
+                if not chunk.choices:
+                    continue
+                delta = chunk.choices[0].delta
+                finish_reason = chunk.choices[0].finish_reason or finish_reason
+                if delta.content:
+                    output_started = True
+                    yield {"type": "content", "text": delta.content}
+                for tc in delta.tool_calls or []:
+                    idx = tc.index
+                    slot = tool_calls_raw.setdefault(idx, {"id": "", "name": "", "arguments": ""})
+                    if tc.id:
+                        slot["id"] = tc.id
+                    if tc.function:
+                        if tc.function.name:
+                            slot["name"] = tc.function.name
+                        if tc.function.arguments:
+                            slot["arguments"] += tc.function.arguments
+        except (BadRequestError, AuthenticationError, APIError) as exc:
+            delay = (
+                openai_service.transient_retry_delay(exc, attempt)
+                if attempt < _MAX_ATTEMPTS and not output_started
+                else None
+            )
+            if delay is None:
+                from services.error_sanitizer import sanitize_openai_error
+
+                yield {"type": "error", "message": sanitize_openai_error(exc)}
+                return
+            yield {"type": "status", "message": "Service busy, retrying..."}
+            await asyncio.sleep(delay)
             continue
-        delta = chunk.choices[0].delta
-        finish_reason = chunk.choices[0].finish_reason or finish_reason
-        if delta.content:
-            yield {"type": "content", "text": delta.content}
-        for tc in delta.tool_calls or []:
-            idx = tc.index
-            slot = tool_calls_raw.setdefault(idx, {"id": "", "name": "", "arguments": ""})
-            if tc.id:
-                slot["id"] = tc.id
-            if tc.function:
-                if tc.function.name:
-                    slot["name"] = tc.function.name
-                if tc.function.arguments:
-                    slot["arguments"] += tc.function.arguments
 
-    for slot in tool_calls_raw.values():
-        yield {"type": "tool_call", "id": slot["id"], "name": slot["name"], "arguments": slot["arguments"]}
-    yield {"type": "finish", "reason": "tool_calls" if tool_calls_raw else (finish_reason or "stop")}
+        for slot in tool_calls_raw.values():
+            yield {"type": "tool_call", "id": slot["id"], "name": slot["name"], "arguments": slot["arguments"]}
+        yield {"type": "finish", "reason": "tool_calls" if tool_calls_raw else (finish_reason or "stop")}
+        return
 
 
 async def _stream_responses(
@@ -216,61 +238,83 @@ async def _stream_responses(
         kwargs["tools"] = tools_to_responses(tools)
         kwargs["tool_choice"] = tool_choice
 
-    async for kind, payload in _open_stream(lambda: client.responses.create(**kwargs)):
-        if kind == "status":
-            yield {"type": "status", "message": payload}
-            continue
-        if kind == "error":
-            yield {"type": "error", "message": payload}
+    attempt = 0
+    while True:
+        attempt += 1
+        async for kind, payload in _open_stream(lambda: client.responses.create(**kwargs)):
+            if kind == "status":
+                yield {"type": "status", "message": payload}
+                continue
+            if kind == "error":
+                yield {"type": "error", "message": payload}
+                return
+            stream = payload
+            break
+        else:  # pragma: no cover
             return
-        stream = payload
-        break
-    else:  # pragma: no cover
+
+        # item_id -> {"call_id", "name", "arguments"} for streamed function calls.
+        calls: dict[str, dict] = {}
+        output_started = False
+        try:
+            async for event in stream:
+                etype = getattr(event, "type", "")
+                if etype == "response.output_text.delta":
+                    text = getattr(event, "delta", "") or ""
+                    if text:
+                        output_started = True
+                        yield {"type": "content", "text": text}
+                elif etype == "response.output_item.added":
+                    item = getattr(event, "item", None)
+                    if item is not None and getattr(item, "type", "") == "function_call":
+                        calls[getattr(item, "id", "")] = {
+                            "call_id": getattr(item, "call_id", "") or "",
+                            "name": getattr(item, "name", "") or "",
+                            "arguments": getattr(item, "arguments", "") or "",
+                        }
+                elif etype == "response.function_call_arguments.delta":
+                    item_id = getattr(event, "item_id", "")
+                    slot = calls.setdefault(item_id, {"call_id": "", "name": "", "arguments": ""})
+                    slot["arguments"] += getattr(event, "delta", "") or ""
+                elif etype == "response.function_call_arguments.done":
+                    item_id = getattr(event, "item_id", "")
+                    slot = calls.setdefault(item_id, {"call_id": "", "name": "", "arguments": ""})
+                    slot["arguments"] = getattr(event, "arguments", slot["arguments"]) or slot["arguments"]
+                    if getattr(event, "name", None):
+                        slot["name"] = event.name
+                elif etype == "response.completed":
+                    usage = getattr(getattr(event, "response", None), "usage", None)
+                    if usage is not None:
+                        output_started = True
+                        yield {
+                            "type": "usage",
+                            "prompt": getattr(usage, "input_tokens", 0) or 0,
+                            "completion": getattr(usage, "output_tokens", 0) or 0,
+                        }
+        except (BadRequestError, AuthenticationError, APIError) as exc:
+            delay = (
+                openai_service.transient_retry_delay(exc, attempt)
+                if attempt < _MAX_ATTEMPTS and not output_started
+                else None
+            )
+            if delay is None:
+                from services.error_sanitizer import sanitize_openai_error
+
+                yield {"type": "error", "message": sanitize_openai_error(exc)}
+                return
+            yield {"type": "status", "message": "Service busy, retrying..."}
+            await asyncio.sleep(delay)
+            continue
+
+        for slot in calls.values():
+            yield {
+                "type": "tool_call",
+                "id": slot["call_id"],
+                "name": slot["name"],
+                "arguments": slot["arguments"],
+            }
+        yield {"type": "finish", "reason": "tool_calls" if calls else "stop"}
         return
-
-    # item_id -> {"call_id", "name", "arguments"} for streamed function calls.
-    calls: dict[str, dict] = {}
-    async for event in stream:
-        etype = getattr(event, "type", "")
-        if etype == "response.output_text.delta":
-            text = getattr(event, "delta", "") or ""
-            if text:
-                yield {"type": "content", "text": text}
-        elif etype == "response.output_item.added":
-            item = getattr(event, "item", None)
-            if item is not None and getattr(item, "type", "") == "function_call":
-                calls[getattr(item, "id", "")] = {
-                    "call_id": getattr(item, "call_id", "") or "",
-                    "name": getattr(item, "name", "") or "",
-                    "arguments": getattr(item, "arguments", "") or "",
-                }
-        elif etype == "response.function_call_arguments.delta":
-            item_id = getattr(event, "item_id", "")
-            slot = calls.setdefault(item_id, {"call_id": "", "name": "", "arguments": ""})
-            slot["arguments"] += getattr(event, "delta", "") or ""
-        elif etype == "response.function_call_arguments.done":
-            item_id = getattr(event, "item_id", "")
-            slot = calls.setdefault(item_id, {"call_id": "", "name": "", "arguments": ""})
-            slot["arguments"] = getattr(event, "arguments", slot["arguments"]) or slot["arguments"]
-            if getattr(event, "name", None):
-                slot["name"] = event.name
-        elif etype == "response.completed":
-            usage = getattr(getattr(event, "response", None), "usage", None)
-            if usage is not None:
-                yield {
-                    "type": "usage",
-                    "prompt": getattr(usage, "input_tokens", 0) or 0,
-                    "completion": getattr(usage, "output_tokens", 0) or 0,
-                }
-
-    for slot in calls.values():
-        yield {
-            "type": "tool_call",
-            "id": slot["call_id"],
-            "name": slot["name"],
-            "arguments": slot["arguments"],
-        }
-    yield {"type": "finish", "reason": "tool_calls" if calls else "stop"}
 
 
 async def stream_tool_completion(

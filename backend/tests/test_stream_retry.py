@@ -21,6 +21,7 @@ from openai import (
     RateLimitError,
 )
 
+from services.error_sanitizer import sanitize_openai_error
 from services.openai_service import transient_retry_delay
 
 
@@ -60,3 +61,21 @@ def test_bad_request_is_not_retryable():
 def test_auth_error_is_not_retryable():
     exc = AuthenticationError("unauthorized", response=MagicMock(status_code=401), body=None)
     assert transient_retry_delay(exc, 1) is None
+
+
+def test_generic_rate_limit_message_is_sanitized():
+    exc = Exception(
+        "Your requests to gpt-5.6-sol in centralus have exceeded rate limit."
+    )
+    assert sanitize_openai_error(exc) == (
+        "Rate limit reached. Please wait a moment and try again."
+    )
+
+
+def test_insufficient_quota_message_takes_precedence_over_http_429():
+    exc = Exception("quota unavailable")
+    exc.status_code = 429
+    exc.code = "insufficient_quota"
+    assert sanitize_openai_error(exc) == (
+        "API quota exceeded. Please contact your administrator."
+    )
