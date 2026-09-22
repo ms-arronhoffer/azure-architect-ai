@@ -317,9 +317,12 @@ jobs:
             --revision-suffix sha-${IMAGE_TAG:0:6}-r${{ github.run_number }}
 
   smoke:
-    needs: [detect, backend, frontend]
+    needs: [setenv, detect, backend, frontend]
     if: always() && (needs.backend.result == 'success' || needs.frontend.result == 'success')
     runs-on: ubuntu-latest
+    # See the detect job: azure/login needs the environment-scoped federated
+    # identity subject, otherwise it fails AADSTS700213 off main.
+    environment: ${{ needs.setenv.outputs.gh_env }}
     steps:
       - uses: azure/login@v2
         with:
