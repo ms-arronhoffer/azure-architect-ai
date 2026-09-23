@@ -69,11 +69,14 @@ async def test_chat_path_normalizes_content_and_tool_calls():
                     usage=SimpleNamespace(prompt_tokens=10, completion_tokens=5)),
     ]
 
+    captured = {}
+
     class _Client:
         class chat:
             class completions:
                 @staticmethod
-                async def create(**_):
+                async def create(**kwargs):
+                    captured.update(kwargs)
                     return _AsyncStream(chunks)
 
     events = await _collect(
@@ -89,6 +92,8 @@ async def test_chat_path_normalizes_content_and_tool_calls():
     usage = next(e for e in events if e["type"] == "usage")
     assert usage == {"type": "usage", "prompt": 10, "completion": 5}
     assert events[-1] == {"type": "finish", "reason": "tool_calls"}
+    assert captured["stream"] is True
+    assert "max_completion_tokens" not in captured
 
 
 # --- Responses API path ----------------------------------------------------
@@ -134,6 +139,8 @@ async def test_responses_path_normalizes_content_and_tool_calls():
     assert captured["instructions"] == "sys"
     assert captured["tools"][0]["name"] == "assess_waf_pillar"
     assert "function" not in captured["tools"][0]
+    assert captured["stream"] is True
+    assert "max_output_tokens" not in captured
 
     tool = next(e for e in events if e["type"] == "tool_call")
     assert tool["id"] == "call_9"

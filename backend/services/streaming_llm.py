@@ -151,8 +151,9 @@ async def _stream_chat(
         "messages": messages,
         "stream": True,
         "stream_options": {"include_usage": True},
-        "max_completion_tokens": max_tokens,
     }
+    if max_tokens is not None:
+        kwargs["max_completion_tokens"] = max_tokens
     if tools:
         kwargs["tools"] = tools
         kwargs["tool_choice"] = tool_choice
@@ -230,8 +231,9 @@ async def _stream_responses(
         "model": deployment,
         "input": inp,
         "stream": True,
-        "max_output_tokens": max_tokens,
     }
+    if max_tokens is not None:
+        kwargs["max_output_tokens"] = max_tokens
     if instructions:
         kwargs["instructions"] = instructions
     if tools:
@@ -324,7 +326,7 @@ async def stream_tool_completion(
     tools: list[dict] | None = None,
     *,
     tool_choice: str = "auto",
-    max_tokens: int = 8000,
+    max_tokens: int | None = None,
     use_responses: bool | None = None,
 ) -> AsyncGenerator[dict, None]:
     """Yield normalized streaming events from Chat Completions or the Responses API.

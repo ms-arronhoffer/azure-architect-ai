@@ -324,7 +324,7 @@ async def _stream_chat_impl(mode: str, messages: list[dict], provider: str = "az
 
         async for ev in stream_tool_completion(
             client, deployment, full_messages, tools,
-            tool_choice="auto", max_tokens=8000, use_responses=use_responses,
+            tool_choice="auto", use_responses=use_responses,
         ):
             etype = ev["type"]
             if etype == "status":
