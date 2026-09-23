@@ -294,7 +294,7 @@ async def _stream_architecture(req: ArchRequest, provider: str = "azure", model:
 
         async for ev in stream_tool_completion(
             client, deployment, full_messages, tools,
-            tool_choice="auto", max_tokens=8000, use_responses=use_responses,
+            tool_choice="auto", use_responses=use_responses,
         ):
             etype = ev["type"]
             if etype == "status":
@@ -618,7 +618,7 @@ async def _stream_waf_assessment(req: ArchRequest, client, deployment: str, syst
 
             async for ev in stream_tool_completion(
                 client, deployment, full_messages, tools,
-                tool_choice="auto", max_tokens=1500, use_responses=use_responses,
+                tool_choice="auto", use_responses=use_responses,
             ):
                 etype = ev["type"]
                 if etype == "status":
